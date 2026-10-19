@@ -1602,7 +1602,28 @@ static class Tags
 
 // ───────────────────────────── GitLab: merge requests you review, and the reviews on yours ─────────────────────────────
 
-record GitLabUser(long Id, string Username, string Name);
+record GitLabUser(long Id, string Username, string Name, string? AvatarUrl = null);
+
+// Fetches a profile picture. The account's own client (with its token) is used only for its own host;
+// anything else (Gravatar, a CDN) is fetched anonymously, so a token never leaves for another site.
+static class Avatars
+{
+    static readonly HttpClient anon = new() { Timeout = TimeSpan.FromSeconds(8) };
+    public static async Task<(byte[] Bytes, string Type)?> Fetch(string? url, string ownHost, HttpClient? own)
+    {
+        if (url is null || !Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != "https") return null;
+        var client = own is not null && u.Host.Equals(ownHost, StringComparison.OrdinalIgnoreCase) ? own : anon;
+        try
+        {
+            using var res = await client.GetAsync(u);
+            var type = res.Content.Headers.ContentType?.MediaType ?? "";
+            if (!res.IsSuccessStatusCode || !type.StartsWith("image/") || type.Contains("svg")) return null;   // no SVG: it can carry script
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            return bytes.Length is > 0 and < 1_000_000 ? (bytes, type) : null;
+        }
+        catch { return null; }
+    }
+}
 
 class GitLab
 {
@@ -1655,8 +1676,11 @@ class GitLab
     public async Task<GitLabUser> Verify()
     {
         var u = await Get("user");
-        return Me = new GitLabUser((long)u["id"]!, (string)u["username"]!, (string?)u["name"] ?? (string)u["username"]!);
+        return Me = new GitLabUser((long)u["id"]!, (string)u["username"]!, (string?)u["name"] ?? (string)u["username"]!, (string?)u["avatar_url"]);
     }
+
+    public Task<(byte[] Bytes, string Type)?> Avatar() => Avatars.Fetch(Me?.AvatarUrl, new Uri(BaseUrl).Host, http);
+
 
     static string P(string project) => Uri.EscapeDataString(project);
     string Mr(string project, long iid) => $"projects/{P(project)}/merge_requests/{iid}";
@@ -2336,7 +2360,7 @@ static class SelfTest
     }
 }
 
-record JiraUser(string AccountId, string DisplayName, string Email);
+record JiraUser(string AccountId, string DisplayName, string Email, string? AvatarUrl = null);
 
 class Jira
 {
@@ -2427,9 +2451,11 @@ class Jira
             throw new Exception("Jira accepted the token but refused access. Your account may not have access to this site.");
         if (!res.IsSuccessStatusCode) throw new Exception($"Jira returned {(int)res.StatusCode}.");
         var j = JsonNode.Parse(await res.Content.ReadAsStringAsync())!;
-        Me = new JiraUser((string)j["accountId"]!, (string?)j["displayName"] ?? Email, (string?)j["emailAddress"] ?? Email);
+        Me = new JiraUser((string)j["accountId"]!, (string?)j["displayName"] ?? Email, (string?)j["emailAddress"] ?? Email, (string?)j["avatarUrls"]?["48x48"]);
         return Me;
     }
+
+    public Task<(byte[] Bytes, string Type)?> Avatar() => Avatars.Fetch(Me?.AvatarUrl, new Uri(baseUrl).Host, http);
 
     public async Task<List<IssueInfo>> Search(string jql, int max = 200)
     {
@@ -2830,6 +2856,17 @@ static class UiServer
                     await SendText(res, 200, File.ReadAllText(Path.Combine(ledger.AppDir, "ui.html")), "text/html; charset=utf-8");
                     return;
 
+                case ("GET", "/me/avatar"):
+                {
+                    // an image tag can't send X-Ledger, so this lives outside /api/; it only ever returns your own picture
+                    if (await MyAvatar(ledger) is not { } av) { await Send(res, 404, Err("No avatar")); return; }
+                    res.StatusCode = 200; res.ContentType = av.Type; res.ContentLength64 = av.Bytes.Length;
+                    res.Headers["Cache-Control"] = "private, max-age=3600";
+                    await res.OutputStream.WriteAsync(av.Bytes);
+                    res.Close();
+                    return;
+                }
+
                 case ("GET", var p) when p.StartsWith("/assets/"):
                 {
                     // only plain file names from the assets folder: no sub-paths, no "..", only known types
@@ -2867,6 +2904,7 @@ static class UiServer
                         ["gitlab"] = await ledger.GitLabUser() is { } gu ? new JsonObject { ["name"] = gu.Name, ["username"] = gu.Username } : null,
                         ["gitlabRejected"] = ledger.GitLab.Configured && ledger.GitLab.Me is null,
                         ["dailyTargetHours"] = ledger.DailyTargetHours,
+                        ["avatar"] = await MyAvatar(ledger) is not null,
                         ["reminderAt"] = ledger.ReminderAt,
                         ["diskFree"] = Work.DiskFree(ledger.AppDir),
                         ["project"] = Work.Project(ledger),
@@ -3198,6 +3236,19 @@ static class UiServer
             Console.Error.WriteLine(e);
             try { await Send(res, 500, Err(e.Message)); } catch { }
         }
+    }
+
+    // your profile picture: Jira first, then GitLab; remembered for an hour per account
+    static (string Who, DateTime At, (byte[] Bytes, string Type)? Image) avatar = ("", DateTime.MinValue, null);
+    static async Task<(byte[] Bytes, string Type)?> MyAvatar(Ledger ledger)
+    {
+        var jira = await ledger.CurrentUser();
+        var gl = await ledger.GitLabUser();
+        var who = $"{jira?.AccountId}|{gl?.Username}";
+        if (avatar.Who == who && DateTime.UtcNow - avatar.At < TimeSpan.FromHours(1)) return avatar.Image;
+        var img = (jira is not null ? await ledger.Jira.Avatar() : null) ?? (gl is not null ? await ledger.GitLab.Avatar() : null);
+        avatar = (who, DateTime.UtcNow, img);
+        return img;
     }
 
     static JsonArray Recent(Ledger ledger, int take = 30)

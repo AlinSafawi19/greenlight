@@ -77,14 +77,23 @@ async function api(path, opts = {}) {
   return body;
 }
 
+// your Jira (or GitLab) picture when there is one, otherwise your initials
+const faceHtml = name => status?.avatar
+  ? `<img class="face" src="/me/avatar?u=${encodeURIComponent(status.account?.accountId || status.gitlab?.username || "")}" alt="" data-initials="${esc(initials(name))}">`
+  : `<span class="face">${esc(initials(name))}</span>`;
+function wireFaces(root = document) {
+  root.querySelectorAll("img.face").forEach(i => i.onerror = () => { const s = document.createElement("span"); s.className = i.className; s.textContent = i.dataset.initials; i.replaceWith(s); });
+}
+
 async function loadStatus() {
   try { status = await api("/api/status"); }
   catch { $("#whoSlot").innerHTML = `<span class="ink-3" style="padding:0 8px">Server isn't running</span>`; return; }
   const me = status.account;
   $("#whoSlot").innerHTML = me
-    ? `<button class="who" id="whoBtn" aria-label="Account and settings" data-tip="Account and settings"><span class="face">${esc(initials(me.name))}</span><span class="nm">${esc(cap(me.name))}<small>${status.gitlab ? "Jira and GitLab" : "Jira"} · settings</small></span>${icon("cog")}</button>`
+    ? `<button class="who" id="whoBtn" aria-label="Account and settings" data-tip="Account and settings">${faceHtml(me.name)}<span class="nm">${esc(cap(me.name))}<small>${status.gitlab ? "Jira and GitLab" : "Jira"} · settings</small></span>${icon("cog")}</button>`
     : `<button class="btn success" id="whoBtn" style="width:100%">Connect Jira</button>`;
   $("#whoBtn").onclick = openSettings;
+  wireFaces($("#whoSlot"));
   $("#checkAll").hidden = !me;
   renderShell();
 }
@@ -94,7 +103,7 @@ function openSettings() {
   d.innerHTML = `<div class="dlg-in">
       <h2 id="dlgTitle">${me ? "Account" : "Connect your Jira account"}</h2>
       ${me ? `
-        <div class="acct"><span class="face">${esc(initials(me.name))}</span><div style="flex:1;min-width:0">${esc(cap(me.name))}<small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div><button class="btn danger small" id="disc">Disconnect</button></div>
+        <div class="acct">${faceHtml(me.name)}<div style="flex:1;min-width:0">${esc(cap(me.name))}<small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div><button class="btn danger small" id="disc">Disconnect</button></div>
         <p class="intro" style="margin:0">Your API token is kept in ${esc(me.source)} on this computer. Handovers are posted under your name.</p>` : `
         <p class="intro">Greenlight lists the tickets assigned to you and posts handovers as you. The token is stored in Windows Credential Manager, never in the project.</p>
         ${status?.credentialsRejected ? `<p class="intro" style="color:var(--red);margin:0">The saved token was rejected. Enter a new one.</p>` : ""}
@@ -133,6 +142,7 @@ function openSettings() {
     finally { b.disabled = false; }
   };
   wireGitlab(msg);
+  wireFaces(d);
   if (!d.open) d.showModal();
   setTimeout(() => ($("#fEmail") || $("#cancel")).focus(), 30);
 }
@@ -1502,7 +1512,7 @@ function reviewsBlank() {
   if (!status?.gitlab) {
     $("#main").innerHTML = `<div class="blank"><div class="blank-in">${glim("thinking")}<h2>Connect GitLab for reviews</h2>
       <p>Merge requests waiting for your review, and the reviews on yours, appear here once GitLab is connected.</p>
-      <div class="void-acts" style="justify-content:flex-start"><button class="btn primary" id="glGo">${icon("review")}Connect GitLab</button></div></div></div>`;
+      <div class="void-acts"><button class="btn primary" id="glGo">${icon("review")}Connect GitLab</button></div></div></div>`;
     $("#glGo").onclick = openSettings; return;
   }
   const waiting = (reviews || []).filter(r => !r.approvedByMe).length;

@@ -223,6 +223,7 @@ kbd { font: 500 11px var(--sans); color: var(--gl-text-muted); background: var(-
 .who:hover { background: var(--gl-fill-2); }
 .who .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 .who .nm small { display: block; font-weight: 400; font-size: 12px; color: var(--gl-text-muted); }
+img.face { object-fit: cover; background: var(--gl-fill-2); }
 .face { width: 28px; height: 28px; border-radius: 50%; background: var(--gl-soft-green); color: var(--gl-text); display: grid; place-items: center; font: 700 11px var(--sans); letter-spacing: .02em; flex: none; }
 /* collapsed sidebar: icons only, with tooltips */
 .app.sb-mini .brand .word, .app.sb-mini .sb-search span, .app.sb-mini .sb-search kbd, .app.sb-mini .nav-i .lbl, .app.sb-mini .nav-i .cnt,
@@ -814,13 +815,13 @@ button.kpi:hover { box-shadow: 0 0 0 1px var(--gl-border-strong); }
 
 /* ── setup / start ── */
 .blank { min-height: 100%; display: grid; place-items: center; padding: 40px; }
-.blank-in { width: min(440px, 100%); color: var(--gl-text-muted); text-align: left; }
+.blank-in { width: min(460px, 100%); color: var(--gl-text-muted); text-align: center; display: flex; flex-direction: column; align-items: center; }
 .blank-in .glim { width: 72px; height: 72px; }
 .blank-in h2 { font: 700 24px var(--display); letter-spacing: -.035em; margin: 16px 0 6px; color: var(--gl-text); }
 .blank-in p { color: var(--gl-text-2); margin: 0; }
-.blank-in .keys { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; margin-top: 24px; color: var(--gl-text-muted); align-items: center; }
+.blank-in .keys { display: grid; grid-template-columns: auto auto; gap: 10px 14px; margin-top: 24px; color: var(--gl-text-muted); align-items: center; justify-content: center; text-align: left; }
 .blank-in .keys span:nth-child(odd) { display: flex; gap: 4px; }
-.setup { list-style: none; margin: 24px 0 0; padding: 0; counter-reset: s; }
+.setup { list-style: none; margin: 24px 0 0; padding: 0; counter-reset: s; text-align: left; width: 100%; }
 .setup li { display: grid; grid-template-columns: 24px 1fr; gap: 2px 14px; padding: 14px 0; border-top: 1px solid var(--gl-border-soft); counter-increment: s; color: var(--gl-text); }
 .setup li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--gl-border); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--gl-text-2); grid-row: 1 / 3; }
 .setup li.ok::before { content: "✓"; background: var(--st-done); color: var(--gl-bg); box-shadow: none; }
