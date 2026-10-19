@@ -1,0 +1,36 @@
+#!/bin/sh
+# feature-ledger commit-msg hook: every commit must reference a Jira key.
+#  - message already has a key          -> accepted as is
+#  - branch name has a key (MM-1234-x)  -> key is prefixed automatically: "MM-1234: <message>"
+#  - neither                            -> rejected, unless the message contains [no-ticket]
+# The key pattern comes from `git config ledger.keyPattern` (set by install-hooks.ps1).
+
+KEY_RE=$(git config --get ledger.keyPattern)
+[ -z "$KEY_RE" ] && KEY_RE='MM-[0-9]+'
+msg_file="$1"
+body=$(grep -v '^#' "$msg_file")
+
+# nothing written: let git abort the empty commit itself
+[ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ] && exit 0
+
+case "$(printf '%s\n' "$body" | head -n 1)" in
+  Merge*|Revert*|fixup!*|squash!*|amend!*) exit 0 ;;
+esac
+
+printf '%s' "$body" | grep -qE "$KEY_RE" && exit 0
+printf '%s' "$body" | grep -qiF '[no-ticket]' && exit 0
+
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
+key=$(printf '%s' "$branch" | grep -oiE "$KEY_RE" | head -n 1 | tr '[:lower:]' '[:upper:]')
+if [ -n "$key" ]; then
+  tmp="$msg_file.ledger"
+  { printf '%s: ' "$key"; cat "$msg_file"; } > "$tmp" && mv "$tmp" "$msg_file"
+  exit 0
+fi
+
+echo "" >&2
+echo "  Commit rejected: no Jira key ($KEY_RE) in the message or the branch name '$branch'." >&2
+echo "  Fix: name the branch after the ticket (e.g. MM-1234-short-title) or start the message with 'MM-1234: '." >&2
+echo "  Commits that really have no ticket: add [no-ticket] to the message." >&2
+echo "" >&2
+exit 1

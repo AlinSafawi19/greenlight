@@ -1,0 +1,22 @@
+{
+  "reposRoot": "..",
+  "excludeRepos": [ "feature-ledger" ],
+  "keyPattern": "MM-[0-9]+",
+  "jira": {
+    "baseUrl": "https://montyholding.atlassian.net",
+    "emailEnv": "JIRA_EMAIL",
+    "tokenEnv": "JIRA_API_TOKEN"
+  },
+  "db": {
+    "repo": "db-migration-scripts",
+    "root": "DBMigrations",
+    "stagingFolder": "dev"
+  },
+  "highlights": {
+    "Database scripts": "\\.sql$",
+    "Access: permissions / scopes / roles / menus": "(?i)(permission|scope|role|polic|claim|menu|sidebar|navigation)",
+    "Configuration": "(?i)(appsettings[^/]*\\.json$|\\.env(\\.|$)|(^|/)config/)",
+    "Pipeline / deployment": "(?i)(\\.gitlab-ci\\.yml$|dockerfile|(^|/)helm/|(^|/)k8s/|\\.csproj$|package\\.json$)"
+  },
+  "jiraMaxFilesPerRepo": 25
+}

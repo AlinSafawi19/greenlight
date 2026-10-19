@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Ledger: build manifest",
+      "type": "shell",
+      "command": "dotnet run ledger.cs -- ${input:key} --fetch",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Ledger: build manifest and post to Jira",
+      "type": "shell",
+      "command": "dotnet run ledger.cs -- ${input:key} --fetch --post",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Ledger: install git hooks in all repos",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File install-hooks.ps1",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    { "id": "key", "type": "promptString", "description": "Jira key, e.g. MM-1234" }
+  ]
+}
