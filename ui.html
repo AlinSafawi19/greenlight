@@ -389,19 +389,21 @@ table.diff tr.hunk td { background: rgba(92, 140, 235, .08); color: #8fb2f5; pad
 .sbs-cols span { padding-left: 52px; }
 .sbs { border-radius: 8px; overflow: hidden; background: #0f1012; box-shadow: inset 0 0 0 1px var(--hair); }
 table.sbs-t { width: 100%; border-collapse: collapse; table-layout: fixed; font: 12px/1.65 var(--mono); }
-table.sbs-t col.c-ln { width: 48px; }
+table.sbs-t col.c-no { width: 52px; }
 table.sbs-t td { padding: 0 10px; vertical-align: top; }
-table.sbs-t td.ln { text-align: right; color: var(--ink-4); user-select: none; padding: 0 8px 0 0; }
+table.sbs-t td.no { text-align: right; color: var(--ink-4); user-select: none; padding: 0 6px 0 0; }
+.lnb { font: inherit; color: inherit; padding: 0 3px; border-radius: 3px; cursor: pointer; }
+.lnb:hover { color: #6cbcf7; background: rgba(62, 166, 242, .12); text-decoration: underline; text-underline-offset: 2px; }
 table.sbs-t td.tx { color: #cfd1d4; white-space: pre-wrap; word-break: break-all; tab-size: 4; }
-table.sbs-t td.tx + td.ln { box-shadow: inset 1px 0 0 var(--hair-2); }
+table.sbs-t td.tx + td.no { box-shadow: inset 1px 0 0 var(--hair-2); }
 table.sbs-t td.del { background: rgba(220, 80, 70, .16); color: #f3d0cc; }
 table.sbs-t td.add { background: rgba(70, 160, 100, .16); color: #cdeed8; }
-table.sbs-t tr:has(td.del) td.ln:first-child { background: rgba(220, 80, 70, .1); color: #e08a82; }
-table.sbs-t tr:has(td.add) td.ln:nth-child(3) { background: rgba(70, 160, 100, .1); color: #6fbf8e; }
+table.sbs-t tr:has(td.del) td.no:first-child { background: rgba(220, 80, 70, .1); color: #e08a82; }
+table.sbs-t tr:has(td.add) td.no:nth-child(3) { background: rgba(70, 160, 100, .1); color: #6fbf8e; }
 table.sbs-t td.gap { background: repeating-linear-gradient(-45deg, transparent 0 5px, rgba(255,255,255,.035) 5px 7px); }
 table.sbs-t tr.hunk td { background: rgba(92, 140, 235, .08); color: #8fb2f5; padding: 4px 12px; font-size: 11.5px; }
 .dd-c + .dd-c { margin-top: 28px; }
-@media (max-width: 900px) { .dp-h { padding: 12px 16px; } .dp-b { padding: 14px 12px 48px; } table.sbs-t col.c-ln { width: 36px; } }
+@media (max-width: 900px) { .dp-h { padding: 12px 16px; } .dp-b { padding: 14px 12px 48px; } table.sbs-t col.c-no { width: 40px; } }
 
 /* centred error */
 .fail-c .ico.big { width: 30px; height: 30px; color: var(--red); margin-bottom: 14px; }
@@ -1135,8 +1137,8 @@ function slide(el, open) {
 }
 
 const APP = { code: "VS Code", vs: "Visual Studio", folder: "File Explorer" };
-async function openLocal(repo, app, path) {
-  try { await api("/api/open", { method: "POST", body: JSON.stringify({ repo, app, path: path || null }) }); toast(`Opening ${esc(path ? path.split("/").pop() : repo)} in ${APP[app]}.`); }
+async function openLocal(repo, app, path, line) {
+  try { await api("/api/open", { method: "POST", body: JSON.stringify({ repo, app, path: path || null, line: line || 1 }) }); toast(`Opening ${esc(path ? path.split("/").pop() : repo)}${line ? ` at line ${line}` : ""} in ${APP[app]}.`); }
   catch (e) { toast(esc(e.message)); }
 }
 
@@ -1178,6 +1180,7 @@ async function renderDiffPage() {
   $$(".dpage [data-mode]").forEach(b => b.onclick = () => { d.mode = b.dataset.mode; $$(".dpage [data-mode]").forEach(x => x.setAttribute("aria-checked", x === b)); $("#dpBody").innerHTML = diffBody(d); });
   $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { toast(esc(e.message)); } };
   $$(".dpage [data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
+  $("#dpBody").onclick = e => { const b = e.target.closest(".lnb"); if (b) openLocal(d.repo, "code", d.path, +b.dataset.line); };
   if (!d.data) {
     try { d.data = await api("/api/diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); }
     catch (e) { $("#dpBody").innerHTML = `<div class="pane-empty"><b>Couldn't load the changes</b><span>${esc(e.message)}</span></div>`; return; }
@@ -1200,10 +1203,13 @@ function diffBody(d) {
 function sideBySide(patch) {
   const rows = [];
   let o = 0, n = 0, dels = [], adds = [];
+  // a line number opens the file in VS Code at that line
+  const no = (k, side) => `<td class="no"><button class="lnb" data-line="${k}" data-side="${side}" title="Open in VS Code at line ${k}">${k}</button></td>`;
+  const none = `<td class="no"></td>`;
   const flush = () => {
     for (let k = 0; k < Math.max(dels.length, adds.length); k++) {
       const a = dels[k], b = adds[k];
-      rows.push(`<tr>${a ? `<td class="ln">${a[0]}</td><td class="tx del">${esc(a[1]) || " "}</td>` : `<td class="ln"></td><td class="tx gap"></td>`}${b ? `<td class="ln">${b[0]}</td><td class="tx add">${esc(b[1]) || " "}</td>` : `<td class="ln"></td><td class="tx gap"></td>`}</tr>`);
+      rows.push(`<tr>${a ? `${no(a[0], "before")}<td class="tx del">${esc(a[1]) || " "}</td>` : `${none}<td class="tx gap"></td>`}${b ? `${no(b[0], "after")}<td class="tx add">${esc(b[1]) || " "}</td>` : `${none}<td class="tx gap"></td>`}</tr>`);
     }
     dels = []; adds = [];
   };
@@ -1214,13 +1220,12 @@ function sideBySide(patch) {
     if (line.startsWith("\\")) continue;
     if (line.startsWith("-")) dels.push([o++, line.slice(1)]);
     else if (line.startsWith("+")) adds.push([n++, line.slice(1)]);
-    else if (line.startsWith(" ")) { flush(); rows.push(`<tr><td class="ln">${o++}</td><td class="tx">${esc(line.slice(1)) || " "}</td><td class="ln">${n++}</td><td class="tx">${esc(line.slice(1)) || " "}</td></tr>`); }
+    else if (line.startsWith(" ")) { flush(); rows.push(`<tr>${no(o++, "before")}<td class="tx">${esc(line.slice(1)) || " "}</td>${no(n++, "after")}<td class="tx">${esc(line.slice(1)) || " "}</td></tr>`); }
   }
   flush();
-  return rows.length ? `<div class="sbs"><table class="sbs-t"><colgroup><col class="c-ln"><col><col class="c-ln"><col></colgroup>${rows.join("")}</table></div>`
+  return rows.length ? `<div class="sbs"><table class="sbs-t"><colgroup><col class="c-no"><col><col class="c-no"><col></colgroup>${rows.join("")}</table></div>`
     : `<div class="pane-empty" style="padding:18px"><span>No text changes (a binary file, or only renamed).</span></div>`;
-}
-const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono ${c.url ? "ln" : ""}" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
+}const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono ${c.url ? "ln" : ""}" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
   <span class="m">${pre}${esc(c.author)} · ${day(c.date)} · ${c.inDefault ? "merged" : `<span style="color:var(--amber)">not in ${esc(branch(ref) || "main")}</span>`}</span>${c.note ? `<span class="nt">${esc(c.note)}</span>` : ""}</div>`;
 
 function wireTicket() {
