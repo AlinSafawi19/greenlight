@@ -163,8 +163,8 @@ async function loadStatus() {
   catch { $("#whoSlot").innerHTML = `<span class="ink-3" style="padding:0 8px">Server isn't running</span>`; return; }
   const me = status.account;
   $("#whoSlot").innerHTML = me
-    ? `<button class="who" id="whoBtn" aria-label="Account and settings" data-tip="Account and settings">${faceHtml(me.name)}<span class="nm">${esc(cap(me.name))}<small>${status.gitlab ? "Jira and GitLab" : "Jira"} · settings</small></span>${icon("cog")}</button>`
-    : `<button class="btn success" id="whoBtn" style="width:100%">Connect Jira</button>`;
+    ? `<button class="who" id="whoBtn" aria-label="Account and settings" title="${esc(cap(me.name))} · account and settings">${faceHtml(me.name)}<span class="nm">${esc(cap(me.name))}<small>${status.gitlab ? "Jira and GitLab" : "Jira"} · settings</small></span>${icon("cog")}</button>`
+    : `<button class="btn success" id="whoBtn">Connect Jira</button>`;
   $("#whoBtn").onclick = openSettings;
   wireFaces($("#whoSlot"));
   $("#checkAll").hidden = !me;
@@ -1483,49 +1483,28 @@ function glim(mood = "welcome", label = "") {
   </svg>`;
 }
 
-/* ─────────────────────────── shell: theme, sidebar, crumb, counts ─────────────────────────── */
+/* ─────────────────────────── shell: theme and counts ─────────────────────────── */
 let section = "tickets";
-const crumb = html => { $("#crumb").innerHTML = html; };
+const crumb = () => { };   // the header has tabs instead of a breadcrumb; pages show their own path
 const localDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+// one button: shows where it takes you (a sun in dark mode, a moon in light mode)
 function applyTheme(pref) {
   if (pref !== "light") pref = "dark";
-  const dark = pref === "dark";
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.documentElement.dataset.theme = pref;
   document.documentElement.dataset.themePref = pref;
-  $$("#themes [data-theme-set]").forEach(b => b.setAttribute("aria-checked", b.dataset.themeSet === pref));
+  const b = $("#themeBtn"), to = pref === "dark" ? "light" : "dark";
+  b.innerHTML = icon(to === "light" ? "sun" : "moon", "ico");
+  b.title = b.ariaLabel = `Switch to ${to} mode`;
 }
-$$("#themes [data-theme-set]").forEach(b => b.onclick = () => {
-  // in the narrow sidebar only the current theme shows: clicking it switches to the other one
-  let pick = b.dataset.themeSet;
-  if ($("#app").classList.contains("sb-mini") && b.getAttribute("aria-checked") === "true") pick = pick === "dark" ? "light" : "dark";
-  try { localStorage.setItem("gl-theme", pick); } catch { }
-  applyTheme(pick);
-});
+$("#themeBtn").onclick = () => {
+  const to = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  try { localStorage.setItem("gl-theme", to); } catch { }
+  applyTheme(to);
+};
 applyTheme(document.documentElement.dataset.themePref || "dark");
 
-$("#brandGlim").innerHTML = glim("welcome");
-// collapsed: your choice, or automatically while the window is narrow
-let sbChoice = document.documentElement.dataset.sb === "mini";
-const narrow = matchMedia("(max-width: 1100px) and (min-width: 901px)");
-function syncSidebar() {
-  const mini = sbChoice || narrow.matches;
-  $("#app").classList.toggle("sb-mini", mini);
-  $("#sbToggle").setAttribute("aria-pressed", mini);
-  $("#sbToggle").title = $("#sbToggle").ariaLabel = mini ? "Expand the sidebar" : "Collapse the sidebar";
-}
-syncSidebar();
-narrow.addEventListener("change", syncSidebar);
-$("#sbToggle").onclick = () => {
-  sbChoice = !$("#app").classList.contains("sb-mini");
-  if (!sbChoice && narrow.matches) { $("#app").classList.remove("sb-mini"); $("#sbToggle").setAttribute("aria-pressed", false); return; }   // a peek while narrow
-  try { localStorage.setItem("gl-sb", sbChoice ? "mini" : "full"); } catch { }
-  syncSidebar();
-};
-$("#menuBtn").onclick = e => { e.stopPropagation(); $("#app").classList.toggle("sb-open"); };
-document.addEventListener("click", e => { if ($("#app").classList.contains("sb-open") && !e.target.closest(".sb") && !e.target.closest("#menuBtn")) $("#app").classList.remove("sb-open"); });
-$$(".nav-i").forEach(a => a.addEventListener("click", () => $("#app").classList.remove("sb-open")));
-$("#brandHome").onclick = e => { e.preventDefault(); history.pushState(null, "", "#tickets"); route(); };
+$("#brandGlim").innerHTML = glim("welcome");$("#brandHome").onclick = e => { e.preventDefault(); history.pushState(null, "", "#tickets"); route(); };
 
 
 function renderShell() {

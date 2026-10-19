@@ -56,35 +56,21 @@
 </svg>
 
 <div class="app" id="app">
-  <aside class="sb" id="sb" aria-label="Greenlight">
-    <div class="sb-top">
-      <a class="brand" href="#tickets" id="brandHome" aria-label="greenlight. home"><span id="brandGlim"></span><span class="word">greenlight<span class="dot">.</span></span></a>
-      <button class="btn only small sb-toggle" id="sbToggle" title="Collapse the sidebar" aria-label="Collapse the sidebar" aria-pressed="false"><svg class="ico s"><use href="#i-sidebar"/></svg></button>
-    </div>
-    <nav class="nav" aria-label="Main">
-      <a class="nav-i" href="#tickets" data-nav="tickets" data-tip="My tickets"><svg class="ico"><use href="#i-ticket"/></svg><span class="lbl">My tickets</span><span class="cnt" id="nTickets"></span></a>
-      <a class="nav-i" href="#reviews" data-nav="reviews" data-tip="Reviews"><svg class="ico"><use href="#i-review"/></svg><span class="lbl">Reviews</span><span class="cnt" id="nReviews"></span></a>
-      <a class="nav-i" href="#worklogs" data-nav="worklogs" data-tip="Worklogs"><svg class="ico"><use href="#i-clock"/></svg><span class="lbl">Worklogs</span><span class="cnt" id="nTime"></span></a>
-    </nav>
-    <div class="sb-fill"></div>
-    <div class="sb-foot">
-      <div class="themes" role="radiogroup" aria-label="Theme" id="themes">
-        <button role="radio" data-theme-set="light" title="Light" data-tip="Light"><svg class="ico s"><use href="#i-sun"/></svg><span class="tl">Light</span></button>
-        <button role="radio" data-theme-set="dark" title="Dark" data-tip="Dark"><svg class="ico s"><use href="#i-moon"/></svg><span class="tl">Dark</span></button>
-      </div>
-      <div id="whoSlot"></div>
-    </div>
-  </aside>
-
   <div class="ws">
     <header class="hd">
-      <button class="btn only menu" id="menuBtn" aria-label="Open navigation"><svg class="ico"><use href="#i-menu"/></svg></button>
-      <div class="crumb" id="crumb"></div>
+      <a class="brand" href="#tickets" id="brandHome" aria-label="greenlight. home"><span id="brandGlim"></span><span class="word">greenlight<span class="dot">.</span></span></a>
+      <nav class="tnav" aria-label="Main">
+        <a class="nav-i" href="#tickets" data-nav="tickets"><svg class="ico s"><use href="#i-ticket"/></svg><span class="lbl">My tickets</span><span class="cnt" id="nTickets"></span></a>
+        <a class="nav-i" href="#reviews" data-nav="reviews"><svg class="ico s"><use href="#i-review"/></svg><span class="lbl">Reviews</span><span class="cnt" id="nReviews"></span></a>
+        <a class="nav-i" href="#worklogs" data-nav="worklogs"><svg class="ico s"><use href="#i-clock"/></svg><span class="lbl">Worklogs</span><span class="cnt" id="nTime"></span></a>
+      </nav>
       <div class="end">
         <span class="progress" id="progress" aria-live="polite"></span>
         <div class="finder-wrap"><svg class="ico s fglass" aria-hidden="true"><use href="#i-search"/></svg><select id="finderSel" aria-label="Find a ticket"></select><kbd class="fkbd">/</kbd></div>
         <div class="pop-wrap" id="dayWrap" hidden><button class="daymeter" id="dayBtn" aria-haspopup="dialog" aria-expanded="false" title="Time logged today against your daily target"></button><div class="pop weekpop" id="weekPop" hidden></div></div>
-        <button class="btn" id="checkAll" hidden title="Fetch every repository, then check all your tickets"><svg class="ico s"><use href="#i-checkall"/></svg>Check all</button>
+        <button class="btn" id="checkAll" hidden title="Fetch every repository, then check all your tickets"><svg class="ico s"><use href="#i-checkall"/></svg><span class="lbl">Check all</span></button>
+        <button class="btn only" id="themeBtn" aria-label="Switch theme" title="Switch theme"></button>
+        <div id="whoSlot"></div>
       </div>
     </header>
     <div class="view">

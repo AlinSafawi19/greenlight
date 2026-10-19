@@ -8,5 +8,4 @@
   var dark = pref === "dark";
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   document.documentElement.setAttribute("data-theme-pref", pref);
-  try { if (localStorage.getItem("gl-sb") === "mini") document.documentElement.setAttribute("data-sb", "mini"); } catch (e) { }
 })();
