@@ -199,7 +199,6 @@ kbd { font: 500 11px var(--sans); color: var(--gl-text-muted); background: var(-
 .nav-i:hover { background: var(--gl-fill-2); color: var(--gl-text); }
 .nav-i[aria-current="page"] { background: var(--gl-surface); color: var(--gl-text); box-shadow: var(--shadow-1); }
 .nav-i[aria-current="page"] .ico { color: var(--gl-text); }
-.nav-i[aria-current="page"]::before { content: ""; position: absolute; left: -10px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gl-brand); }
 .nav-i .lbl { flex: 1; white-space: nowrap; overflow: hidden; }
 .nav-i .cnt { font-size: 12px; font-weight: 600; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; background: var(--gl-fill-2); color: var(--gl-text-muted); }
 .nav-i .cnt.hot { background: var(--st-todo-bg); color: var(--st-todo); }
