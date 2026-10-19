@@ -232,7 +232,20 @@ class Ledger
     {
         if (myEmails is not null) return myEmails;
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var r in Repos) { var e = Git.Run(r, "config", "user.email").Trim(); if (e != "") set.Add(e); }
+        // each repository's own identity, read from its config file (no process); then the global one, once
+        foreach (var e in Repos.AsParallel().Select(r =>
+                 {
+                     try
+                     {
+                         var cfgFile = Path.Combine(r, ".git", "config");
+                         if (!File.Exists(cfgFile)) return "";
+                         var m = Regex.Match(File.ReadAllText(cfgFile), @"(?ms)^\[user\][^\[]*?^\s*email\s*=\s*(\S+)");
+                         return m.Success ? m.Groups[1].Value : "";
+                     }
+                     catch { return ""; }
+                 }))
+            if (e != "") set.Add(e);
+        if (Repos.Count > 0 && Git.Run(Repos[0], "config", "--global", "user.email").Trim() is { Length: > 0 } g) set.Add(g);
         if (Jira.Me?.Email is { Length: > 0 } je) set.Add(je);
         return myEmails = set.ToList();
     }
@@ -253,6 +266,18 @@ class Ledger
         if (Jira.Configured)
         {
             issue = await Jira.GetIssue(key);
+            // the parent chain is read while the child tickets are being read
+            var chain = Task.Run(async () =>
+            {
+                var up = new List<IssueInfo>();
+                for (var (pk, depth) = (issue?.ParentKey, 0); pk is not null && depth < 3; depth++)
+                {
+                    if (await Jira.GetIssue(pk) is not { } p) break;
+                    up.Insert(0, p);
+                    pk = p.ParentKey;
+                }
+                return up;
+            });
             // sub-tasks can't have children; for anything else the counts are always looked up, so the UI can
             // say "no sub-tickets" or "none are yours" even while they're switched off
             if (issue is not null && issue.Level >= 0)
@@ -265,12 +290,7 @@ class Ledger
                 // other people's sub-tickets are left out: their keys aren't scanned, so their commits don't count either
                 if (includeChildren) scope = onlyMine && meId is not null ? mine : all;
             }
-            for (var (pk, depth) = (issue?.ParentKey, 0); pk is not null && depth < 3; depth++)
-            {
-                if (await Jira.GetIssue(pk) is not { } p) break;
-                ancestors.Insert(0, p);
-                pk = p.ParentKey;
-            }
+            ancestors.AddRange(await chain);
         }
         // the ticket itself is known now: the page can show it while git is still being read
         emit(new JsonObject
@@ -732,7 +752,11 @@ static class Scanner
         {
             var oldest = outside.Select(s => shown.TryGetValue(s, out var t) && long.TryParse(t.Split('\n')[0].Split('\x1f').ElementAtOrDefault(6)?.Trim(), out var at) ? at : 0)
                                 .DefaultIfEmpty(0).Min();
-            var upstream = Git.Lines(Git.Run(repo, "rev-list", "--no-merges", $"--since={Math.Max(0, oldest - 86400)}", defaultRef)).ToList();
+            // the same change touches the same files, so only main-branch commits touching them can be twins
+            var touched = outside.SelectMany(s => shown.TryGetValue(s, out var t) ? t.Split('\n').Skip(1).Select(l => l.TrimEnd('\r').Split('\t')).Where(x => x.Length >= 2 && x[0].Length > 0).Select(x => x[^1]) : [])
+                                 .Distinct(StringComparer.Ordinal).ToList();
+            string[] since = ["rev-list", "--no-merges", $"--since={Math.Max(0, oldest - 86400)}", defaultRef];
+            var upstream = Git.Lines(Git.Cached(repo, null, touched.Count > 0 && touched.Sum(t => t.Length + 3) < 20000 ? [.. since, "--", .. touched] : since)).ToList();
             if (upstream.Count > 0)
             {
                 var ids = Git.PatchIds(repo, outside.Concat(upstream));
@@ -1097,6 +1121,16 @@ static class QaPrep
                                         ConcurrentDictionary<string, TagDetail>? tagsOut = null, Action<Station>? onStation = null)
     {
         Station Out(Station s) { onStation?.Invoke(s); return s; }
+        // the slow reads (each repository's patches and tags) run for all repositories at once; the steps below
+        // then find them in the cache instead of waiting on one repository after another
+        Parallel.ForEach(repos, new ParallelOptions { MaxDegreeOfParallelism = 12 }, r =>
+        {
+            if (pathOf(r.Name) is not { } path) return;
+            var own = Own(r).ToList();
+            if (own.Count == 0) return;
+            Git.Many(path, own.Select(c => c.Sha), "-p", "--unified=0", "--no-color", "--format=%x1e%H");
+            if (!r.Name.Equals(db.Repo, StringComparison.OrdinalIgnoreCase) && own.All(c => c.InDefault)) Tags.For(path, own.Select(c => c.Sha), r.WebUrl);
+        });
         var code = Out(Code(repos));
         var tag = Out(Tag(repos, db, pathOf, tagsOut));
         var (cfgItems, accessFromCode) = ScanPatches(repos, db, pathOf);
@@ -2383,7 +2417,7 @@ static class UiServer
                 {
                     // only plain file names from the assets folder: no sub-paths, no "..", only known types
                     var name = p["/assets/".Length..];
-                    var types = new Dictionary<string, string> { [".ttf"] = "font/ttf", [".woff2"] = "font/woff2", [".svg"] = "image/svg+xml", [".js"] = "text/javascript; charset=utf-8", [".css"] = "text/css; charset=utf-8" };
+                    var types = new Dictionary<string, string> { [".ttf"] = "font/ttf", [".woff2"] = "font/woff2", [".svg"] = "image/svg+xml", [".js"] = "text/javascript; charset=utf-8", [".css"] = "text/css; charset=utf-8", [".jpg"] = "image/jpeg", [".png"] = "image/png", [".webp"] = "image/webp" };
                     var file = Path.Combine(ledger.AppDir, "assets", name);
                     if (!Regex.IsMatch(name, @"^[A-Za-z0-9_\-]+(\.[A-Za-z0-9_\-]+)*\.[a-z0-9]+$") || name.Contains("..") || !types.TryGetValue(Path.GetExtension(name), out var type) || !File.Exists(file))
                     { await Send(res, 404, Err("Not found")); return; }
