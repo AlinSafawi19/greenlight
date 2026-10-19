@@ -969,15 +969,19 @@ const headHtml = (key, k, ancestors = []) => `<div class="path">${ancestors.map(
     <div class="facts"><span class="tag">${typeTag(k.type, true)}</span><span class="tag">${jiraBadge(k.status, k.statusCategory)}</span>${k.assignee ? `<span><b>${esc(cap(k.assignee))}</b></span>` : ""}</div>`
   : `<div class="line" style="width:64%;height:22px;margin-top:14px"></div><div class="line" style="width:30%"></div>`}`;
 
-async function load(key, fetchFirst, inPlace = false) {
+async function load(key, fetchFirst, inPlace = false, retrying = false) {
   if (key !== selected) { evTicket = "*"; evRepos = []; fileQuery = ""; groupOpen = {}; }
   selected = key; commitFilter = ""; openStep = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
   document.title = `${key} · Greenlight`;
   const n = ++seq;
-  // switching scope keeps the page and dims what is about to change, instead of blanking it
-  if (inPlace && $(".page")) $(".page").classList.add("dim");
+  // switching scope keeps the page and dims what is about to change, instead of blanking it;
+  // a retry keeps the error on screen with a spinner on its button, so nothing flashes
+  const started = Date.now();
+  const settle = ms => new Promise(ok => setTimeout(ok, Math.max(0, ms - (Date.now() - started))));
+  if (retrying) { const b = $("#retry"); if (b) { b.disabled = true; b.innerHTML = `<span class="spinner"></span>Trying again`; } }
+  else if (inPlace && $(".page")) $(".page").classList.add("dim");
   else {
     // what we already know shows straight away; the rest fills in part by part as the check runs
     const k = tickets?.find(t => t.key === key) || (report?.issue?.key === key ? report.issue : null);
@@ -1015,6 +1019,7 @@ async function load(key, fetchFirst, inPlace = false) {
     });
     if (n !== seq) return;
     if (!r) throw new Error("The check stopped before it finished.");
+    if (retrying) await settle(500);
     r.fetched = fetchFirst; report = r;
     const t = tickets?.find(x => x.key === key);
     if (t) { t.lastBuild = { generated: r.generated, stations: r.stations }; renderList(); }
@@ -1024,6 +1029,7 @@ async function load(key, fetchFirst, inPlace = false) {
     soften($(".page .body"), 40); soften($(".page .ev"), 90);
   } catch (e) {
     if (n !== seq) return;
+    if (retrying) await settle(600);
     const disk = /disk was full|not enough space/i.test(e.message);
     $("#main").innerHTML = `<div class="page"><button class="btn back" id="back">${icon("back")}My tickets</button>
       <div class="void fail-c">${icon("alert", "ico big")}
@@ -1032,7 +1038,7 @@ async function load(key, fetchFirst, inPlace = false) {
         <div class="void-acts"><button class="btn solid" id="retry">${icon("refresh")}Try again</button></div>
         <details class="why"><summary>Technical details</summary><code>${esc(e.message)}</code></details>
       </div></div>`;
-    $("#back").onclick = back; $("#retry").onclick = () => load(key, fetchFirst);
+    $("#back").onclick = back; $("#retry").onclick = () => load(key, fetchFirst, false, true);
   }
 }
 function back() { history.pushState(null, "", location.pathname); selected = null; report = null; reviewing = null; reviewerMode = false; $("#split").classList.remove("open"); renderList(); blank(); }
@@ -1756,29 +1762,34 @@ function openReview(project, iid) {
   loadReview(project, +iid);
 }
 
-async function loadReview(project, iid) {
+async function loadReview(project, iid, retrying = false) {
+  const started = Date.now();
+  const settle = ms => new Promise(ok => setTimeout(ok, Math.max(0, ms - (Date.now() - started))));
+  if (retrying) { const b = $("#retry"); if (b) { b.disabled = true; b.innerHTML = `<span class="spinner"></span>Trying again`; } }
   reviewing = { project, iid };
   selected = null; report = null; diffState = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.project === project && +b.dataset.iid === iid));
   const known = reviews?.find(r => r.project === project && r.iid === iid);
-  $("#main").innerHTML = `<div class="loading">
+  if (!retrying) $("#main").innerHTML = `<div class="loading">
     <button class="btn back" id="back">${icon("back")}To review</button>
     ${known ? `<div class="path">${repoTag(known.repo)}<span class="mono">!${iid}</span></div><div class="title-row"><h2>${esc(known.title)}</h2></div><div style="height:28px"></div>` : ""}
     <div class="note"><span class="spinner"></span>Reading the merge request, its changes and its discussions from GitLab</div>
     ${[72, 58, 66, 49, 61, 54].map(w => `<div class="line" style="width:${w}%"></div>`).join("")}</div>`;
-  $("#back").onclick = back;
+  if ($("#back")) $("#back").onclick = back;
   try {
     const r = await api(`/api/review?project=${encodeURIComponent(project)}&iid=${iid}`);
+    if (retrying) await settle(500);
     if (!reviewing || reviewing.iid !== iid || reviewing.project !== project) return;
     reviewing = { ...r, project, iid, fileQuery: "" };
     document.title = `!${iid} · ${r.repo} · Greenlight`;
     renderReview();
   } catch (e) {
+    if (retrying) await settle(600);
     $("#main").innerHTML = `<div class="page"><button class="btn back" id="back">${icon("back")}To review</button>
       <div class="void fail-c">${icon("alert", "ico big")}<h3>Couldn't open !${iid}</h3><p>${esc(e.message)}</p>
       <div class="void-acts"><button class="btn solid" id="retry">${icon("refresh")}Try again</button></div></div></div>`;
-    $("#back").onclick = back; $("#retry").onclick = () => loadReview(project, iid);
+    $("#back").onclick = back; $("#retry").onclick = () => loadReview(project, iid, true);
   }
 }
 
