@@ -19,5 +19,6 @@
     "Pipeline / deployment": "(?i)(\\.gitlab-ci\\.yml$|dockerfile|(^|/)helm/|(^|/)k8s/|\\.csproj$|package\\.json$)"
   },
   "jiraMaxFilesPerRepo": 25,
-  "time": { "dailyTargetHours": 5, "workDays": [1, 2, 3, 4, 5] }
+  "time": { "dailyTargetHours": 5, "workDays": [1, 2, 3, 4, 5], "reminderAt": "17:00" },
+  "team": { "jql": null }
 }
