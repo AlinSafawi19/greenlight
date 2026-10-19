@@ -6,268 +6,197 @@
 <title>Feature Ledger</title>
 <style>
   :root {
-    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f1f3f6; --border: #e2e5ea;
-    --text: #1b1f24; --muted: #5d6673; --faint: #8a93a0;
-    --accent: #2f5bd3; --accent-ink: #ffffff; --accent-soft: #e8eefc;
-    --ok: #1e7a46; --ok-soft: #e5f4ec; --warn: #9a5b00; --warn-soft: #fdf2e0; --bad: #b42318; --bad-soft: #fdecea;
-    --info: #2f5bd3; --info-soft: #e8eefc;
-    --epic: #6e3fc9; --epic-soft: #efe8fb; --story: #1e7a46; --task: #2f5bd3; --bug: #b42318; --sub: #5d6673;
-    --add: #1e7a46; --mod: #2f5bd3; --del: #b42318;
-    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
-    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    --paper: #fbfaf7; --sheet: #ffffff; --ink: #1f1e1b; --ink-2: #4a4843; --muted: #7a776f; --faint: #a7a39a;
+    --line: #e8e5de; --line-2: #f1efe9; --hover: #f4f2ec;
+    --accent: #1b5e9e; --good: #2f7a4a; --warn: #a3590a; --bad: #b3261e;
+    --mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0f1216; --surface: #171b21; --surface-2: #1e232b; --border: #2a313b;
-      --text: #e6e9ee; --muted: #a2abb8; --faint: #77818f;
-      --accent: #7c9cff; --accent-ink: #0f1216; --accent-soft: #1f2a47;
-      --ok: #5cc98a; --ok-soft: #14291e; --warn: #f0b45a; --warn-soft: #2d2213; --bad: #f2867c; --bad-soft: #2f1716;
-      --info: #7c9cff; --info-soft: #1f2a47;
-      --epic: #b79cff; --epic-soft: #2a2140; --story: #5cc98a; --task: #7c9cff; --bug: #f2867c; --sub: #a2abb8;
-      --add: #5cc98a; --mod: #7c9cff; --del: #f2867c;
-      --shadow: 0 1px 2px rgba(0,0,0,.4);
+      --paper: #161614; --sheet: #1c1c1a; --ink: #ecebe6; --ink-2: #c9c7c0; --muted: #96938a; --faint: #6c6a63;
+      --line: #2e2d2a; --line-2: #252522; --hover: #24231f;
+      --accent: #7fb0e6; --good: #7cc495; --warn: #e5a35a; --bad: #f08a80;
     }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
-  body { background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  body { background: var(--paper); color: var(--ink); font: 14.5px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
   a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  code, .mono { font-family: var(--mono); font-size: 12.5px; }
-  button { font: inherit; cursor: pointer; }
-  input, select { font: inherit; color: var(--text); }
+  a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  input, select { font: inherit; color: var(--ink); }
+  .key { font: 500 13px var(--mono); letter-spacing: -.01em; }
+  code { font: 12.5px var(--mono); color: var(--ink-2); }
+  .muted { color: var(--muted); }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
 
-  header.bar {
-    position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 16px; padding: 10px 20px; flex-wrap: wrap;
-  }
-  .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 15px; white-space: nowrap; }
-  .brand svg { color: var(--accent); }
-  form.search { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 280px; max-width: 720px; flex-wrap: wrap; }
-  .search input[type=text] {
-    flex: 1; min-width: 140px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
-    background: var(--surface-2); font: 600 14px var(--mono); text-transform: uppercase;
-  }
-  .search input[type=text]:focus, .field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
-  label.toggle { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; user-select: none; }
-  .btn {
-    display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 550; white-space: nowrap;
-  }
-  .btn:hover:not(:disabled) { background: var(--surface-2); text-decoration: none; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  .btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
-  .btn.danger { color: var(--bad); }
-  .btn.small { padding: 4px 10px; font-size: 13px; }
-  .btn.icon { padding: 5px 7px; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .account { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; display: grid; place-items: center; flex: none; }
-  .acct-btn { display: flex; align-items: center; gap: 8px; background: none; border: 1px solid transparent; border-radius: 999px; padding: 3px 10px 3px 3px; color: var(--text); }
-  .acct-btn:hover { background: var(--surface-2); border-color: var(--border); }
-  .acct-btn .who { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
-  .acct-btn .who small { color: var(--muted); font-size: 11px; }
+  /* top line */
+  .top { display: flex; align-items: center; gap: 24px; padding: 14px 28px; border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 3; }
+  .wordmark { font: 600 15px var(--display); letter-spacing: -.01em; white-space: nowrap; }
+  .wordmark span { color: var(--muted); font-weight: 400; }
+  form.go { flex: 1; max-width: 560px; display: flex; align-items: center; gap: 14px; }
+  .go input[type=text] { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--sheet); border-radius: 6px; padding: 7px 10px; font: 500 13.5px var(--mono); text-transform: uppercase; }
+  .go input[type=text]::placeholder { text-transform: none; font-family: var(--sans); color: var(--faint); }
+  .go input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .go label { display: flex; gap: 5px; align-items: center; font-size: 13px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+  .who { margin-left: auto; font-size: 13.5px; white-space: nowrap; }
+  .textbtn { background: none; border: 0; padding: 0; color: var(--accent); }
+  .textbtn:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .textbtn:disabled { color: var(--faint); cursor: default; text-decoration: none; }
 
-  .layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 20px; padding: 20px; max-width: 1500px; margin: 0 auto; }
-  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; padding: 16px; } aside { order: 2; } }
+  .frame { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: calc(100vh - 54px); }
+  @media (max-width: 920px) { .frame { grid-template-columns: 1fr; } nav.side { border-right: 0; border-bottom: 1px solid var(--line); max-height: 45vh; } }
 
-  aside { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
-  .panel-h { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--border); }
-  .panel-h h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); flex: 1; }
-  .panel-h .n { font-size: 11px; background: var(--surface-2); border-radius: 999px; padding: 1px 7px; color: var(--muted); }
-  .scroll { max-height: calc(100vh - 220px); overflow: auto; }
-  .mine-filter { display: flex; gap: 4px; padding: 8px 10px 0; flex-wrap: wrap; }
-  .seg { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
-  .seg.active { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+  /* left: an inbox of your tickets */
+  nav.side { border-right: 1px solid var(--line); padding: 18px 0 24px; overflow: auto; max-height: calc(100vh - 54px); position: sticky; top: 54px; }
+  .side h2 { font: 600 12px var(--sans); color: var(--muted); margin: 0; padding: 0 20px; display: flex; align-items: baseline; gap: 8px; }
+  .side h2 + * { margin-top: 8px; }
+  .side .ctl { padding: 0 20px; display: flex; gap: 10px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  .side select { border: 0; background: none; color: var(--accent); padding: 0; font-size: 12.5px; cursor: pointer; }
+  .parent { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 14px 20px 4px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button.parent:hover { color: var(--accent); }
+  .parent .key { font-size: 11.5px; color: var(--ink-2); }
+  .row { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 20px 7px 20px; border-left: 2px solid transparent; }
+  .row:hover { background: var(--hover); }
+  .row.on { background: var(--hover); border-left-color: var(--ink); }
+  .row .l1 { display: flex; gap: 8px; align-items: baseline; }
+  .row .l1 .st { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .row .t { font-size: 13.5px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; transform: translateY(-1px); }
+  .dot.good { background: var(--good); } .dot.warn { background: var(--warn); }
+  .side .note { padding: 6px 20px; font-size: 13px; color: var(--muted); }
+  .side hr { border: 0; border-top: 1px solid var(--line); margin: 22px 20px 18px; }
 
-  .group { padding: 4px 6px; }
-  .group + .group { border-top: 1px solid var(--border); }
-  .group-h {
-    width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 6px 8px; color: var(--muted);
-    display: flex; gap: 6px; align-items: center; font-size: 12px;
-  }
-  .group-h:hover { background: var(--surface-2); color: var(--text); }
-  .group-h .gs { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tk {
-    width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 7px 8px; color: var(--text);
-    display: grid; grid-template-columns: auto 1fr auto; gap: 1px 8px; align-items: center;
-  }
-  .tk:hover, .tk.active { background: var(--surface-2); }
-  .tk .k { font: 600 12.5px var(--mono); }
-  .tk .s { grid-column: 2 / -1; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tk .meta { display: flex; gap: 4px; align-items: center; }
-  .empty { padding: 14px; color: var(--muted); font-size: 13px; }
+  /* right: the ticket, written out like a handover note */
+  main { padding: 36px 48px 80px; min-width: 0; }
+  @media (max-width: 700px) { main { padding: 24px 18px 60px; } .top { padding: 12px 16px; gap: 12px; flex-wrap: wrap; } }
+  article { max-width: 920px; }
+  .crumbs { font-size: 13px; color: var(--muted); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .crumbs button { border: 0; background: none; padding: 0; color: var(--muted); }
+  .crumbs button:hover { color: var(--accent); }
+  .ident { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .ident .key { font-size: 14px; }
+  h1 { font: 600 27px/1.25 var(--display); letter-spacing: -.015em; margin: 4px 0 8px; max-width: 760px; }
+  .facts { color: var(--muted); font-size: 13.5px; }
+  .facts b { color: var(--ink-2); font-weight: 500; }
+  .tools { display: flex; gap: 18px; margin-top: 14px; font-size: 13.5px; flex-wrap: wrap; }
 
-  .type { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; font: 700 10px/1 system-ui; color: #fff; flex: none; }
-  .type.epic { background: var(--epic); } .type.story { background: var(--story); } .type.bug { background: var(--bug); }
-  .type.task { background: var(--task); } .type.sub { background: var(--sub); }
+  .verdict { margin: 30px 0 8px; padding: 2px 0 2px 18px; border-left: 3px solid var(--line); }
+  .verdict.ok { border-color: var(--good); } .verdict.no { border-color: var(--warn); }
+  .verdict h2 { font: 600 19px var(--display); margin: 0 0 6px; letter-spacing: -.01em; }
+  .verdict p { margin: 0; color: var(--ink-2); }
+  .todo { list-style: none; margin: 10px 0 0; padding: 0; }
+  .todo li { padding: 3px 0 3px 22px; position: relative; color: var(--ink-2); }
+  .todo li::before { content: ""; position: absolute; left: 2px; top: 9px; width: 9px; height: 9px; border: 1.5px solid var(--warn); border-radius: 2px; }
+  .open-in-jira { margin-top: 12px; font-size: 13.5px; color: var(--muted); }
 
-  main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-
-  .crumbs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
-  .crumbs button { background: none; border: 0; padding: 0; color: var(--accent); display: inline-flex; gap: 5px; align-items: center; }
-  .crumbs button:hover { text-decoration: underline; }
-  .ticket { padding: 18px 20px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-  .ticket .title { flex: 1; min-width: 260px; }
-  .ticket .key { font: 650 13px var(--mono); display: flex; gap: 8px; align-items: center; }
-  .ticket h1 { margin: 2px 0 8px; font-size: 20px; line-height: 1.3; font-weight: 650; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
-  .chip b { color: var(--text); font-weight: 600; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-  .banner { padding: 14px 18px; border-radius: 12px; border: 1px solid; display: flex; gap: 12px; align-items: flex-start; }
-  .banner.ok { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 35%, transparent); color: var(--ok); }
-  .banner.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); color: var(--warn); }
-  .banner.info { background: var(--info-soft); border-color: color-mix(in srgb, var(--info) 30%, transparent); color: var(--info); }
-  .banner h2 { margin: 0 0 2px; font-size: 15px; }
-  .banner ul { margin: 6px 0 0; padding-left: 18px; color: var(--text); }
-  .banner li { margin: 3px 0; }
-  .banner p { margin: 0; color: var(--text); }
-  .banner svg { flex: none; margin-top: 2px; }
-  .banner .btn { margin-top: 8px; }
-
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
-  .stat { padding: 14px 16px; }
-  .stat .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.2; }
-  .stat .l { color: var(--muted); font-size: 12px; }
-  .stat .sub { color: var(--faint); font-size: 12px; }
-
-  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); padding: 0 12px; overflow-x: auto; }
-  .tabs button { background: none; border: 0; padding: 12px 12px 10px; color: var(--muted); font-weight: 550; border-bottom: 2px solid transparent; white-space: nowrap; }
-  .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
-  .tabs .n { font-size: 11px; background: var(--surface-2); border-radius: 999px; padding: 1px 7px; margin-left: 4px; color: var(--muted); }
-  .tabbody { padding: 16px; }
-  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-  .toolbar select, .filter { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
-  .filter { width: 100%; max-width: 360px; }
+  section.s { margin-top: 40px; }
+  section.s > h3 { font: 600 13px var(--sans); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: baseline; }
+  section.s > h3 .c { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  section.s > p.lead { margin: -2px 0 12px; color: var(--muted); font-size: 13.5px; }
 
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  td, th { padding: 9px 12px 9px 0; vertical-align: top; text-align: left; border-bottom: 1px solid var(--line-2); }
+  th { font-weight: 500; font-size: 12.5px; color: var(--muted); padding-top: 0; }
   tr:last-child td { border-bottom: 0; }
-  tr.me td { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
-  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
-  .indent-1 { padding-left: 26px !important; }
-  .indent-2 { padding-left: 44px !important; }
-  .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font: 600 12.5px var(--mono); }
-  .linkbtn:hover { text-decoration: underline; }
+  td.nw { white-space: nowrap; }
+  td .sub { font-size: 12.5px; color: var(--muted); }
+  tr.you td:first-child { box-shadow: inset 2px 0 0 var(--accent); padding-left: 10px; }
+  .lvl1 { padding-left: 18px !important; } .lvl2 { padding-left: 36px !important; }
+  .tablewrap { overflow-x: auto; }
 
-  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 550; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
-  .badge.ok { background: var(--ok-soft); color: var(--ok); }
-  .badge.warn { background: var(--warn-soft); color: var(--warn); }
-  .badge.info { background: var(--info-soft); color: var(--info); }
-  .badge.muted { background: var(--surface-2); color: var(--muted); }
-  .badge.key { font-family: var(--mono); font-size: 11.5px; }
-  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .plain { list-style: none; margin: 0; padding: 0; }
+  .plain li { padding: 5px 0; border-bottom: 1px solid var(--line-2); display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .plain li:last-child { border-bottom: 0; }
+  .plain .r { color: var(--muted); font-size: 13px; min-width: 150px; }
 
-  .repo { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
-  .repo > summary { list-style: none; cursor: pointer; padding: 10px 14px; display: flex; gap: 10px; align-items: center; background: var(--surface-2); flex-wrap: wrap; }
-  .repo > summary::-webkit-details-marker { display: none; }
-  .repo > summary .name { font-weight: 600; }
-  .repo > summary .meta { color: var(--muted); font-size: 12px; margin-left: auto; }
-  .repo > summary::before { content: "▸"; color: var(--faint); transition: transform .15s; }
-  .repo[open] > summary::before { transform: rotate(90deg); }
-  .files { list-style: none; margin: 0; padding: 6px 0; }
-  .files li { display: flex; gap: 10px; padding: 3px 14px; align-items: baseline; }
-  .files li:hover { background: var(--surface-2); }
-  .fs { font: 700 11px var(--mono); width: 14px; text-align: center; flex: none; }
-  .fs.A { color: var(--add); } .fs.M { color: var(--mod); } .fs.D { color: var(--del); } .fs.R { color: var(--mod); }
-  .files code { word-break: break-all; }
+  details.more { margin-top: 10px; border-top: 1px solid var(--line); }
+  details.more > summary { list-style: none; cursor: pointer; padding: 12px 0; color: var(--ink-2); display: flex; gap: 8px; align-items: baseline; }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary::before { content: "+"; font: 500 14px var(--mono); color: var(--muted); width: 12px; }
+  details.more[open] > summary::before { content: "–"; }
+  details.more > summary .c { color: var(--muted); font-size: 13px; }
+  .inner { padding: 0 0 18px 20px; }
+  .inner h4 { font: 600 13px var(--sans); margin: 14px 0 4px; }
+  .inner h4:first-child { margin-top: 0; }
+  .files { list-style: none; margin: 0; padding: 0; columns: 1; }
+  .files li { padding: 2px 0; font: 12.5px/1.6 var(--mono); color: var(--ink-2); word-break: break-all; }
+  .files .op { display: inline-block; width: 16px; color: var(--muted); }
+  .files .op.A { color: var(--good); } .files .op.D { color: var(--bad); }
+  .commit { padding: 6px 0; border-bottom: 1px solid var(--line-2); }
+  .commit:last-child { border-bottom: 0; }
+  .commit .m { font-size: 12.5px; color: var(--muted); }
+  .commit .n { font-size: 12.5px; color: var(--warn); }
+  .inline-ctl { display: flex; gap: 14px; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .inline-ctl input, .inline-ctl select { border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; background: var(--sheet); font-size: 13px; }
 
-  .commits { list-style: none; margin: 0; padding: 4px 0; }
-  .commits li { padding: 8px 14px; border-top: 1px solid var(--border); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
-  .commits li:first-child { border-top: 0; }
-  .commits .sha { font: 600 12.5px var(--mono); }
-  .commits .subj { word-break: break-word; }
-  .commits .by { grid-column: 2; color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .commits .note { grid-column: 2; font-size: 12px; color: var(--warn); }
+  .blank { max-width: 560px; margin-top: 8vh; color: var(--ink-2); }
+  .blank h1 { font-size: 24px; }
+  .blank p { margin: 0 0 12px; }
+  .blank ol { padding-left: 20px; margin: 16px 0; }
+  .blank li { margin: 6px 0; }
+  .working { margin-top: 8vh; color: var(--muted); }
+  .working .key { color: var(--ink); font-size: 15px; }
+  .working p { margin: 6px 0; }
+  .bar { height: 2px; background: var(--line); width: 220px; margin-top: 14px; overflow: hidden; position: relative; }
+  .bar::after { content: ""; position: absolute; inset: 0; width: 40%; background: var(--ink-2); animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+  .err { margin-top: 8vh; color: var(--bad); max-width: 620px; }
 
-  .hl { margin-bottom: 14px; }
-  .hl h4 { margin: 0 0 6px; font-size: 13px; }
-  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
-
-  .state { padding: 48px 24px; text-align: center; color: var(--muted); }
-  .state h2 { color: var(--text); font-size: 18px; margin: 12px 0 6px; }
-  .state ol { text-align: left; display: inline-block; margin: 12px auto 0; }
-  .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto; }
-  .spinner.sm { width: 16px; height: 16px; border-width: 2px; margin: 0; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .error { background: var(--bad-soft); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); padding: 12px 16px; border-radius: 10px; }
-
-  dialog { border: 1px solid var(--border); border-radius: 14px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--text); box-shadow: 0 20px 50px rgba(0,0,0,.25); }
-  dialog::backdrop { background: rgba(10,14,20,.45); }
-  .dlg-h { display: flex; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-  .dlg-h h2 { margin: 0; font-size: 16px; flex: 1; }
-  .dlg-b { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
-  .dlg-b section + section { border-top: 1px solid var(--border); padding-top: 14px; }
-  .dlg-b h3 { margin: 0 0 4px; font-size: 13px; }
-  .field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
-  .field label { font-size: 12px; color: var(--muted); font-weight: 600; }
-  .field input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
-  .field small { color: var(--faint); font-size: 12px; }
-  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
-  .msg { font-size: 13px; }
-  .msg.ok { color: var(--ok); } .msg.bad { color: var(--bad); }
-  .connected { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--ok-soft); }
-  .connected .who { flex: 1; line-height: 1.3; }
-  .connected small { color: var(--muted); display: block; }
-
-  .toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; transition: .2s;
-    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 10; max-width: calc(100vw - 32px);
-  }
-  .toast.show { opacity: 1; transform: translateX(-50%); }
+  /* account sheet */
+  dialog { border: 1px solid var(--line); border-radius: 8px; padding: 26px 28px 22px; width: min(480px, calc(100vw - 32px)); background: var(--sheet); color: var(--ink); box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+  dialog::backdrop { background: rgba(20,19,16,.35); }
+  dialog h2 { font: 600 18px var(--display); margin: 0 0 4px; }
+  dialog h3 { font: 600 13px var(--sans); margin: 22px 0 2px; }
+  dialog p { margin: 0 0 10px; color: var(--muted); font-size: 13.5px; }
+  .f { display: block; margin-top: 12px; }
+  .f span { display: block; font-size: 12.5px; color: var(--ink-2); margin-bottom: 4px; }
+  .f input { width: 100%; border: 1px solid var(--line); border-radius: 5px; padding: 7px 9px; background: var(--paper); }
+  .f input:focus { outline: none; border-color: var(--accent); }
+  .f small { display: block; margin-top: 4px; color: var(--muted); font-size: 12.5px; }
+  .actions { display: flex; gap: 16px; align-items: center; margin-top: 18px; }
+  .btn { border: 1px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 5px; padding: 6px 14px; font-weight: 500; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.quiet { background: none; color: var(--ink); border-color: var(--line); }
+  .say { font-size: 13px; }
+  .close { position: absolute; top: 14px; right: 16px; border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 12px); opacity: 0; transition: .18s; background: var(--ink); color: var(--paper); padding: 9px 14px; border-radius: 6px; font-size: 13.5px; z-index: 9; max-width: calc(100vw - 32px); }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast a { color: inherit; text-decoration: underline; }
-  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-<header class="bar">
-  <div class="brand">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h12l4 4v12H4z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg>
-    Feature Ledger
-  </div>
-  <form class="search" id="searchForm" autocomplete="off">
-    <input type="text" id="keyInput" placeholder="MM-1234" aria-label="Jira key" spellcheck="false">
-    <label class="toggle" title="Also scan the ticket's child tickets: an epic's stories and their sub-tasks, a story's sub-tasks"><input type="checkbox" id="childrenBox" checked> Child tickets</label>
-    <label class="toggle" title="Run git fetch on every repo first (slower, but up to date)"><input type="checkbox" id="fetchBox" checked> Fetch first</label>
-    <button class="btn primary" id="buildBtn" type="submit">Build manifest</button>
+<header class="top">
+  <div class="wordmark">Feature Ledger <span>· what a ticket touched</span></div>
+  <form class="go" id="go" autocomplete="off">
+    <input type="text" id="keyInput" placeholder="Open a ticket, e.g. MM-1234" aria-label="Ticket key" spellcheck="false">
+    <label title="Include the ticket's sub-tasks, or for an epic everything under it"><input type="checkbox" id="childrenBox" checked> with sub-tasks</label>
+    <label title="git fetch every repo first: slower, but includes work pushed from other machines"><input type="checkbox" id="fetchBox" checked> fetch</label>
   </form>
-  <div class="account" id="account"></div>
+  <div class="who" id="who"></div>
 </header>
 
-<div class="layout">
-  <aside>
-    <div class="panel">
-      <div class="panel-h"><h3>My open tickets</h3><span class="n" id="mineCount">–</span>
-        <button class="btn icon small" id="mineRefresh" title="Reload from Jira" aria-label="Reload from Jira">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
-        </button>
-      </div>
-      <div class="mine-filter" id="mineFilter"></div>
-      <div class="scroll" id="mine"><div class="empty">Loading…</div></div>
-    </div>
-    <div class="panel">
-      <div class="panel-h"><h3>Recently built</h3></div>
-      <div class="scroll" id="recent" style="max-height:280px"></div>
-    </div>
-  </aside>
-  <main id="main"></main>
+<div class="frame">
+  <nav class="side" aria-label="Your tickets">
+    <h2>Assigned to you <span class="muted" id="mineCount" style="font-weight:400"></span></h2>
+    <div class="ctl" id="mineCtl"></div>
+    <div id="mine"></div>
+    <hr>
+    <h2>Recently checked</h2>
+    <div id="recent"></div>
+  </nav>
+  <main><article id="doc"></article></main>
 </div>
 
-<dialog id="acctDlg">
-  <div class="dlg-h"><h2>Your account</h2><button class="btn icon small" id="dlgClose" aria-label="Close">✕</button></div>
-  <div class="dlg-b">
-    <section id="jiraSection"></section>
-    <section>
-      <h3>Repositories folder</h3>
-      <p class="hint" style="margin:0">The folder that contains your local clones (one git repo per subfolder).</p>
-      <div class="field"><label for="reposRoot">Folder</label><input id="reposRoot" spellcheck="false"></div>
-      <div class="row"><button class="btn small" id="saveRepos">Save folder</button><span class="msg" id="reposMsg"></span></div>
-    </section>
-  </div>
+<dialog id="acct">
+  <button class="close" id="acctClose" aria-label="Close">×</button>
+  <div id="acctBody"></div>
+  <h3>Where your repositories are</h3>
+  <p>The folder that holds your clones, one repository per subfolder.</p>
+  <label class="f"><input id="reposRoot" spellcheck="false" aria-label="Repositories folder"></label>
+  <div class="actions"><button class="btn quiet" id="saveRepos">Save folder</button><span class="say" id="reposSay"></span></div>
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -275,408 +204,384 @@
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const link = (text, url, cls = "") => url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="${cls}">${esc(text)}</a>` : `<span class="${cls}">${esc(text)}</span>`;
-const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const initials = n => (n || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
+const a = (text, url) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
+const n = (k, word, plural) => `${k} ${k === 1 ? word : (plural || word + "s")}`;
+const branchName = ref => (ref || "").replace(/^origin\//, "");
+const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const day = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ""); return m ? `${+m[3]} ${months[+m[2] - 1]}` : esc(d); };
 
-let status = null, current = null, activeTab = "repos", mine = null, mineFilter = "all", commitTicket = "";
-
-const icons = {
-  ok: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>`,
-  warn: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`,
-  info: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/></svg>`,
-};
-
-function typeIcon(type, level) {
-  const t = (type || "").toLowerCase();
-  const cls = level === 1 || t === "epic" ? "epic" : level === -1 || t.includes("sub") ? "sub" : t.includes("bug") ? "bug" : t.includes("story") ? "story" : "task";
-  const letter = { epic: "E", sub: "S", bug: "B", story: "St", task: "T" }[cls];
-  return `<span class="type ${cls}" title="${esc(type)}">${letter}</span>`;
-}
-
-function statusBadge(name, cat) {
-  const cls = cat === "done" ? "ok" : cat === "indeterminate" ? "info" : "muted";
-  return `<span class="badge ${cls}">${esc(name)}</span>`;
-}
+let status = null, current = null, mine = null, mineStatus = "", commitTicket = "";
 
 function toast(html, ms = 3500) {
-  const t = $("#toast");
-  t.innerHTML = html; t.classList.add("show");
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), ms);
+  const t = $("#toast"); t.innerHTML = html; t.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms);
 }
 
 async function api(path, opts = {}) {
-  if (opts.method && opts.method !== "GET") opts.headers = { "X-Ledger": "1", "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (opts.method && opts.method !== "GET") opts.headers = { "X-Ledger": "1", "Content-Type": "application/json" };
   const res = await fetch(path, opts);
   const body = res.headers.get("content-type")?.includes("json") ? await res.json() : await res.text();
   if (!res.ok) throw new Error(body?.error || res.statusText);
   return body;
 }
 
-// ───────────── account ─────────────
+/* ───────── account ───────── */
 
 async function loadStatus() {
-  try {
-    status = await api("/api/status");
-  } catch {
-    $("#account").innerHTML = `<span class="badge warn">Server not reachable</span>`;
-    return;
-  }
-  const a = status.account;
-  $("#account").innerHTML = a
-    ? `<button class="acct-btn" id="acctBtn" title="Account settings"><span class="avatar">${esc(initials(a.name))}</span><span class="who">${esc(a.name)}<small>${status.repoCount} repos</small></span></button>`
-    : `<button class="btn primary small" id="acctBtn">${status.credentialsRejected ? "Reconnect Jira" : "Connect Jira"}</button>`;
-  $("#acctBtn").onclick = openAccount;
+  try { status = await api("/api/status"); }
+  catch { $("#who").innerHTML = `<span class="bad">The ledger server isn't running.</span>`; return; }
+  const me = status.account;
+  $("#who").innerHTML = me
+    ? `<button class="textbtn" id="whoBtn" title="Account and settings">${esc(me.name)}</button>`
+    : `<button class="textbtn" id="whoBtn">${status.credentialsRejected ? "Jira rejected your token. Reconnect" : "Connect your Jira account"}</button>`;
+  $("#whoBtn").onclick = openAccount;
   renderRecent();
 }
 
 function openAccount() {
-  const a = status?.account;
-  $("#jiraSection").innerHTML = a ? `
-    <h3>Jira</h3>
-    <div class="connected"><span class="avatar">${esc(initials(a.name))}</span>
-      <div class="who"><b>${esc(a.name)}</b><small>${esc(a.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small><small>Stored in ${esc(a.source)}</small></div>
-      <button class="btn small danger" id="disconnectBtn">Disconnect</button></div>` : `
-    <h3>Connect your Jira account</h3>
-    <p class="hint" style="margin:0">Each person connects their own account. Your token is stored in Windows Credential Manager on this PC, never in the project.</p>
-    ${status?.credentialsRejected ? `<p class="msg bad" style="margin:6px 0 0">The saved credentials were rejected by Jira. Enter a new API token.</p>` : ""}
-    <div class="field"><label for="jSite">Jira site</label><input id="jSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"></div>
-    <div class="field"><label for="jEmail">Atlassian email</label><input id="jEmail" type="email" autocomplete="username" spellcheck="false"></div>
-    <div class="field"><label for="jToken">API token</label><input id="jToken" type="password" autocomplete="off">
-      <small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create an API token</a> while logged in as yourself, then paste it here.</small></div>
-    <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span class="msg" id="jMsg"></span></div>`;
+  const me = status?.account;
+  $("#acctBody").innerHTML = me ? `
+    <h2>${esc(me.name)}</h2>
+    <p>${esc(me.email)} on ${esc(status.jiraBaseUrl.replace("https://", ""))}.<br>Your API token is kept in ${esc(me.source)} on this computer.</p>
+    <div class="actions"><button class="btn quiet" id="disconnect">Disconnect</button></div>` : `
+    <h2>Connect your Jira account</h2>
+    <p>Everything the ledger does in Jira, like listing your tickets and posting comments, happens as you. The token stays in Windows Credential Manager on this computer.</p>
+    ${status?.credentialsRejected ? `<p class="bad">The saved token no longer works. Enter a new one.</p>` : ""}
+    <label class="f"><span>Jira site</span><input id="jSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"></label>
+    <label class="f"><span>Your Atlassian email</span><input id="jEmail" type="email" autocomplete="username" spellcheck="false"></label>
+    <label class="f"><span>API token</span><input id="jToken" type="password" autocomplete="off">
+      <small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create one here</a> while signed in as yourself, then paste it.</small></label>
+    <div class="actions"><button class="btn" id="connect">Connect</button><span class="say" id="jSay"></span></div>`;
   $("#reposRoot").value = status?.reposRoot || "";
-  $("#reposMsg").textContent = "";
-  $("#reposMsg").className = "msg";
+  $("#reposSay").textContent = "";
 
-  if (a) $("#disconnectBtn").onclick = async () => {
+  if (me) $("#disconnect").onclick = async () => {
     await api("/api/account/disconnect", { method: "POST" });
     await loadStatus(); loadMine(); openAccount();
-    toast("Disconnected. Your token was removed from Credential Manager.");
+    toast("Disconnected. The token was removed from this computer.");
   };
-  else $("#connectBtn").onclick = async () => {
-    const msg = $("#jMsg"), btn = $("#connectBtn");
-    btn.disabled = true; msg.className = "msg"; msg.textContent = "Checking with Jira…";
+  else $("#connect").onclick = async () => {
+    const say = $("#jSay"), btn = $("#connect");
+    btn.disabled = true; say.className = "say muted"; say.textContent = "Checking with Jira…";
     try {
-      const me = await api("/api/account", { method: "POST", body: JSON.stringify({ baseUrl: $("#jSite").value, email: $("#jEmail").value, token: $("#jToken").value }) });
-      msg.className = "msg ok"; msg.textContent = `Connected as ${me.name}`;
+      const who = await api("/api/account", { method: "POST", body: JSON.stringify({ baseUrl: $("#jSite").value, email: $("#jEmail").value, token: $("#jToken").value }) });
+      say.className = "say good"; say.textContent = `Connected as ${who.name}.`;
       await loadStatus(); loadMine(); openAccount();
-    } catch (e) { msg.className = "msg bad"; msg.textContent = e.message; }
+    } catch (e) { say.className = "say bad"; say.textContent = e.message; }
     finally { btn.disabled = false; }
   };
-  const dlg = $("#acctDlg");
-  if (!dlg.open) dlg.showModal();
+  if (!$("#acct").open) $("#acct").showModal();
 }
 
-$("#dlgClose").onclick = () => $("#acctDlg").close();
+$("#acctClose").onclick = () => $("#acct").close();
 $("#saveRepos").onclick = async () => {
-  const m = $("#reposMsg");
+  const say = $("#reposSay");
   try {
     const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ reposRoot: $("#reposRoot").value }) });
-    m.className = "msg ok"; m.textContent = `${r.repoCount} repos found`;
+    say.className = "say good"; say.textContent = `Found ${n(r.repoCount, "repository", "repositories")}.`;
     loadStatus();
-  } catch (e) { m.className = "msg bad"; m.textContent = e.message; }
+  } catch (e) { say.className = "say bad"; say.textContent = e.message; }
 };
 
-// ───────────── sidebar: my open tickets, grouped by their story / epic ─────────────
+/* ───────── left: your tickets, under their story or epic ───────── */
 
 async function loadMine() {
-  const box = $("#mine");
   if (!status?.account) {
-    mine = null; $("#mineCount").textContent = "–"; $("#mineFilter").innerHTML = "";
-    box.innerHTML = `<div class="empty">Connect your Jira account to see the tickets assigned to you that aren't done.<div class="row"><button class="btn primary small" id="mineConnect">Connect Jira</button></div></div>`;
+    mine = null; $("#mineCount").textContent = ""; $("#mineCtl").innerHTML = "";
+    $("#mine").innerHTML = `<p class="note">Connect your Jira account and the tickets assigned to you that aren't done will be listed here. <button class="textbtn" id="mineConnect">Connect</button></p>`;
     $("#mineConnect").onclick = openAccount;
     return;
   }
-  box.innerHTML = `<div class="empty" style="display:flex;gap:8px;align-items:center"><span class="spinner sm"></span> Loading from Jira…</div>`;
-  try {
-    mine = await api("/api/my-tickets");
-    renderMine();
-  } catch (e) {
-    box.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
-  }
+  $("#mine").innerHTML = `<p class="note">Asking Jira…</p>`;
+  try { mine = await api("/api/my-tickets"); renderMine(); }
+  catch (e) { $("#mine").innerHTML = `<p class="note bad">${esc(e.message)}</p>`; }
 }
 
 function renderMine() {
   if (!mine) return;
   $("#mineCount").textContent = mine.length;
   const statuses = [...new Set(mine.map(i => i.status))];
-  $("#mineFilter").innerHTML = ["all", ...statuses].map(s => `<button class="seg ${s === mineFilter ? "active" : ""}" data-s="${esc(s)}">${s === "all" ? "All" : esc(s)}</button>`).join("");
-  $("#mineFilter").querySelectorAll(".seg").forEach(b => b.onclick = () => { mineFilter = b.dataset.s; renderMine(); });
+  $("#mineCtl").innerHTML = `<span>Showing</span><select id="mineSel" aria-label="Filter by status"><option value="">every status</option>${statuses.map(s => `<option ${s === mineStatus ? "selected" : ""}>${esc(s)}</option>`).join("")}</select><button class="textbtn" id="mineReload" style="margin-left:auto">Reload</button>`;
+  $("#mineSel").onchange = e => { mineStatus = e.target.value; renderMine(); };
+  $("#mineReload").onclick = loadMine;
 
-  const list = mine.filter(i => mineFilter === "all" || i.status === mineFilter);
-  if (!list.length) { $("#mine").innerHTML = `<div class="empty">${mine.length ? "No tickets with this status." : "Nothing open is assigned to you."}</div>`; return; }
+  const list = mine.filter(i => !mineStatus || i.status === mineStatus);
+  if (!list.length) { $("#mine").innerHTML = `<p class="note">${mine.length ? "Nothing in this status." : "Nothing open is assigned to you."}</p>`; return; }
 
-  // group under the parent (story for sub-tasks, epic for stories/tasks/bugs); tickets without a parent stand alone
   const groups = new Map();
   for (const i of list) {
     const g = i.parentKey || "";
     if (!groups.has(g)) groups.set(g, { key: i.parentKey, summary: i.parentSummary, type: i.parentType, items: [] });
     groups.get(g).items.push(i);
   }
-  const ordered = [...groups.values()].sort((a, b) => (a.key ? 1 : 0) - (b.key ? 1 : 0));
+  const ordered = [...groups.values()].sort((x, y) => (x.key ? 1 : 0) - (y.key ? 1 : 0));
   $("#mine").innerHTML = ordered.map(g => `
-    <div class="group">
-      ${g.key ? `<button class="group-h" data-key="${esc(g.key)}" title="Build the whole ${esc(g.type || "parent")}: every ticket under it, by everyone">${typeIcon(g.type, g.type === "Epic" ? 1 : 0)}<b class="mono">${esc(g.key)}</b><span class="gs">${esc(g.summary)}</span></button>`
-              : `<div class="group-h" style="cursor:default">Standalone</div>`}
-      ${g.items.map(i => `
-        <button class="tk ${current?.key === i.key ? "active" : ""}" data-key="${esc(i.key)}">
-          ${typeIcon(i.type, i.level)}<span class="k">${esc(i.key)}</span>
-          <span class="meta">${i.lastBuild ? (i.lastBuild.warnings ? `<span class="badge warn" title="Last build: ${i.lastBuild.warnings} warning(s)">${i.lastBuild.warnings}</span>` : `<span class="badge ok" title="Last build ${esc(i.lastBuild.generated)}">✓</span>`) : ""}${statusBadge(i.status, i.statusCategory)}</span>
-          <span class="s">${esc(i.summary)}</span>
-        </button>`).join("")}
-    </div>`).join("");
-  $("#mine").querySelectorAll("[data-key]").forEach(b => b.onclick = () => build(b.dataset.key, $("#fetchBox").checked));
+    ${g.key ? `<button class="parent" data-key="${esc(g.key)}" title="Open the whole ${esc((g.type || "parent").toLowerCase())}, including other people's sub-tasks">${esc(g.type || "Parent")} <span class="key">${esc(g.key)}</span> · ${esc(g.summary)}</button>`
+            : (ordered.length > 1 ? `<div class="parent">On their own</div>` : "")}
+    ${g.items.map(i => {
+      const lb = i.lastBuild;
+      const dot = lb ? `<span class="dot ${lb.warnings ? "warn" : "good"}" title="${lb.warnings ? n(lb.warnings, "thing") + " to fix, checked " + esc(lb.generated) : "Ready, checked " + esc(lb.generated)}"></span>` : "";
+      return `<button class="row ${current?.key === i.key ? "on" : ""}" data-key="${esc(i.key)}">
+        <span class="l1"><span class="key">${esc(i.key)}</span>${dot}<span class="st">${esc(i.status)}</span></span>
+        <span class="t">${esc(i.summary)}</span></button>`;
+    }).join("")}`).join("");
+  $("#mine").querySelectorAll("[data-key]").forEach(b => b.onclick = () => open(b.dataset.key, $("#fetchBox").checked));
 }
 
 function renderRecent() {
-  const box = $("#recent");
   const items = status?.recent ?? [];
-  if (!items.length) { box.innerHTML = `<div class="empty">Tickets you build appear here.</div>`; return; }
-  box.innerHTML = `<div class="group">${items.map(r => `
-    <button class="tk ${current?.key === r.key ? "active" : ""}" data-key="${esc(r.key)}">
-      ${r.type ? typeIcon(r.type, r.type === "Epic" ? 1 : 0) : `<span></span>`}<span class="k">${esc(r.key)}</span>
-      <span class="meta">${r.children ? `<span class="badge muted" title="Child tickets included">+${r.children}</span>` : ""}${r.warnings ? `<span class="badge warn">${r.warnings}</span>` : `<span class="badge ok">✓</span>`}</span>
-      <span class="s">${esc(r.summary || r.generated)}</span>
-    </button>`).join("")}</div>`;
-  box.querySelectorAll("[data-key]").forEach(b => b.onclick = () => build(b.dataset.key, false));
+  $("#recent").innerHTML = items.length ? items.slice(0, 12).map(r => `
+    <button class="row ${current?.key === r.key ? "on" : ""}" data-key="${esc(r.key)}">
+      <span class="l1"><span class="key">${esc(r.key)}</span><span class="dot ${r.warnings ? "warn" : "good"}" title="${r.warnings ? n(r.warnings, "thing") + " to fix" : "Ready for QA"}"></span><span class="st">${when(r.generated)}</span></span>
+      ${r.summary ? `<span class="t">${esc(r.summary)}</span>` : ""}
+    </button>`).join("") : `<p class="note">Nothing yet.</p>`;
+  $("#recent").querySelectorAll("[data-key]").forEach(b => b.onclick = () => open(b.dataset.key, false));
 }
 
-// ───────────── building and the report ─────────────
+/* ───────── right: one ticket as a document ───────── */
 
-function renderWelcome() {
-  $("#main").innerHTML = `
-    <div class="panel state">
-      ${icons.ok.replace('width="20" height="20"', 'width="36" height="36"')}
-      <h2>Everything a ticket touched, from git</h2>
-      <p>Pick one of your tickets on the left, or type any key. For a story or an epic, every child ticket is included, whoever works on it.</p>
-      <ol>
-        <li>Name branches after the ticket: <code>MM-1234-short-title</code> (sub-task keys work too)</li>
-        <li>Before QA, build the story's manifest and clear everything under <b>Needs attention</b></li>
-        <li>Post it to Jira so it's on the ticket when QA asks months later</li>
-      </ol>
-      ${status?.account ? "" : `<div class="row" style="justify-content:center"><button class="btn primary" id="welcomeConnect">Connect your Jira account</button></div>`}
-    </div>`;
-  $("#welcomeConnect")?.addEventListener("click", openAccount);
+function blank() {
+  $("#doc").innerHTML = `<div class="blank">
+    <h1>Which ticket?</h1>
+    <p>Pick one of yours on the left, or type a key at the top.</p>
+    <p class="muted">A story brings in all of its sub-tasks, whoever is working on them. An epic brings in everything under it. What you see is worked out from git every time, so nobody has to keep notes.</p>
+    ${status?.account ? "" : `<p style="margin-top:20px"><button class="btn" id="blankConnect">Connect your Jira account</button></p>`}
+  </div>`;
+  $("#blankConnect")?.addEventListener("click", openAccount);
 }
 
-function renderLoading(key, fetchFirst, children) {
-  $("#main").innerHTML = `
-    <div class="panel state">
-      <div class="spinner"></div>
-      <h2>${esc(key)}</h2>
-      <p>${children && status?.account ? "Reading child tickets from Jira, then " : ""}${fetchFirst ? `fetching ${status?.repoCount ?? ""} repos and scanning…` : "scanning local git history…"}<br>
-      <span style="color:var(--faint)">${fetchFirst ? "Usually 15–60 seconds." : "Usually a few seconds."}</span></p>
-    </div>`;
-}
-
-async function build(key, fetchFirst) {
+async function open(key, fetchFirst) {
   key = (key || "").trim().toUpperCase();
-  if (!key) { $("#keyInput").focus(); return; }
+  if (!key) return;
   const children = $("#childrenBox").checked;
-  $("#keyInput").value = key;
+  $("#keyInput").value = "";
   history.replaceState(null, "", "#" + key);
-  $("#buildBtn").disabled = true;
   commitTicket = "";
-  renderLoading(key, fetchFirst, children);
+  $("#doc").innerHTML = `<div class="working"><span class="key">${esc(key)}</span>
+    <p>${children && status?.account ? "Looking up its sub-tasks in Jira, " : ""}${fetchFirst ? `fetching ${status?.repoCount ?? "all"} repositories and reading their history` : "reading the local git history"}…</p>
+    <div class="bar"></div></div>`;
   try {
     current = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${children ? 1 : 0}`);
-    if (current.scope.length > 1 && activeTab === "repos") activeTab = "tickets";
-    renderReport();
-    loadStatus();
-    renderMine();
+    render();
+    loadStatus(); renderMine();
+    window.scrollTo(0, 0);
   } catch (e) {
-    $("#main").innerHTML = `<div class="error"><b>Could not build ${esc(key)}.</b> ${esc(e.message)}</div>`;
-  } finally {
-    $("#buildBtn").disabled = false;
+    $("#doc").innerHTML = `<div class="err"><span class="key">${esc(key)}</span><p>That didn't work: ${esc(e.message)}</p></div>`;
   }
 }
 
-function spansHtml(spans) {
-  return spans.map(s => s.url ? link(s.t, s.url) : s.code ? `<code>${esc(s.t)}</code>` : esc(s.t)).join("");
-}
+function spans(sp) { return sp.map(s => s.url ? a(s.t, s.url) : s.code ? `<code>${esc(s.t)}</code>` : esc(s.t)).join(""); }
 
-// scope arrives breadth-first; show it as a tree (epic → story → sub-task)
-function scopeTree(scope) {
-  const byParent = new Map();
-  for (const t of scope.slice(1)) {
-    const p = t.parentKey || "";
-    if (!byParent.has(p)) byParent.set(p, []);
-    byParent.get(p).push(t);
-  }
+// What to do next, in plain words, with a link that does it where possible.
+function todoList(r) {
   const out = [];
-  const walk = (t, depth) => { out.push({ ...t, depth }); (byParent.get(t.key) || []).forEach(c => walk(c, depth + 1)); };
+  for (const repo of r.repos) {
+    const target = branchName(repo.defaultRef);
+    for (const b of repo.branches.filter(b => b.unmerged)) {
+      const localOnly = / \(local only, never pushed\)$/.test(b.name);
+      const name = b.name.replace(/ \(local only, never pushed\)$/, "");
+      if (localOnly) {
+        out.push(`<b>${esc(repo.name)}</b>: push <code>${esc(name)}</code> and merge it into ${esc(target)}. It only exists on this computer (${n(b.unmerged, "commit")}).`);
+      } else {
+        const mrUrl = repo.webUrl ? `${repo.webUrl}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${encodeURIComponent(name)}&merge_request%5Btarget_branch%5D=${encodeURIComponent(target)}` : null;
+        out.push(`<b>${esc(repo.name)}</b>: merge <code>${esc(name)}</code> into ${esc(target)}. ${n(b.unmerged, "commit is", "commits are")} waiting.${mrUrl ? ` ${a("Open a merge request", mrUrl)}` : ""}`);
+      }
+    }
+    const stray = repo.commits.filter(c => !c.inDefault).length - repo.branches.reduce((s, b) => s + b.unmerged, 0);
+    if (stray > 0 && !repo.branches.some(b => b.unmerged))
+      out.push(`<b>${esc(repo.name)}</b>: ${n(stray, "commit")} mentioning this ticket ${stray === 1 ? "isn't" : "aren't"} in ${esc(target)}, and no branch named after the ticket holds ${stray === 1 ? "it" : "them"}. Check the commits list below.`);
+  }
+  const lost = r.db.filter(d => d.warning);
+  const groups = new Map();
+  for (const d of lost) { const k = d.service + "|" + d.status; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); }
+  for (const g of groups.values()) {
+    const d = g[0], files = g.map(x => `<code>${esc(x.file)}</code>`).join(", ");
+    if (/STAGED/i.test(d.status)) out.push(`<b>Database, ${esc(d.service)}</b>: move ${files} from <code>dev/</code> into a release folder. QA only gets scripts that are in a release.`);
+    else if (/NOT found/i.test(d.status)) out.push(`<b>Database, ${esc(d.service)}</b>: ${files} ${g.length === 1 ? "was" : "were"} removed from <code>dev/</code> but ${g.length === 1 ? "isn't" : "aren't"} in any release. Find where ${g.length === 1 ? "it" : "they"} went before QA.`);
+    else out.push(`<b>Database, ${esc(d.service)}</b>: ${files}, ${esc(d.status)}.`);
+  }
+  return out;
+}
+
+// "2026-10-19 15:34" → "today 15:34" / "yesterday 09:10" / "14 Oct"
+function when(stamp) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(stamp || "");
+  if (!m) return esc(stamp);
+  const d = new Date(+m[1], +m[2] - 1, +m[3]), today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - d) / 86400000);
+  return diff === 0 ? `today ${m[4] || ""}` : diff === 1 ? `yesterday ${m[4] || ""}` : `${+m[3]} ${months[+m[2] - 1]}`;
+}
+
+function tree(scope) {
+  const kids = new Map();
+  for (const t of scope.slice(1)) { const p = t.parentKey || ""; if (!kids.has(p)) kids.set(p, []); kids.get(p).push(t); }
+  const out = [];
+  const walk = (t, d) => { out.push({ ...t, depth: d }); (kids.get(t.key) || []).forEach(c => walk(c, d + 1)); };
   if (scope.length) walk(scope[0], 0);
   return out;
 }
 
-function renderReport() {
-  const r = current, s = r.stats, i = r.issue;
-  const empty = r.repos.length === 0;
-  const meId = status?.account?.accountId;
-  const tabs = [
-    ...(r.scope.length > 1 ? [["tickets", "Tickets", r.scope.length]] : []),
-    ["repos", "Repositories", r.repos.length],
-    ["db", "Database", r.db.length],
-    ["files", "Files", s.files],
-    ["commits", "Commits", s.commits],
-    ...(r.foreign.length ? [["foreign", "Other tickets' commits", r.foreign.length]] : []),
-  ];
-  if (!tabs.some(t => t[0] === activeTab)) activeTab = tabs[0][0];
+function render() {
+  const r = current, i = r.issue, meId = status?.account?.accountId;
+  const kids = r.scope.length - 1;
+  const nothing = r.repos.length === 0;
+  const openTickets = r.scope.slice(1).filter(t => t.statusCategory !== "done");
 
-  const notDone = r.scope.slice(1).filter(t => t.statusCategory !== "done");
-  const crumbs = r.ancestors.length ? `<div class="crumbs">${r.ancestors.map(a => `<button data-key="${esc(a.key)}" title="Build ${esc(a.key)}">${typeIcon(a.type, a.level)}${esc(a.key)} · ${esc(a.summary.length > 50 ? a.summary.slice(0, 50) + "…" : a.summary)}</button><span>›</span>`).join("")}</div>` : "";
+  const crumbs = r.ancestors.length ? `<div class="crumbs">${r.ancestors.map(x =>
+    `<button data-key="${esc(x.key)}">${esc(x.type)} <span class="key">${esc(x.key)}</span> · ${esc(x.summary)}</button><span>/</span>`).join("")}</div>` : "";
 
-  $("#main").innerHTML = `
-    <section class="panel ticket">
-      <div class="title">
-        ${crumbs}
-        <div class="key">${i ? typeIcon(i.type, i.level) : ""}${link(r.key, r.jiraUrl)}${i ? statusBadge(i.status, i.statusCategory) : ""}</div>
-        <h1>${esc(i?.summary || (status?.account ? "Ticket details unavailable" : "Connect Jira to see the ticket title"))}</h1>
-        <div class="chips">
-          ${i ? `<span class="chip">Assignee <b>${esc(i.assignee)}</b></span><span class="chip">Fix version <b>${esc(i.fixVersions)}</b></span>` : ""}
-          ${r.scope.length > 1 ? `<span class="chip">Includes <b>${plural(r.scope.length - 1, "child ticket")}</b></span>` : ""}
-          <span class="chip">Generated <b>${esc(r.generated)}</b></span>
-        </div>
-      </div>
-      <div class="actions">
-        <button class="btn" id="refreshBtn" title="Fetch all repos and rebuild">Refresh</button>
-        <button class="btn" id="copyBtn">Copy Markdown</button>
-        <a class="btn" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">Download .md</a>
-        <button class="btn primary" id="postBtn" ${status?.account && !empty ? "" : "disabled"}
-          title="${status?.account ? "Create or replace your manifest comment on the ticket" : "Connect your Jira account first"}">Post to Jira</button>
-      </div>
-    </section>
+  const facts = [
+    i && `<b>${esc(i.type)}</b>`, i && esc(i.status), i && esc(i.assignee),
+    kids > 0 && n(kids, "sub-ticket"), i && i.fixVersions !== "none" && `fix version ${esc(i.fixVersions)}`,
+    `checked ${when(r.generated)}`,
+  ].filter(Boolean).join(" · ");
 
-    ${empty ? `<div class="panel state"><h2>Nothing found in git</h2><p>No commits, merges or branches reference <b>${esc(r.key)}</b>${r.scope.length > 1 ? ` or its ${plural(r.scope.length - 1, "child ticket")}` : ""} in any of the ${status?.repoCount ?? ""} repos.<br>Check the key, or tick <b>Fetch first</b> if the work was pushed from another machine.</p></div>` : `
-    ${r.warnings.length
-      ? `<div class="banner warn">${icons.warn}<div><h2>Needs attention before QA</h2><ul>${r.warnings.map(w => `<li>${spansHtml(w)}</li>`).join("")}</ul></div></div>`
-      : `<div class="banner ok">${icons.ok}<div><h2>Code ready for QA</h2><p>All work is merged and every DB script is in a release tag.</p></div></div>`}
-    ${notDone.length ? `<div class="banner info">${icons.info}<div><h2>${plural(notDone.length, "child ticket")} not done in Jira</h2><p>${notDone.slice(0, 6).map(t => `<b class="mono">${esc(t.key)}</b> ${esc(t.assignee)} · ${esc(t.status)}`).join("<br>")}${notDone.length > 6 ? `<br>…and ${notDone.length - 6} more (see the Tickets tab)` : ""}</p></div></div>` : ""}
+  let html = `${crumbs}
+    ${i ? `<div class="ident"><span class="key">${a(r.key, r.jiraUrl)}</span></div><h1>${esc(i.summary)}</h1>`
+        : `<h1>${a(r.key, r.jiraUrl)}</h1>`}
+    <div class="facts">${facts}${!i && !status?.account ? ` · <button class="textbtn" id="factsConnect">connect Jira</button> to see its title, status and sub-tasks` : ""}</div>
+    <div class="tools">
+      <button class="textbtn" id="again">Check again</button>
+      <button class="textbtn" id="copy">Copy as Markdown</button>
+      <a href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">Download</a>
+      <button class="textbtn" id="post" ${status?.account && !nothing ? "" : "disabled"} title="${status?.account ? "Adds this to the ticket, or updates the one you posted before" : "Connect your Jira account first"}">Post to the Jira ticket</button>
+    </div>`;
 
-    <div class="stats">
-      ${r.scope.length > 1 ? `<div class="panel stat"><div class="v">${r.scope.length}</div><div class="l">Tickets</div><div class="sub">${r.scope.filter(t => t.commits).length} with code</div></div>` : ""}
-      <div class="panel stat"><div class="v">${s.repos}</div><div class="l">Repositories</div></div>
-      <div class="panel stat"><div class="v">${s.mergeRequests}</div><div class="l">Merge requests</div></div>
-      <div class="panel stat"><div class="v">${s.merged}/${s.commits}</div><div class="l">Commits merged</div></div>
-      <div class="panel stat"><div class="v">${s.files}</div><div class="l">Files changed</div></div>
-      <div class="panel stat"><div class="v">${s.dbScripts}</div><div class="l">DB scripts</div>${r.db.some(d => d.warning) ? `<div class="sub" style="color:var(--warn)">${r.db.filter(d => d.warning).length} need attention</div>` : ""}</div>
-    </div>
+  if (nothing) {
+    html += `<div class="verdict"><h2>No trace of it in git.</h2>
+      <p>Nothing in the ${status?.repoCount ?? ""} repositories mentions ${esc(r.key)}${kids ? ` or its ${n(kids, "sub-ticket")}` : ""}: no commit, branch or merge request.
+      If the work was pushed from somewhere else, tick <b>fetch</b> and check again.</p></div>`;
+    $("#doc").innerHTML = html; wire(); return;
+  }
 
-    <section class="panel">
-      <nav class="tabs" role="tablist">${tabs.map(([id, label, n]) => `<button role="tab" data-tab="${id}" class="${id === activeTab ? "active" : ""}">${label}<span class="n">${n}</span></button>`).join("")}</nav>
-      <div class="tabbody" id="tabbody"></div>
-    </section>`}`;
+  const todos = todoList(r);
+  html += todos.length
+    ? `<div class="verdict no"><h2>Not ready for QA yet</h2><p>${n(todos.length, "thing needs", "things need")} doing first:</p>
+         <ul class="todo">${todos.map(t => `<li>${t}</li>`).join("")}</ul>
+         ${openTickets.length ? `<div class="open-in-jira">Still open in Jira: ${openTickets.map(t => `<span class="key">${esc(t.key)}</span> (${esc(t.assignee)}, ${esc(t.status.toLowerCase())})`).join(", ")}.</div>` : ""}</div>`
+    : `<div class="verdict ok"><h2>Ready for QA</h2><p>Everything is merged${r.db.length ? " and every database script is in a release" : ""}.</p>
+         ${openTickets.length ? `<div class="open-in-jira">The code is in, but Jira still has ${openTickets.map(t => `<span class="key">${esc(t.key)}</span> (${esc(t.assignee)}, ${esc(t.status.toLowerCase())})`).join(", ")} open.</div>` : ""}</div>`;
 
-  $("#refreshBtn").onclick = () => build(r.key, true);
-  $("#copyBtn").onclick = copyMarkdown;
-  $("#postBtn").onclick = postToJira;
-  document.querySelectorAll(".crumbs [data-key]").forEach(b => b.onclick = () => build(b.dataset.key, false));
-  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { activeTab = b.dataset.tab; renderReport(); });
-  if (!empty) renderTab(meId);
-  renderRecent();
+  // code, one line per repository
+  html += `<section class="s"><h3>Code <span class="c">${n(r.repos.length, "repository", "repositories")}</span></h3>
+    <div class="tablewrap"><table><thead><tr><th>Repository</th><th>Merge request</th><th>State</th></tr></thead><tbody>
+    ${r.repos.map(repo => {
+      const total = repo.commits.length, merged = repo.commits.filter(c => c.inDefault).length;
+      const target = branchName(repo.defaultRef);
+      const waiting = repo.branches.filter(b => b.unmerged);
+      const mrs = repo.merges.length
+        ? repo.merges.map(m => m.url ? `${a(m.label, m.url)} <span class="muted">${day(m.date)}</span>` : `<span class="muted" title="Merged without a merge request (${esc(m.label)})">merged directly, ${day(m.date)}</span>`).join(", ")
+        : `<span class="muted">none yet</span>`;
+      const state = waiting.length
+        ? `<span class="warn">${waiting.map(b => `${n(b.unmerged, "commit")} on <code>${esc(b.name)}</code>`).join("; ")} not in ${esc(target)}</span>`
+        : merged === total ? `<span class="good">in ${esc(target)}</span>` : `<span class="warn">${total - merged} of ${total} commits not in ${esc(target)}</span>`;
+      return `<tr><td class="nw">${a(repo.name, repo.webUrl)}</td><td>${mrs}</td><td>${state}</td></tr>`;
+    }).join("")}</tbody></table></div></section>`;
+
+  // database, grouped by service and release folder
+  if (r.db.length) {
+    const groups = new Map();
+    for (const d of r.db) { const k = d.service + "|" + d.location; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); }
+    html += `<section class="s"><h3>Database <span class="c">${n(r.db.length, "script")}</span></h3>
+      <ul class="plain">${[...groups.values()].map(g => {
+        const bad = g.filter(d => d.warning), first = g[0];
+        const where = first.location === "dev" ? "staged in dev" : `release ${esc(first.location)}`;
+        const kinds = new Map();
+        for (const d of g) { const k = d.kind || "Other"; if (!kinds.has(k)) kinds.set(k, []); kinds.get(k).push(d.file); }
+        const label = { Schema: "Schema", Routines: "Functions", DataSeeding: "Seed data" };
+        const files = [...kinds].map(([k, fs]) => `${label[k] || esc(k)}: ${fs.length <= 2 ? fs.map(f => `<code>${esc(f)}</code>`).join(", ")
+          : `<span title="${esc(fs.join("\n"))}" style="text-decoration:underline dotted;cursor:help">${fs.length} files</span>`}`).join(" · ");
+        return `<li><span class="r">${esc(first.service)} · ${where}</span><span style="flex:1;min-width:240px">${files}
+          ${bad.length ? `<div class="warn" style="font-size:13px;margin-top:2px">${esc(bad[0].status)}${bad.length > 1 ? ` (${bad.length} files)` : ""}</div>` : `<div class="good" style="font-size:13px;margin-top:2px">${esc(first.status)}</div>`}</span></li>`;
+      }).join("")}</ul></section>`;
+  }
+
+  // who did what, when the ticket has sub-tickets
+  if (kids > 0) {
+    html += `<section class="s"><h3>Who did what <span class="c">${n(r.scope.length, "ticket")}</span></h3>
+      <div class="tablewrap"><table><thead><tr><th>Ticket</th><th>Assignee</th><th>Jira</th><th>Code</th></tr></thead><tbody>
+      ${tree(r.scope).map(t => `<tr class="${meId && t.assigneeId === meId ? "you" : ""}">
+        <td class="${t.depth ? "lvl" + Math.min(t.depth, 2) : ""}"><button class="textbtn key" data-open="${esc(t.key)}">${esc(t.key)}</button> ${esc(t.summary)}<div class="sub">${esc(t.type)}</div></td>
+        <td class="nw">${esc(t.assignee)}${meId && t.assigneeId === meId ? ` <span class="muted">(you)</span>` : ""}</td>
+        <td class="nw ${t.statusCategory === "done" ? "good" : ""}">${esc(t.status)}</td>
+        <td>${t.commits ? `<span class="${t.merged === t.commits ? "good" : "warn"}">${t.merged === t.commits ? `${n(t.commits, "commit")}, all merged` : `${t.merged} of ${t.commits} merged`}</span><div class="sub">${t.repos.map(esc).join(", ")}</div>` : `<span class="muted">no code of its own</span>`}</td>
+      </tr>`).join("")}</tbody></table></div></section>`;
+  }
+
+  // things a deploy usually forgets
+  if (r.highlights.length) {
+    html += `<section class="s"><h3>Worth a second look</h3>
+      <p class="lead">Files whose names suggest permissions, scopes, menus, configuration or deployment. These are the changes that tend to get forgotten when moving to QA.</p>
+      <ul class="plain">${r.highlights.map(h => h.hits.map(x => `<li><span class="r">${esc(h.name)}</span><span><span class="muted">${esc(x.repo)}/</span><code>${esc(x.path)}</code></span></li>`).join("")).join("")}</ul></section>`;
+  }
+
+  // the full record, folded away
+  html += `<section class="s"><h3>The full record</h3>
+    <details class="more" id="filesBox"><summary>Every changed file <span class="c">${r.stats.files}</span></summary><div class="inner">
+      <div class="inline-ctl"><input id="fileFilter" placeholder="Filter by path" aria-label="Filter files"></div>
+      <div id="fileList">${r.repos.filter(x => x.files.length).map(repo => `<h4>${esc(repo.name)}</h4><ul class="files">${repo.files.map(f =>
+        `<li data-p="${esc((repo.name + " " + f.path).toLowerCase())}"><span class="op ${esc(f.status)}" title="${({ A: "added", M: "changed", D: "deleted", R: "renamed" })[f.status] || ""}">${esc(f.status)}</span>${esc(f.path)}</li>`).join("")}</ul>`).join("")}</div>
+    </div></details>
+    <details class="more" id="commitsBox"><summary>Every commit <span class="c">${r.stats.commits}</span></summary><div class="inner" id="commitList"></div></details>
+    ${r.foreign.length ? `<details class="more"><summary>Commits from other tickets that came along on these branches <span class="c">${r.foreign.length}</span></summary><div class="inner">
+      <p class="muted" style="margin:0 0 8px;font-size:13px">Not counted above. Usually a branch that was started from another ticket's branch.</p>
+      ${r.foreign.map(c => commitHtml(c, null, `${esc(c.otherKey)} · ${esc(c.repo)} · `)).join("")}</div></details>` : ""}
+  </section>`;
+
+  $("#doc").innerHTML = html;
+  renderCommits();
+  wire();
 }
 
-function renderTab(meId) {
-  const r = current, body = $("#tabbody");
-  if (activeTab === "tickets") {
-    const rows = scopeTree(r.scope);
-    body.innerHTML = `<p class="hint">The ticket and everything under it in Jira, with each ticket's own commits. Your tickets are highlighted. Click a key to build just that ticket.</p>
-      <div class="tablewrap"><table>
-      <thead><tr><th>Ticket</th><th>Summary</th><th>Assignee</th><th>Status</th><th>Commits merged</th><th>Repos</th></tr></thead>
-      <tbody>${rows.map(t => `<tr class="${meId && t.assigneeId === meId ? "me" : ""}">
-        <td class="${t.depth ? "indent-" + Math.min(t.depth, 2) : ""}" style="white-space:nowrap">${typeIcon(t.type, t.level)} <button class="linkbtn" data-key="${esc(t.key)}">${esc(t.key)}</button></td>
-        <td>${esc(t.summary)}<div style="color:var(--faint);font-size:12px">${esc(t.type)}</div></td>
-        <td style="white-space:nowrap">${esc(t.assignee)}</td>
-        <td>${statusBadge(t.status, t.statusCategory)}</td>
-        <td>${t.commits ? `<span class="badge ${t.merged === t.commits ? "ok" : "warn"}">${t.merged}/${t.commits}</span>` : `<span class="badge muted" title="No commits, branches or merges reference this key">no code</span>`}</td>
-        <td><div class="pills">${t.repos.map(x => `<span class="badge muted">${esc(x)}</span>`).join("")}</div></td>
-      </tr>`).join("")}</tbody></table></div>`;
-    body.querySelectorAll(".linkbtn").forEach(b => b.onclick = () => { $("#childrenBox").checked = true; build(b.dataset.key, false); });
-  }
-  else if (activeTab === "repos") {
-    body.innerHTML = `<div class="tablewrap"><table>
-      <thead><tr><th>Repository</th><th>Merge requests</th><th>Branches</th><th>Commits merged</th></tr></thead>
-      <tbody>${r.repos.map(repo => {
-        const merged = repo.commits.filter(c => c.inDefault).length;
-        return `<tr>
-          <td>${link(repo.name, repo.webUrl)}<div class="mono" style="color:var(--faint)">${esc(repo.defaultRef)}</div></td>
-          <td><div class="pills">${repo.merges.length ? repo.merges.map(m => `<span class="badge ${m.inDefault ? "ok" : "warn"}" title="${m.inDefault ? "In " + esc(repo.defaultRef) : "Not in " + esc(repo.defaultRef)}">${link(m.label, m.url)} · ${esc(m.date)}</span>`).join("") : `<span class="badge muted">none</span>`}</div></td>
-          <td><div class="pills">${repo.branches.length ? repo.branches.map(b => `<span class="badge ${b.unmerged ? "warn" : "muted"}" title="${esc(b.name)}">${esc(b.name.length > 34 ? b.name.slice(0, 34) + "…" : b.name)}${b.unmerged ? ` · ${b.unmerged} unmerged` : ""}</span>`).join("") : `<span class="badge muted">none</span>`}</div></td>
-          <td><span class="badge ${merged === repo.commits.length ? "ok" : "warn"}">${merged}/${repo.commits.length}</span></td>
-        </tr>`; }).join("")}</tbody></table></div>`;
-  }
-  else if (activeTab === "db") {
-    body.innerHTML = r.db.length ? `<p class="hint">Scripts in <code>db-migration-scripts</code> touched by these tickets, and whether they made it into a release tag.</p>
-      <div class="tablewrap"><table>
-      <thead><tr><th>Service</th><th>Folder</th><th>Kind</th><th>File</th><th>Status</th></tr></thead>
-      <tbody>${r.db.map(d => `<tr><td>${esc(d.service)}</td><td class="mono">${esc(d.location)}</td><td>${esc(d.kind)}</td><td><code>${esc(d.file)}</code></td><td><span class="badge ${d.warning ? "warn" : "ok"}">${esc(d.status)}</span></td></tr>`).join("")}</tbody>
-      </table></div>` : `<p class="hint">No DB migration scripts were touched.</p>`;
-  }
-  else if (activeTab === "files") {
-    body.innerHTML = `
-      ${r.highlights.map(h => `<div class="hl"><h4>${esc(h.name)}</h4><ul class="files" style="border:1px solid var(--border);border-radius:10px">${h.hits.map(x => `<li><span class="badge muted">${esc(x.repo)}</span><code>${esc(x.path)}</code></li>`).join("")}</ul></div>`).join("")}
-      <input class="filter" id="fileFilter" placeholder="Filter files…" aria-label="Filter files" style="margin-bottom:12px">
-      <div id="fileList">${r.repos.filter(x => x.files.length).map(repo => `
-        <details class="repo" open><summary><span class="name">${esc(repo.name)}</span><span class="meta">${plural(repo.files.length, "file")}</span></summary>
-        <ul class="files">${repo.files.map(f => `<li data-p="${esc((repo.name + " " + f.path).toLowerCase())}"><span class="fs ${esc(f.status)}" title="${({ A: "Added", M: "Modified", D: "Deleted", R: "Renamed" })[f.status] || esc(f.status)}">${esc(f.status)}</span><code>${esc(f.path)}</code></li>`).join("")}</ul></details>`).join("")}</div>`;
-    $("#fileFilter").oninput = e => {
-      const q = e.target.value.toLowerCase();
-      document.querySelectorAll("#fileList li").forEach(li => li.hidden = q && !li.dataset.p.includes(q));
-    };
-  }
-  else if (activeTab === "commits") {
-    const multi = r.scope.length > 1;
-    const repos = r.repos.map(repo => ({ ...repo, commits: repo.commits.filter(c => !commitTicket || c.ticket === commitTicket) })).filter(x => x.commits.length);
-    body.innerHTML = `
-      ${multi ? `<div class="toolbar"><label for="ticketSel" class="hint" style="margin:0">Ticket</label>
-        <select id="ticketSel"><option value="">All tickets</option>${scopeTree(r.scope).filter(t => t.commits).map(t => `<option value="${esc(t.key)}" ${t.key === commitTicket ? "selected" : ""}>${"  ".repeat(t.depth)}${esc(t.key)} · ${esc(t.assignee)}</option>`).join("")}</select></div>` : ""}
-      ${repos.map(repo => `
-      <details class="repo" open><summary><span class="name">${esc(repo.name)}</span><span class="meta">${plural(repo.commits.length, "commit")}</span></summary>
-      <ul class="commits">${repo.commits.map(c => commitHtml(c, repo.defaultRef, multi && c.ticket ? `<span class="badge key info">${esc(c.ticket)}</span>` : "")).join("")}</ul></details>`).join("") || `<p class="hint">No commits for this ticket.</p>`}`;
-    $("#ticketSel")?.addEventListener("change", e => { commitTicket = e.target.value; renderTab(meId); });
-  }
-  else if (activeTab === "foreign") {
-    body.innerHTML = `<p class="hint">Commits from tickets outside this scope that sit on these branches. Listed for reference only; their files and merge state are not counted.</p>
-      <ul class="commits" style="border:1px solid var(--border);border-radius:10px">${r.foreign.map(c => commitHtml(c, null, `<span class="badge muted">${esc(c.repo)}</span><span class="badge key warn">${esc(c.otherKey)}</span>`)).join("")}</ul>`;
-  }
+function renderCommits() {
+  const r = current, multi = r.scope.length > 1;
+  const repos = r.repos.map(repo => ({ ...repo, commits: repo.commits.filter(c => !commitTicket || c.ticket === commitTicket) })).filter(x => x.commits.length);
+  $("#commitList").innerHTML = `
+    ${multi ? `<div class="inline-ctl">Only <select id="ticketSel"><option value="">all tickets</option>${tree(r.scope).filter(t => t.commits).map(t => `<option value="${esc(t.key)}" ${t.key === commitTicket ? "selected" : ""}>${esc(t.key)} (${esc(t.assignee)})</option>`).join("")}</select></div>` : ""}
+    ${repos.map(repo => `<h4>${esc(repo.name)}</h4>${repo.commits.map(c => commitHtml(c, repo.defaultRef, multi && c.ticket ? esc(c.ticket) + " · " : "")).join("")}`).join("") || `<p class="muted">None.</p>`}`;
+  $("#ticketSel")?.addEventListener("change", e => { commitTicket = e.target.value; renderCommits(); });
 }
 
-function commitHtml(c, defaultRef, extra = "") {
-  return `<li>
-    ${link(c.short, c.url, "sha")}
-    <span class="subj">${esc(c.subject)}</span>
-    <span class="by">${extra}<span>${esc(c.date)}</span><span>${esc(c.author)}</span>${c.inDefault ? `<span class="badge ok">merged</span>` : `<span class="badge warn">not in ${esc(defaultRef || "default branch")}</span>`}</span>
-    ${c.note ? `<span class="note">${esc(c.note)}</span>` : ""}
-  </li>`;
+function commitHtml(c, defaultRef, prefix = "") {
+  return `<div class="commit"><div>${a(c.short, c.url)} ${esc(c.subject)}</div>
+    <div class="m">${prefix}${esc(c.author)}, ${day(c.date)} · ${c.inDefault ? "merged" : `<span class="warn">not in ${esc(branchName(defaultRef) || "the main branch")}</span>`}</div>
+    ${c.note ? `<div class="n">${esc(c.note)}</div>` : ""}</div>`;
 }
 
-async function copyMarkdown() {
-  try {
-    const md = await api(`/api/markdown?key=${encodeURIComponent(current.key)}`);
-    await navigator.clipboard.writeText(md);
-    toast("Markdown copied to clipboard");
-  } catch (e) { toast("Copy failed: " + esc(e.message)); }
+function wire() {
+  const r = current;
+  $("#again").onclick = () => open(r.key, true);
+  $("#copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Copied."); }
+    catch (e) { toast("Couldn't copy: " + esc(e.message)); }
+  };
+  $("#post").onclick = async () => {
+    const b = $("#post"); b.disabled = true; b.textContent = "Posting…";
+    try {
+      const res = await api(`/api/post?key=${encodeURIComponent(r.key)}`, { method: "POST" });
+      toast(`Posted to ${esc(r.key)} as ${esc(status.account.name)}. <a href="${esc(res.url)}" target="_blank" rel="noopener">See it</a>`, 6000);
+    } catch (e) { toast("Jira said no: " + esc(e.message), 6000); }
+    finally { b.disabled = false; b.textContent = "Post to the Jira ticket"; }
+  };
+  $("#factsConnect")?.addEventListener("click", openAccount);
+  document.querySelectorAll(".crumbs [data-key]").forEach(b => b.onclick = () => open(b.dataset.key, false));
+  document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => open(b.dataset.open, false));
+  $("#fileFilter")?.addEventListener("input", e => {
+    const q = e.target.value.toLowerCase();
+    document.querySelectorAll("#fileList li").forEach(li => li.hidden = q && !li.dataset.p.includes(q));
+  });
 }
 
-async function postToJira() {
-  const btn = $("#postBtn");
-  btn.disabled = true; btn.textContent = "Posting…";
-  try {
-    const res = await api(`/api/post?key=${encodeURIComponent(current.key)}`, { method: "POST" });
-    toast(`Posted to Jira as ${esc(status.account.name)} · <a href="${esc(res.url)}" target="_blank" rel="noopener">open comment</a>`, 6000);
-  } catch (e) { toast("Jira: " + esc(e.message), 6000); }
-  finally { btn.disabled = false; btn.textContent = "Post to Jira"; }
-}
-
-$("#searchForm").onsubmit = e => { e.preventDefault(); build($("#keyInput").value, $("#fetchBox").checked); };
-$("#mineRefresh").onclick = loadMine;
+$("#go").onsubmit = e => { e.preventDefault(); open($("#keyInput").value, $("#fetchBox").checked); };
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("#keyInput").focus(); }
+});
 
 (async () => {
   await loadStatus();
   loadMine();
-  const hashKey = decodeURIComponent(location.hash.slice(1));
-  if (hashKey) build(hashKey, false); else renderWelcome();
+  const k = decodeURIComponent(location.hash.slice(1));
+  if (k) open(k, false); else blank();
 })();
 </script>
 </body>
