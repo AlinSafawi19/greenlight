@@ -62,7 +62,10 @@ return 0;
 record Report(string Key, DateTime Generated, IssueInfo? Issue, List<IssueInfo> Scope, List<IssueInfo> Ancestors,
               List<RepoResult> Repos, Doc Doc,
               List<List<Span>> Warnings, List<(string Name, List<(string Repo, string Path)> Hits)> Highlights,
-              string Markdown, string MarkdownPath, List<Station> Stations);
+              string Markdown, string MarkdownPath, List<Station> Stations, SubTickets Subs);
+
+// Sub-tickets in Jira under this ticket, whatever the toggle says. Possible=false: sub-tasks can't have any, or Jira isn't connected.
+record SubTickets(bool Possible, int Total, int Mine);
 
 class Ledger
 {
@@ -162,6 +165,22 @@ class Ledger
             .Where(d => !string.Equals(Path.GetFullPath(d).TrimEnd('\\'), AppDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
             .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        myEmails = null;
+    }
+
+    // Only repositories the ledger knows are ever opened or read on request from the page.
+    public string? RepoPath(string? name) =>
+        name is null ? null : Repos.FirstOrDefault(r => string.Equals(Path.GetFileName(r), name, StringComparison.OrdinalIgnoreCase));
+
+    // Emails that count as "me" for commit authorship: the git identities configured in the repos, plus the Jira account.
+    List<string>? myEmails;
+    public List<string> MyEmails()
+    {
+        if (myEmails is not null) return myEmails;
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in Repos) { var e = Git.Run(r, "config", "user.email").Trim(); if (e != "") set.Add(e); }
+        if (Jira.Me?.Email is { Length: > 0 } je) set.Add(je);
+        return myEmails = set.ToList();
     }
 
     public bool IsValidKey(string key) => Regex.IsMatch(key, $"^(?:{KeyPattern})$");
@@ -171,16 +190,21 @@ class Ledger
         IssueInfo? issue = null;
         var scope = new List<IssueInfo>();
         var ancestors = new List<IssueInfo>();
+        var subs = new SubTickets(false, 0, 0);
         if (Jira.Configured)
         {
             issue = await Jira.GetIssue(key);
-            if (issue is not null && includeChildren)
+            // sub-tasks can't have children; for anything else the counts are always looked up, so the UI can
+            // say "no sub-tickets" or "none are yours" even while they're switched off
+            if (issue is not null && issue.Level >= 0)
             {
                 progress($"Reading child tickets of {key} from Jira...");
-                scope = await Jira.Descendants(key);
+                var all = await Jira.Descendants(key);
+                var meId = (await CurrentUser())?.AccountId;
+                var mine = all.Where(s => s.AssigneeId == meId).ToList();
+                subs = new SubTickets(true, all.Count, mine.Count);
                 // other people's sub-tickets are left out: their keys aren't scanned, so their commits don't count either
-                if (onlyMine && await CurrentUser() is { } me)
-                    scope = scope.Where(s => s.AssigneeId == me.AccountId).ToList();
+                if (includeChildren) scope = onlyMine && meId is not null ? mine : all;
             }
             for (var (pk, depth) = (issue?.ParentKey, 0); pk is not null && depth < 3; depth++)
             {
@@ -218,7 +242,7 @@ class Ledger
         File.WriteAllText(mdPath, markdown);
 
         var report = new Report(key, DateTime.Now, issue, scope, ancestors, results, doc, Manifest.Warnings(key, results),
-                                Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath, stations);
+                                Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath, stations, subs);
         File.WriteAllText(Path.Combine(OutDir, $"{key}.json"), ReportJson.Summary(report).ToJsonString());
         return report;
     }
@@ -371,6 +395,7 @@ record Commit(string Sha, string Short, string Author, string Date, string Subje
 {
     public string? Note { get; set; }   // e.g. carries this ticket's change under another ticket's message
     public string? Ticket { get; set; } // which key in scope this commit belongs to (story, sub-task, ...)
+    public string AuthorEmail { get; set; } = "";
     public bool IsForeign => OtherKey is not null && Note is null;
 }
 record MergeInfo(string Sha, string Date, string SourceBranch, string? Target, string? MrUrl, bool InDefault);
@@ -447,7 +472,7 @@ static class Scanner
             var merged = inDefault.Contains(sha) ||
                          !Git.Lines(Git.Run(repo, "rev-list", "--no-merges", "--cherry-pick", "--right-only", $"{defaultRef}...{sha}")).Contains(sha);
             if (merged && !inDefault.Contains(sha)) { copies.Add(sha); continue; }   // copy of a patch already in the default branch
-            var text = Git.Run(repo, "show", "--date=short", "--name-status", "-M", "--format=%x1e%h%x1f%an%x1f%ad%x1f%s", sha);
+            var text = Git.Run(repo, "show", "--date=short", "--name-status", "-M", "--format=%x1e%h%x1f%an%x1f%ad%x1f%s%x1f%ae", sha);
             var lines = text.Split('\n');
             var head = lines.FirstOrDefault(l => l.StartsWith('\x1e'))?.TrimStart('\x1e').Split('\x1f');
             if (head is null || head.Length < 4) continue;
@@ -464,6 +489,7 @@ static class Scanner
             commits.Add(new Commit(sha, head[0], head[1], head[2], head[3], source, merged, otherKey, files)
             {
                 Ticket = subjectKey ?? via.GetValueOrDefault(sha),
+                AuthorEmail = head.Length > 4 ? head[4].Trim() : "",
             });
         }
         commits = commits.OrderBy(c => c.Date).ThenBy(c => c.Short).ToList();
@@ -1024,6 +1050,120 @@ static class QaPrep
     }
 }
 
+// ───────────────────────────── opening repositories and files on this computer ─────────────────────────────
+
+static class LocalApps
+{
+    static readonly Regex Sha = new(@"^[0-9a-f]{7,40}$");
+
+    // A path inside a repository: relative, no drive, no "..", no wildcards.
+    public static string? SafeFile(string repo, string? rel)
+    {
+        if (string.IsNullOrWhiteSpace(rel) || Path.IsPathRooted(rel) || rel.Contains("..") || rel.IndexOfAny(['*', '?', '"', '<', '>', '|', ':']) >= 0) return null;
+        var full = Path.GetFullPath(Path.Combine(repo, rel));
+        return full.StartsWith(Path.GetFullPath(repo).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase) ? full : null;
+    }
+
+    public static bool IsCommit(string repo, string? sha) =>
+        sha is not null && Sha.IsMatch(sha) && Git.Run(repo, "cat-file", "-t", sha).Trim() == "commit";
+
+    // The solution Visual Studio should open: a .sln in the repository root, or one level down.
+    public static string? Solution(string? repo)
+    {
+        if (repo is null || !Directory.Exists(repo)) return null;
+        var sln = Directory.GetFiles(repo, "*.sln").FirstOrDefault()
+               ?? Directory.GetDirectories(repo).Where(d => !Path.GetFileName(d).StartsWith('.'))
+                           .SelectMany(d => Directory.GetFiles(d, "*.sln")).FirstOrDefault();
+        return sln is null ? null : Path.GetRelativePath(repo, sln).Replace('\\', '/');
+    }
+
+    static string? codeExe, devenvExe;
+
+    // VS Code's own executable understands the same arguments as the "code" command (-g, --diff), without a shell.
+    static string? VsCode()
+    {
+        if (codeExe is not null) return codeExe;
+        var candidates = new[] {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Microsoft VS Code", "Code.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft VS Code", "Code.exe"),
+        }.ToList();
+        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+            if (File.Exists(Path.Combine(dir, "code.cmd"))) candidates.Add(Path.GetFullPath(Path.Combine(dir, "..", "Code.exe")));
+        return codeExe = candidates.FirstOrDefault(File.Exists);
+    }
+
+    static string? VisualStudio()
+    {
+        if (devenvExe is not null) return devenvExe;
+        var vswhere = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft Visual Studio", "Installer", "vswhere.exe");
+        if (!File.Exists(vswhere)) return null;
+        var psi = new ProcessStartInfo(vswhere) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+        foreach (var a in new[] { "-latest", "-prerelease", "-property", "productPath" }) psi.ArgumentList.Add(a);
+        using var p = Process.Start(psi)!;
+        var path = p.StandardOutput.ReadToEnd().Trim().Split('\n').FirstOrDefault()?.Trim();
+        p.WaitForExit();
+        return devenvExe = !string.IsNullOrEmpty(path) && File.Exists(path) ? path : null;
+    }
+
+    static void Launch(string exe, params string[] args)
+    {
+        var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        Process.Start(psi);
+    }
+
+    // app: code | vs | folder. file: optional path inside the repo.
+    public static void Open(string repo, string app, string? file, int line)
+    {
+        switch (app)
+        {
+            case "code":
+                var code = VsCode() ?? throw new Exception("VS Code isn't installed on this computer.");
+                if (file is null) Launch(code, repo); else Launch(code, repo, "-g", $"{file}:{Math.Max(1, line)}");
+                break;
+            case "vs":
+                var vs = VisualStudio() ?? throw new Exception("Visual Studio isn't installed on this computer.");
+                if (file is not null) Launch(vs, "/edit", file);
+                else if (Solution(repo) is { } sln) Launch(vs, Path.Combine(repo, sln));
+                else Launch(vs, repo);
+                break;
+            case "folder":
+                if (file is not null && File.Exists(file)) Launch("explorer.exe", $"/select,{file}");
+                else Launch("explorer.exe", file is not null ? Path.GetDirectoryName(file)! : repo);
+                break;
+            default: throw new Exception("Unknown app.");
+        }
+    }
+
+    // What each of the given commits changed in one file, oldest first.
+    public static JsonArray Diff(string repo, string rel, IEnumerable<string> shas) => new(shas.Select(sha =>
+    {
+        var head = Git.Run(repo, "show", "-s", "--date=short", "--format=%h%x1f%an%x1f%ad%x1f%s", sha).Trim().Split('\x1f');
+        var patch = Git.Run(repo, "show", "--format=", "--no-color", "-M", "--unified=3", sha, "--", rel);
+        return (JsonNode)new JsonObject
+        {
+            ["sha"] = sha, ["short"] = head.ElementAtOrDefault(0), ["author"] = head.ElementAtOrDefault(1),
+            ["date"] = head.ElementAtOrDefault(2), ["subject"] = head.ElementAtOrDefault(3), ["patch"] = patch,
+        };
+    }).ToArray());
+
+    // Opens the file as it was before the first of these commits next to how it is after the last, in VS Code's diff view.
+    public static void OpenDiff(string repo, string rel, List<string> shas)
+    {
+        var code = VsCode() ?? throw new Exception("VS Code isn't installed on this computer.");
+        // shas arrive oldest first (the page lists commits by date)
+        var first = shas[0]; var last = shas[^1];
+        var dir = Path.Combine(Path.GetTempPath(), "feature-ledger", "diff", Path.GetFileName(repo), first[..8] + "-" + last[..8]);
+        Directory.CreateDirectory(dir);
+        var name = Path.GetFileName(rel);
+        var before = Path.Combine(dir, "before " + name);
+        var after = Path.Combine(dir, "after " + name);
+        File.WriteAllText(before, Git.Run(repo, "show", $"{first}^:{rel}"));
+        File.WriteAllText(after, Git.Run(repo, "show", $"{last}:{rel}"));
+        Launch(code, "--diff", before, after);
+    }
+}
+
 record JiraUser(string AccountId, string DisplayName, string Email);
 
 class Jira
@@ -1222,7 +1362,8 @@ static class ReportJson
     static JsonObject CommitJson(RepoResult r, Commit c) => new()
     {
         ["sha"] = c.Sha, ["short"] = c.Short, ["date"] = c.Date, ["author"] = c.Author, ["subject"] = c.Subject,
-        ["inDefault"] = c.InDefault, ["note"] = c.Note, ["url"] = CommitUrl(r, c), ["ticket"] = c.Ticket,
+        ["inDefault"] = c.InDefault, ["note"] = c.Note, ["url"] = CommitUrl(r, c), ["ticket"] = c.Ticket, ["email"] = c.AuthorEmail,
+        ["files"] = new JsonArray(c.Files.Select(f => (JsonNode)new JsonObject { ["s"] = f.Status, ["p"] = f.Path }).ToArray()),
     };
 
     public static JsonObject Issue(IssueInfo i) => new()
@@ -1256,17 +1397,19 @@ static class ReportJson
         }).ToArray()),
     }).ToArray());
 
-    public static JsonObject Full(Report rep, string jiraBase)
+    public static JsonObject Full(Report rep, Ledger ledger)
     {
         var own = rep.Repos.SelectMany(r => r.Commits.Where(c => !c.IsForeign)).ToList();
         return new JsonObject
         {
             ["key"] = rep.Key,
             ["generated"] = rep.Generated.ToString("yyyy-MM-dd HH:mm"),
-            ["jiraUrl"] = $"{jiraBase}/browse/{rep.Key}",
+            ["jiraUrl"] = $"{ledger.JiraBaseUrl}/browse/{rep.Key}",
+            ["myEmails"] = new JsonArray(ledger.MyEmails().Select(e => (JsonNode)e).ToArray()),
             ["issue"] = rep.Issue is null ? null : Issue(rep.Issue),
             ["ancestors"] = new JsonArray(rep.Ancestors.Select(a => (JsonNode)Issue(a)).ToArray()),
             ["stations"] = StationsJson(rep.Stations),
+            ["subTickets"] = new JsonObject { ["possible"] = rep.Subs.Possible, ["total"] = rep.Subs.Total, ["mine"] = rep.Subs.Mine, ["included"] = rep.Scope.Count },
             ["scope"] = new JsonArray((rep.Issue is null ? rep.Scope : rep.Scope.Prepend(rep.Issue)).Select(t =>
             {
                 var j = Issue(t);
@@ -1291,10 +1434,11 @@ static class ReportJson
                 ["name"] = r.Name,
                 ["webUrl"] = r.WebUrl == "" ? null : r.WebUrl,
                 ["defaultRef"] = r.DefaultRef,
+                ["sln"] = LocalApps.Solution(ledger.RepoPath(r.Name)),
                 ["merges"] = new JsonArray(r.Merges.Select(m => (JsonNode)new JsonObject
                 {
                     ["label"] = m.MrUrl is null ? $"merge {m.Sha[..8]}" : $"!{m.MrUrl.Split('/')[^1]}",
-                    ["url"] = m.MrUrl, ["date"] = m.Date, ["inDefault"] = m.InDefault,
+                    ["url"] = m.MrUrl, ["date"] = m.Date, ["inDefault"] = m.InDefault, ["branch"] = m.SourceBranch,
                 }).ToArray()),
                 ["branches"] = new JsonArray(r.Branches.Select(b => (JsonNode)new JsonObject { ["name"] = b.Name, ["unmerged"] = b.Unmerged }).ToArray()),
                 ["commits"] = new JsonArray(r.Commits.Where(c => !c.IsForeign).Select(c => (JsonNode)CommitJson(r, c)).ToArray()),
@@ -1372,9 +1516,9 @@ static class UiServer
                 {
                     // only plain file names from the assets folder: no sub-paths, no "..", only known types
                     var name = p["/assets/".Length..];
-                    var types = new Dictionary<string, string> { [".ttf"] = "font/ttf", [".woff2"] = "font/woff2", [".svg"] = "image/svg+xml" };
+                    var types = new Dictionary<string, string> { [".ttf"] = "font/ttf", [".woff2"] = "font/woff2", [".svg"] = "image/svg+xml", [".js"] = "text/javascript; charset=utf-8", [".css"] = "text/css; charset=utf-8" };
                     var file = Path.Combine(ledger.AppDir, "assets", name);
-                    if (!Regex.IsMatch(name, @"^[A-Za-z0-9_\-]+\.[a-z0-9]+$") || !types.TryGetValue(Path.GetExtension(name), out var type) || !File.Exists(file))
+                    if (!Regex.IsMatch(name, @"^[A-Za-z0-9_\-]+(\.[A-Za-z0-9_\-]+)*\.[a-z0-9]+$") || name.Contains("..") || !types.TryGetValue(Path.GetExtension(name), out var type) || !File.Exists(file))
                     { await Send(res, 404, Err("Not found")); return; }
                     var bytes = await File.ReadAllBytesAsync(file);
                     res.StatusCode = 200; res.ContentType = type; res.ContentLength64 = bytes.Length;
@@ -1465,7 +1609,7 @@ static class UiServer
                     {
                         var rep = await ledger.Build(key, fetch, msg => Console.WriteLine($"[{key}] {msg}"), children, onlyMine);
                         cache[key] = rep;
-                        await Send(res, 200, ReportJson.Full(rep, ledger.JiraBaseUrl));
+                        await Send(res, 200, ReportJson.Full(rep, ledger));
                     }
                     finally { buildLock.Release(); }
                     return;
@@ -1477,6 +1621,31 @@ static class UiServer
                     if (file is null || !File.Exists(file)) { await Send(res, 404, Err("Build the manifest first")); return; }
                     if (req.QueryString["download"] == "1") res.AddHeader("Content-Disposition", $"attachment; filename=\"{key}.md\"");
                     await SendText(res, 200, File.ReadAllText(file), "text/markdown; charset=utf-8");
+                    return;
+                }
+
+                case ("POST", "/api/open"):
+                case ("POST", "/api/diff"):
+                case ("POST", "/api/open-diff"):
+                {
+                    if (!Trusted(req)) { await Send(res, 403, Err("Missing X-Ledger header")); return; }
+                    var body = await ReadJson(req);
+                    var repo = ledger.RepoPath((string?)body["repo"]);
+                    if (repo is null) { await Send(res, 400, Err("Unknown repository.")); return; }
+                    var rel = (string?)body["path"];
+                    string? file = null;
+                    if (rel is not null && (file = LocalApps.SafeFile(repo, rel)) is null) { await Send(res, 400, Err("Invalid file path.")); return; }
+                    if (path == "/api/open")
+                    {
+                        LocalApps.Open(repo, (string?)body["app"] ?? "", file, (int?)body["line"] ?? 1);
+                        await Send(res, 200, new JsonObject { ["ok"] = true });
+                        return;
+                    }
+                    var shas = body["shas"]?.AsArray().Select(n => (string?)n).Where(s => LocalApps.IsCommit(repo, s)).Select(s => s!).Distinct().ToList() ?? [];
+                    if (rel is null || shas.Count == 0) { await Send(res, 400, Err("Nothing to compare.")); return; }
+                    if (path == "/api/diff") { await Send(res, 200, new JsonObject { ["commits"] = LocalApps.Diff(repo, rel, shas) }); return; }
+                    LocalApps.OpenDiff(repo, rel, shas);
+                    await Send(res, 200, new JsonObject { ["ok"] = true });
                     return;
                 }
 

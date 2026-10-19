@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ledger</title>
+<link rel="stylesheet" href="/assets/select2.min.css">
 <style>
 @font-face { font-family: "Inter"; src: url(/assets/Inter.ttf) format("truetype"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "JBMono"; src: url(/assets/JetBrainsMono.ttf) format("truetype"); font-weight: 100 800; font-display: swap; }
@@ -78,12 +79,13 @@ kbd { font: 500 10.5px var(--sans); color: var(--ink-3); background: var(--tint-
 .rail-h h1 { font-size: 15px; font-weight: 600; letter-spacing: -.015em; margin: 0; }
 .rail-h .n { color: var(--ink-3); }
 .rail-h .btn { margin-left: auto; align-self: center; }
-.views { display: flex; gap: 14px; padding: 14px 20px 0; border-bottom: 1px solid var(--hair); overflow-x: auto; }
-.views button { flex: none; padding: 0 0 11px; color: var(--ink-3); font-weight: 500; position: relative; transition: color .15s var(--ease); }
-.views button:hover { color: var(--ink-2); }
-.views button[aria-pressed="true"] { color: var(--ink); }
-.views button[aria-pressed="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px; background: var(--ink); }
-.views .c { margin-left: 4px; color: var(--ink-4); font-weight: 400; }
+.views { display: flex; gap: 2px; padding: 12px 14px 12px; border-bottom: 1px solid var(--hair); overflow-x: auto; scrollbar-width: none; }
+.views::-webkit-scrollbar { display: none; }
+.views button, .tabs button { flex: none; height: 28px; padding: 0 11px; border-radius: 999px; color: var(--ink-3); font-weight: 500; display: inline-flex; align-items: center; transition: background .15s var(--ease), color .15s var(--ease); }
+.views button:hover, .tabs button:hover { color: var(--ink); background: var(--tint-1); }
+.views button[aria-pressed="true"], .tabs button[aria-selected="true"] { background: var(--tint-3); color: var(--ink); }
+.views .c, .tabs .c { margin-left: 6px; color: var(--ink-4); font-weight: 400; }
+.views button[aria-pressed="true"] .c, .tabs button[aria-selected="true"] .c { color: var(--ink-3); }
 .list { overflow-y: auto; padding: 8px 10px 24px; }
 .sec-l { font-size: 11.5px; font-weight: 500; color: var(--ink-3); padding: 16px 10px 6px; }
 .sec-l:first-child { padding-top: 8px; }
@@ -177,12 +179,8 @@ kbd { font: 500 10.5px var(--sans); color: var(--ink-3); background: var(--tint-
 .scope button:hover .s { color: var(--ink); }
 
 .ev { margin-top: 64px; }
-.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--hair); }
-.tabs button { padding: 0 0 11px; color: var(--ink-3); font-weight: 500; position: relative; transition: color .15s; }
-.tabs button:hover { color: var(--ink-2); }
-.tabs button[aria-selected="true"] { color: var(--ink); }
-.tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px; background: var(--ink); }
-.tabs .c { margin-left: 5px; color: var(--ink-4); font-weight: 400; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding-bottom: 14px; border-bottom: 1px solid var(--hair); }
+.tabs::-webkit-scrollbar { display: none; }
 .pane { padding-top: 18px; }
 .filter { height: 30px; width: 280px; max-width: 100%; border-radius: 7px; border: 0; background: var(--tint-1); padding: 0 10px; margin-bottom: 16px; }
 .filter:focus { outline: none; background: var(--tint-2); }
@@ -222,6 +220,147 @@ table.tb a:hover { text-decoration: underline; text-decoration-color: var(--ink-
           mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 6'%3E%3Cpath d='M1 5 5 1M1.6 1H5v3.4' fill='none' stroke='black' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
   transition: opacity .15s, transform .15s; }
 .ln:hover::after { opacity: 1; transform: translate(1px, -1px); }
+.jb { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 4px; font: 600 10.5px/1 var(--sans); letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; background: var(--tint-3); color: var(--ink-2); }
+.jb.prog { background: rgba(92, 140, 235, .16); color: #8fb2f5; }
+.jb.done { background: rgba(90, 184, 138, .15); color: var(--green); }
+.ty { width: 14px; height: 14px; flex: none; display: block; }
+.ty rect:first-child { fill: #6b7280; }
+.ty.story rect:first-child { fill: #5fb336; } .ty.task rect:first-child { fill: #3d8fe0; } .ty.bug rect:first-child { fill: #e2483d; }
+.ty.epic rect:first-child { fill: #8b5cf6; } .ty.sub rect:first-child { fill: #3fa7d6; }
+.tyn { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-2); }
+.facts .tag { display: inline-flex; align-items: center; }
+.subs { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; }
+.subs-note { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-3); font-size: 12.5px; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--tint-1); box-shadow: inset 0 0 0 1px var(--hair); }
+.seg button { height: 26px; padding: 0 12px; border-radius: 999px; color: var(--ink-3); font-weight: 500; display: inline-flex; align-items: center; gap: 7px; transition: background .15s var(--ease), color .15s var(--ease); }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-checked="true"] { background: var(--tint-3); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.page.dim .state, .page.dim .meter, .page.dim .body, .page.dim .ev, .page.dim .void { opacity: .35; pointer-events: none; transition: opacity .2s var(--ease); }
+.scope .kk { display: inline-flex; align-items: center; gap: 7px; }
+.row .m .s { display: flex; }
+/* service badge: hue from the name, same lightness for every service so none shouts */
+.rt { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 4px; font: 500 11px/1 var(--mono); letter-spacing: 0; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  background: hsl(var(--h) 42% 52% / .15); color: hsl(var(--h) 62% 74%); }
+.it .rp { margin-bottom: 3px; }
+.grp .rt { vertical-align: middle; }
+
+/* finder: Select2, dressed to match */
+.finder-wrap { position: relative; width: min(420px, 100%); margin-left: 28px; }
+.finder-wrap .fglass { position: absolute; left: 11px; top: 9px; color: var(--ink-3); z-index: 1; pointer-events: none; }
+.finder-wrap .fkbd { position: absolute; right: 8px; top: 8px; pointer-events: none; }
+.select2-container--default .select2-selection--single { height: 32px; border: 0; border-radius: 8px; background: var(--tint-1); transition: background .15s var(--ease); }
+.select2-container--default .select2-selection--single:hover { background: var(--tint-2); }
+.select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 32px; color: var(--ink-2); padding-left: 12px; padding-right: 30px; }
+.select2-container--default .select2-selection--single .select2-selection__arrow { height: 32px; right: 6px; }
+.select2-container--default .select2-selection--single .select2-selection__arrow b { border-color: var(--ink-3) transparent transparent; }
+.select2-container--default.select2-container--open .select2-selection--single .select2-selection__arrow b { border-color: transparent transparent var(--ink-3); }
+.select2-container--default.select2-container--focus .select2-selection--single, .select2-container--open .select2-selection--single { box-shadow: inset 0 0 0 1px var(--hair-2); }
+.finder-wrap .select2-selection__rendered { padding-left: 34px !important; }
+.finder-wrap .select2-selection__arrow { display: none; }
+.s2-ph { color: var(--ink-3); }
+.select2-dropdown { background: var(--tint-2); border: 0 !important; border-radius: 10px !important; box-shadow: 0 0 0 1px var(--hair-2), 0 18px 44px rgba(0,0,0,.55); overflow: hidden; margin-top: 6px; color: var(--ink); }
+.select2-dropdown--above { margin-top: -6px; }
+.finder-wrap .select2-dropdown { width: min(560px, calc(100vw - 32px)) !important; }
+.select2-search--dropdown { padding: 8px; }
+.select2-container--default .select2-search--dropdown .select2-search__field { height: 34px; border: 0; border-radius: 7px; background: var(--canvas); color: var(--ink); padding: 0 10px; box-shadow: inset 0 0 0 1px var(--hair-2); }
+.select2-container--default .select2-search--dropdown .select2-search__field:focus { outline: none; box-shadow: inset 0 0 0 1px var(--ink-3); }
+.select2-container--default .select2-results > .select2-results__options { max-height: 52vh; padding: 0 6px 6px; }
+.select2-results__option { padding: 8px 10px; border-radius: 7px; color: var(--ink-2); }
+.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable { background: var(--tint-3); color: var(--ink); }
+.select2-container--default .select2-results__option--selected { background: transparent; color: var(--ink); font-weight: 500; }
+.select2-results__message, .select2-results__option--disabled { color: var(--ink-3) !important; }
+.s2-hit { display: grid; grid-template-columns: 16px 14px 70px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.s2-hit .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.s2-hit .mono { color: var(--ink-2); }
+.s2-msg { display: inline-flex; gap: 9px; align-items: center; color: var(--ink-3); }
+#pane .select2-container { margin-bottom: 16px; }
+@media (max-width: 900px) { .finder-wrap { margin-left: 16px; } .fkbd { display: none; } }
+/* evidence filters */
+.evbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+#evTicket, #evTicket + .select2 { width: 300px; max-width: 100%; }
+#evRepos, #evRepos + .select2 { width: 360px; max-width: 100%; }
+.select2-container--default .select2-selection--multiple { min-height: 32px; border: 0; border-radius: 8px; background: var(--tint-1); padding: 3px 28px 3px 6px; cursor: pointer; }
+.select2-container--default.select2-container--focus .select2-selection--multiple { border: 0; box-shadow: inset 0 0 0 1px var(--hair-2); }
+.select2-container--default .select2-selection--multiple .select2-selection__rendered { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; }
+.select2-container--default .select2-selection--multiple .select2-selection__choice { margin: 0; border: 0; background: none; padding: 0 0 0 16px; position: relative; display: inline-flex; align-items: center; }
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove { position: absolute; left: 0; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--ink-3); padding: 0 3px; }
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover { background: none; color: var(--ink); }
+.select2-container--default .select2-selection--multiple .select2-selection__choice__display { padding: 0; }
+.select2-container--default .select2-selection--multiple .select2-selection__clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); margin: 0; color: var(--ink-3); background: none; border: 0; height: auto; padding: 0 4px; }
+.select2-container .select2-search--inline .select2-search__field { margin: 0; height: 24px; color: var(--ink); font: inherit; padding-left: 4px; }
+.select2-container .select2-search--inline .select2-search__field::placeholder { color: var(--ink-3); }
+.select2-container--default .select2-selection--single .select2-selection__clear { color: var(--ink-3); }
+.s2-repo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.select2-results__option[aria-selected="true"] .rt::before, .select2-results__option--selected .rt::before { content: "✓ "; }
+.tgl { display: inline-flex; align-items: center; gap: 9px; color: var(--ink-2); font-weight: 500; cursor: pointer; user-select: none; margin-left: 4px; }
+.tgl input { position: absolute; opacity: 0; pointer-events: none; }
+.tgl .knob { width: 28px; height: 16px; border-radius: 999px; background: var(--tint-3); position: relative; transition: background .2s var(--ease); }
+.tgl .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-2); transition: transform .25s var(--ease), background .2s; }
+.tgl input:checked + .knob { background: var(--ink-2); }
+.tgl input:checked + .knob::after { transform: translateX(12px); background: var(--canvas); }
+.tgl input:focus-visible + .knob { outline: 1.5px solid var(--amber); outline-offset: 2px; }
+.tool { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.tool .filter { margin-bottom: 0; }
+
+/* collapsible repository groups */
+.gbox { border-top: 1px solid var(--hair); }
+.gbox:first-of-type { border-top: 0; }
+.gbox-h { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.gtoggle { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 4px 0; }
+.gtoggle .chev { color: var(--ink-3); transition: transform .38s cubic-bezier(.33, .8, .25, 1); }
+.gbox[data-open="true"] .gtoggle .chev { transform: rotate(90deg); }
+.gtoggle:hover .chev { color: var(--ink); }
+.gbox-b, .stp-b { overflow: hidden; }
+.gbox-b { padding: 0 0 12px 24px; }
+.acts-i { display: inline-flex; gap: 2px; }
+.acts-i .btn.only.small { width: 26px; color: var(--ink-3); }
+.acts-i .btn.only.small:hover { color: var(--ink); }
+
+/* files with actions */
+.files li { align-items: center; padding: 1px 0; border-radius: 6px; }
+.files li:hover { background: var(--tint-1); }
+.fpath { flex: 1; min-width: 0; text-align: left; font: inherit; color: var(--ink-2); overflow-wrap: anywhere; }
+.fpath:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-4); text-underline-offset: 3px; }
+.facts-i { display: inline-flex; gap: 2px; opacity: 0; transition: opacity .15s; flex: none; }
+.files li:hover .facts-i, .files li:focus-within .facts-i { opacity: 1; }
+.facts-i .btn.only.small { width: 24px; height: 24px; color: var(--ink-3); }
+.facts-i .btn.only.small:hover { color: var(--ink); }
+.facts-i .acts-i { gap: 2px; }
+@media (hover: none) { .facts-i { opacity: 1; } }
+.pane-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 40px 16px; color: var(--ink-3); }
+.pane-empty b { color: var(--ink); font-weight: 600; }
+.pane-empty .btn { margin-top: 10px; }
+
+/* change preview drawer */
+dialog.drawer { position: fixed; inset: 0 0 0 auto; margin: 0; height: 100%; max-height: none; width: min(980px, 100vw); border-radius: 0; box-shadow: -1px 0 0 var(--hair-2), -24px 0 60px rgba(0,0,0,.45); background: var(--canvas); display: none; flex-direction: column; }
+dialog.drawer[open] { display: flex; animation: drawer .38s cubic-bezier(.33, .8, .25, 1); }
+@keyframes drawer { from { transform: translateX(40px); opacity: 0; } }
+.dd-h { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--hair); background: var(--rail); }
+.dd-t { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.dd-t .mono { color: var(--ink); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-a { display: flex; align-items: center; gap: 4px; }
+.dd-b { overflow: auto; flex: 1; padding: 14px 18px 40px; }
+.dd-c + .dd-c { margin-top: 22px; }
+.dd-ch { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; font-size: 12.5px; }
+.dd-s { color: var(--ink); font-weight: 500; }
+.diffwrap { overflow-x: auto; border-radius: 8px; background: #0f1012; box-shadow: inset 0 0 0 1px var(--hair); }
+table.diff { border-collapse: collapse; width: 100%; font: 12px/1.6 var(--mono); }
+table.diff td { padding: 0 10px; white-space: pre; vertical-align: top; }
+table.diff td:nth-child(-n+2) { width: 1%; text-align: right; color: var(--ink-4); user-select: none; padding: 0 8px; }
+table.diff td:nth-child(3) { color: #cfd1d4; width: 100%; }
+table.diff tr.add td { background: rgba(70, 160, 100, .14); }
+table.diff tr.add td:nth-child(3) { color: #c9ecd5; }
+table.diff tr.add td:nth-child(2) { color: #6fbf8e; }
+table.diff tr.del td { background: rgba(220, 80, 70, .14); }
+table.diff tr.del td:nth-child(3) { color: #f2cbc7; }
+table.diff tr.del td:nth-child(1) { color: #e08a82; }
+table.diff tr.hunk td { background: rgba(92, 140, 235, .08); color: #8fb2f5; padding-top: 3px; padding-bottom: 3px; }
+
+/* centred error */
+.fail-c .ico.big { width: 30px; height: 30px; color: var(--red); margin-bottom: 14px; }
+.fail-c .why { margin-top: 26px; color: var(--ink-3); font-size: 12px; max-width: 100%; }
+.fail-c .why summary { cursor: pointer; }
+.fail-c .why code { display: block; margin-top: 8px; text-align: left; background: var(--tint-1); padding: 10px 12px; border-radius: 8px; color: var(--ink-3); white-space: pre-wrap; }
 .blank { height: 100%; display: grid; place-items: center; padding: 40px; }
 .blank-in { width: min(380px, 100%); color: var(--ink-3); }
 .blank-in h2 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; margin: 18px 0 6px; color: var(--ink); }
@@ -329,6 +468,12 @@ dialog[open] { animation: rise .16s var(--ease); }
     <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 2.5v8M4.75 7.5 8 10.75l3.25-3.25M3 13.25h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-send" viewBox="0 0 16 16"><path d="M2.75 8h9.5M8.75 4.5 12.25 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-checkall" viewBox="0 0 16 16"><path d="m2.5 8.5 2.5 2.5 5-5.5M8.5 10.5l.5.5 4.5-5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-vscode" viewBox="0 0 16 16"><path d="M11.4 1.6 6 6.6 3.2 4.4 2 5v6l1.2.6L6 9.4l5.4 5 2.6-1.2V2.8zM3.4 9.6V6.4L5 8zm8 1.6L8.1 8l3.3-3.2z" fill="currentColor"/></symbol>
+    <symbol id="i-vs" viewBox="0 0 16 16"><path d="M11.3 1.5 5.9 6.7 2.7 4.3 1.5 4.9v6.2l1.2.6 3.2-2.4 5.4 5.2 3.2-1.4V2.9zM2.9 10V6l2 2zm8.4 1.6L8 8l3.3-3.6z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2.25 4.25a1 1 0 0 1 1-1h3l1.5 1.5h5a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-9.5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.75 8S4 3.75 8 3.75 14.25 8 14.25 8 12 12.25 8 12.25 1.75 8 1.75 8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.75v3.75M8 11h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
     <symbol id="i-list" viewBox="0 0 16 16"><path d="M3 4.5h10M3 8h10M3 11.5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
   </defs>
 </svg>
@@ -339,7 +484,7 @@ dialog[open] { animation: rise .16s var(--ease); }
       <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="2" width="16" height="3" rx="1.5" fill="#ededee"/><rect x="1" y="7.5" width="11" height="3" rx="1.5" fill="#ededee" opacity=".55"/><rect x="1" y="13" width="7" height="3" rx="1.5" fill="#e8a33d"/></svg>
       Ledger
     </div>
-    <button class="finder" id="finder" aria-label="Find a ticket (Ctrl+K)"><svg class="ico s"><use href="#i-search"/></svg><span>Find a ticket</span><kbd>Ctrl K</kbd></button>
+    <div class="finder-wrap"><svg class="ico s fglass" aria-hidden="true"><use href="#i-search"/></svg><select id="finderSel" aria-label="Find a ticket"></select><kbd class="fkbd">Ctrl K</kbd></div>
     <div class="end">
       <span class="progress" id="progress" aria-live="polite"></span>
       <button class="btn" id="checkAll" hidden title="Fetch every repository, then check all your tickets"><svg class="ico s"><use href="#i-checkall"/></svg>Check all</button>
@@ -359,15 +504,13 @@ dialog[open] { animation: rise .16s var(--ease); }
 </div>
 
 <dialog class="dlg" id="settings" aria-labelledby="dlgTitle"></dialog>
-<dialog class="find" id="find" aria-label="Find a ticket">
-  <div class="bar"><svg class="ico" style="color:var(--ink-3)"><use href="#i-search"/></svg>
-    <input id="fq" placeholder="Search your tickets" aria-label="Search your tickets" role="combobox" aria-controls="fres" aria-expanded="true" spellcheck="false"></div>
-  <div class="res" id="fres" role="listbox"></div>
-  <div class="keys"><span><kbd>↑</kbd> <kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span></div>
-</dialog>
+<dialog class="drawer" id="diffDlg" aria-label="Changes in this file"></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="/assets/jquery.min.js"></script>
+<script src="/assets/select2.min.js"></script>
 <script>
+const jq = jQuery.noConflict(true);
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -415,6 +558,7 @@ function overall(st) {
 }
 const GROUP = { todo: "Needs you", wait: "Waiting", check: "Ready to hand over", none: "Not checked yet", done: "With QA" };
 
+let viewsScroll = 0, evTicket = null, evRepos = [], evMine = true, fileQuery = "", groupOpen = {};
 let status = null, tickets = null, selected = null, report = null, view = "all", openStep = null, tab = "repos", commitFilter = "", includeKids = true, checking = false, seq = 0;
 
 function toast(html, ms = 4200) { const t = $("#toast"); t.innerHTML = html; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms); }
@@ -499,8 +643,17 @@ function renderList() {
   all.forEach(t => g[overall(statesOf(t.lastBuild))].push(t));
   const V = [["all", "All", all.length], ["todo", "Needs you", g.todo.length + g.wait.length], ["check", "Ready", g.check.length], ["done", "With QA", g.done.length], ["none", "New", g.none.length]];
   $("#count").textContent = all.length || "";
+  viewsScroll = $("#views").scrollLeft;
   $("#views").innerHTML = V.map(([id, l, n]) => `<button aria-pressed="${view === id}" data-v="${id}">${l}<span class="c">${n}</span></button>`).join("");
-  $$("#views [data-v]").forEach(b => b.onclick = () => { view = b.dataset.v; renderList(); });
+  $$("#views [data-v]").forEach(b => {
+    b.onclick = () => { view = b.dataset.v; renderList(); $(`#views [data-v="${view}"]`)?.focus({ preventScroll: true }); };
+    b.onkeydown = e => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
+      e.preventDefault(); const all = $$("#views [data-v]"); all[(all.indexOf(b) + d + all.length) % all.length].click();
+    };
+  });
+  $("#views").scrollLeft = viewsScroll;
+  glide($("#views"), $("#views [aria-pressed=true]"));
   const order = view === "all" ? ["todo", "wait", "check", "none", "done"] : view === "todo" ? ["todo", "wait"] : [view];
   const secs = order.map(k => [k, g[k]]).filter(([, l]) => l.length);
   if (!secs.length) { $("#list").innerHTML = `<div class="rail-note"><b>${all.length ? "Nothing here" : "All clear"}</b>${all.length ? "No tickets in this view." : "Nothing open is assigned to you in Jira."}</div>`; return; }
@@ -512,7 +665,7 @@ function rowHtml(t) {
   const st = statesOf(t.lastBuild);
   return `<button class="row ${t._busy ? "busy" : ""}" role="option" aria-selected="${t.key === selected}" data-key="${esc(t.key)}">
     ${mark(overall(st))}<span class="t">${esc(t.summary)}</span>
-    <span class="m"><span class="mono">${esc(t.key)}</span><span class="s">${esc(t.status)}</span>${qbar(st)}</span></button>`;
+    <span class="m">${typeTag(t.type)}<span class="mono">${esc(t.key)}</span><span class="s">${jiraBadge(t.status, t.statusCategory)}</span>${qbar(st)}</span></button>`;
 }
 
 function move(dir) {
@@ -530,18 +683,21 @@ function select(key, fetchFirst = false) {
   load(key, fetchFirst);
 }
 
-async function load(key, fetchFirst) {
+async function load(key, fetchFirst, inPlace = false) {
+  if (key !== selected) { evTicket = key; evRepos = []; fileQuery = ""; groupOpen = {}; }
   selected = key; commitFilter = ""; openStep = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
   document.title = `${key} · Ledger`;
   const n = ++seq;
-  $("#main").innerHTML = `<div class="loading">
+  // switching scope keeps the page and dims what is about to change, instead of blanking it
+  if (inPlace && $(".page")) $(".page").classList.add("dim");
+  else $("#main").innerHTML = `<div class="loading">
     <button class="btn back" id="back">${icon("back")}My tickets</button>
     <div class="note"><span class="spinner"></span>${fetchFirst ? `Fetching ${pl(status?.repoCount ?? 0, "repository", "repositories")}, then checking ${esc(key)}` : `Checking ${esc(key)}`}</div>
     <div class="line" style="width:38%;height:14px"></div><div class="line" style="width:64%;height:22px"></div><div class="line" style="width:30%"></div>
     <div style="height:30px"></div>${[72, 58, 66, 49, 61, 54].map(w => `<div class="line" style="width:${w}%"></div>`).join("")}</div>`;
-  $("#back").onclick = back;
+  if ($("#back")) $("#back").onclick = back;
   try {
     const r = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=1`);
     if (n !== seq) return;
@@ -553,7 +709,14 @@ async function load(key, fetchFirst) {
     renderTicket();
   } catch (e) {
     if (n !== seq) return;
-    $("#main").innerHTML = `<div class="page"><button class="btn back" id="back">${icon("back")}My tickets</button><div class="fail"><h2>Couldn't check ${esc(key)}</h2><p>${esc(e.message)}</p><button class="btn line" id="retry">Try again</button></div></div>`;
+    const disk = /disk was full|not enough space/i.test(e.message);
+    $("#main").innerHTML = `<div class="page"><button class="btn back" id="back">${icon("back")}My tickets</button>
+      <div class="void fail-c">${icon("alert", "ico big")}
+        <h3>Couldn't check ${esc(key)}</h3>
+        <p>${disk ? "Your disk is full, so the result couldn't be saved. Free some space on drive C:, then try again." : "Something went wrong while checking this ticket."}</p>
+        <div class="void-acts"><button class="btn solid" id="retry">${icon("refresh")}Try again</button></div>
+        <details class="why"><summary>Technical details</summary><code>${esc(e.message)}</code></details>
+      </div></div>`;
     $("#back").onclick = back; $("#retry").onclick = () => load(key, fetchFirst);
   }
 }
@@ -607,10 +770,10 @@ function renderTicket() {
       </div>
     </div>
     <div class="facts">
-      ${i ? `<span>${esc(i.type)}</span><span>Jira <b>${esc(i.status)}</b></span><span><b>${esc(cap(i.assignee))}</b></span>${i.fixVersions !== "none" ? `<span>Fix version <b>${esc(i.fixVersions)}</b></span>` : ""}`
+      ${i ? `<span class="tag">${typeTag(i.type, true)}</span><span class="tag">${jiraBadge(i.status, i.statusCategory)}</span><span><b>${esc(cap(i.assignee))}</b></span>${i.fixVersions !== "none" ? `<span>Fix version <b>${esc(i.fixVersions)}</b></span>` : ""}`
           : me ? "" : `<span><button id="hc" style="color:var(--ink-2);border-bottom:1px solid var(--hair-2)">Connect Jira</button> for title, status and sub-tickets</span>`}
-      ${me ? `<label><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}>Include my sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
     </div>
+    ${me ? subControl(r) : ""}
 
     ${nothing ? voidHtml(r, kids) : `<div class="state">
       <div class="say">${mark(v[0])}${v[1]}</div>
@@ -625,24 +788,65 @@ function renderTicket() {
         <ol class="steps">${r.stations.map((s, k) => stepHtml(s, k)).join("")}</ol>
       </section>
       <aside class="side">
-        <div><h3 class="h3">Footprint</h3><div class="figs">
-          <div class="fig"><div class="v">${r.stats.repos}</div><div class="l">Repositories</div></div>
-          <div class="fig"><div class="v">${r.stats.mergeRequests}</div><div class="l">Merge requests</div></div>
-          <div class="fig"><div class="v">${r.stats.merged}<small> / ${r.stats.commits}</small></div><div class="l">Commits merged</div></div>
-          <div class="fig"><div class="v">${r.stats.dbScripts}</div><div class="l">Database scripts</div></div>
-        </div></div>
-        ${kids ? `<div><h3 class="h3">Your tickets in scope</h3><ul class="scope">${r.scope.map(t => `<li><button data-go="${esc(t.key)}"><span class="k"><span class="mono ln">${esc(t.key)}</span><span>${t.commits ? `${t.merged}/${t.commits} merged` : "no code"}</span></span><span class="s">${esc(t.summary)}</span></button></li>`).join("")}</ul></div>` : ""}
+        <div><h3 class="h3">Your footprint<span id="figsFor"></span></h3><div class="figs" id="figs"></div></div>
+        ${kids ? `<div><h3 class="h3">Your tickets in scope</h3><ul class="scope">${r.scope.map(t => `<li><button data-go="${esc(t.key)}"><span class="k"><span class="kk">${typeTag(t.type)}<span class="mono ln">${esc(t.key)}</span>${jiraBadge(t.status, t.statusCategory)}</span><span>${t.commits ? `${t.merged}/${t.commits} merged` : "no code"}</span></span><span class="s">${esc(t.summary)}</span></button></li>`).join("")}</ul></div>` : ""}
       </aside>
     </div>
 
     <section class="ev">
-      <div class="tabs" role="tablist">${[["repos", "Repositories", r.repos.length], ["files", "Files", r.stats.files], ["commits", "Commits", r.stats.commits], ...(r.foreign.length ? [["foreign", "Other tickets", r.foreign.length]] : [])]
-        .map(([id, l, c]) => `<button role="tab" aria-selected="${tab === id}" data-tab="${id}">${l}<span class="c">${c}</span></button>`).join("")}</div>
+      <div class="evbar">
+        ${r.scope.length > 1 ? `<select id="evTicket" aria-label="Ticket">
+          ${r.scope.map(t => `<option value="${esc(t.key)}" ${t.key === evTicket ? "selected" : ""}>${esc(t.key)}${t.key === r.key ? " (this ticket)" : ""} · ${esc(t.summary)}</option>`).join("")}
+          <option value="*" ${evTicket === "*" ? "selected" : ""}>All ${r.scope.length} of your tickets here</option></select>` : ""}
+        <select id="evRepos" multiple aria-label="Repositories"></select>
+        <label class="tgl"><input type="checkbox" id="evMine" ${evMine ? "checked" : ""}><span class="knob"></span>Only my commits</label>
+      </div>
+      <div class="tabs" role="tablist" id="evTabs"></div>
       <div class="pane" id="pane"></div>
     </section>`}
   </div>`;
   wireTicket();
-  if (!nothing) renderPane();
+  if (!nothing) initEvidence();
+}
+
+/* service / repository names: one stable colour per name, so a service looks the same everywhere */
+function repoTag(name) {
+  let h = 7; for (const c of name || "") h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `<span class="rt" style="--h:${h % 360}" title="${esc(name)}">${esc(name)}</span>`;
+}
+
+/* Jira status as a lozenge, coloured by Jira's own category: to do grey, in progress blue, done green */
+const jiraBadge = (name, cat) => `<span class="jb ${cat === "done" ? "done" : cat === "indeterminate" ? "prog" : "todo"}" title="Jira status">${esc(name)}</span>`;
+
+/* issue type, drawn like Jira's type icons */
+function typeTag(type, withName = false) {
+  const t = (type || "").toLowerCase();
+  const k = t.includes("epic") ? "epic" : t.includes("bug") ? "bug" : t.includes("sub") ? "sub" : t.includes("story") ? "story" : "task";
+  const glyph = {
+    story: `<path d="M5 3.5h6v9l-3-2.2-3 2.2z" fill="#fff"/>`,
+    task:  `<path d="m4.8 8.2 2.2 2.2 4.2-4.6" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`,
+    bug:   `<circle cx="8" cy="8" r="3.2" fill="#fff"/>`,
+    epic:  `<path d="M8.9 2.8 4.8 9h3l-.7 4.2L11.2 7h-3z" fill="#fff"/>`,
+    sub:   `<rect x="4" y="4" width="4.5" height="4.5" rx=".8" fill="none" stroke="#fff" stroke-width="1.3"/><rect x="7.5" y="7.5" width="4.5" height="4.5" rx=".8" fill="#fff"/>`,
+  }[k];
+  const svg = `<svg class="ty ${k}" viewBox="0 0 16 16" ${withName ? 'aria-hidden="true"' : `role="img" aria-label="${esc(type)}"`}><rect width="16" height="16" rx="3.5"/>${glyph}</svg>`;
+  return withName ? `<span class="tyn">${svg}${esc(type)}</span>` : svg;
+}
+
+/* the sub-ticket control adapts to what Jira actually has under this ticket */
+function subControl(r) {
+  const s = r.subTickets;
+  if (!s || !s.possible) return "";
+  const others = s.total - s.mine;
+  if (s.total === 0) return `<div class="subs"><span class="subs-note">${icon("list")}No sub-tickets under this ${esc((r.issue?.type || "ticket").toLowerCase())}</span></div>`;
+  if (s.mine === 0) return `<div class="subs"><span class="subs-note">${icon("list")}${pl(s.total, "sub-ticket")}, none assigned to you. Only this ticket is checked.</span></div>`;
+  return `<div class="subs">
+    <div class="seg" role="radiogroup" aria-label="What to check">
+      <button role="radio" aria-checked="${!includeKids}" data-kids="0">This ticket only</button>
+      <button role="radio" aria-checked="${includeKids}" data-kids="1">With my ${pl(s.mine, "sub-ticket")}</button>
+    </div>
+    <span class="subs-note">${includeKids ? `Checking ${pl(s.mine + 1, "ticket")} together.` : `Your ${pl(s.mine, "sub-ticket")} ${s.mine === 1 ? "is" : "are"} left out.`}${others ? ` ${pl(others, "sub-ticket")} by others ${others === 1 ? "is" : "are"} never counted.` : ""}</span>
+  </div>`;
 }
 
 /* nothing in git yet: say why, and give the one command that fixes it */
@@ -678,43 +882,239 @@ function stepHtml(s, k) {
     <button class="stp-h" aria-expanded="${open}" aria-controls="sb-${s.id}">${mark(s.state)}<span class="nm">${STEPS[k].name}</span><span class="hl">${esc(s.headline)}</span>${ct}${icon("chev", "ico chev")}</button>
     <div class="stp-b" id="sb-${s.id}" ${open ? "" : "hidden"}>
       <p class="means">${esc(STEPS[k].means)}</p>
-      ${items.length ? `<ul class="its">${items.map(it => `<li class="it"><div class="lead"><span class="dot ${it.state}"></span>${it.repo ? `<span class="rp">${esc(it.repo)}</span>` : ""}<span class="tx">${esc(it.title)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ""}</div>
+      ${items.length ? `<ul class="its">${items.map(it => `<li class="it"><div class="lead"><span class="dot ${it.state}"></span>${it.repo ? `<span class="rp">${repoTag(it.repo)}</span>` : ""}<span class="tx">${esc(it.title)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ""}</div>
         ${it.actionUrl === "post:" ? `<button class="btn solid small" data-post>${icon("send")}${esc(it.actionLabel)}</button>`
           : it.actionUrl ? `<a class="btn line small" href="${esc(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")}${icon("out")}</a>` : ""}</li>`).join("")}</ul>`
         : `<p class="empty-step">${esc(s.headline)}.</p>`}
     </div></li>`;
 }
 
+/* ── evidence: what *you* changed for the chosen ticket, by repository ── */
+const MINE = () => new Set((report?.myEmails || []).map(e => e.toLowerCase()));
+const byDate = (a, b) => (a.date || "").localeCompare(b.date || "");
+
+// commits that pass the ticket and author filters; the repository filter is applied separately
+function evScoped() {
+  const mine = MINE();
+  return report.repos.map(x => ({ ...x, commits: x.commits.filter(c => (evTicket === "*" || c.ticket === evTicket) && (!evMine || mine.has((c.email || "").toLowerCase()))).sort(byDate) }))
+    .filter(x => x.commits.length);
+}
+const evShown = () => evScoped().filter(x => !evRepos.length || evRepos.includes(x.name));
+const keyHit = name => evTicket === "*" ? report.scope.some(t => (name || "").toUpperCase().includes(t.key)) : (name || "").toUpperCase().includes(evTicket);
+
+// one entry per path: final status across the commits, and which commits touched it (oldest first)
+function evFiles(x) {
+  const m = new Map();
+  for (const c of x.commits) for (const f of c.files || []) {
+    const prev = m.get(f.p);
+    const st = prev && prev.s === "A" && f.s !== "D" ? "A" : f.s === "R" ? "A" : f.s;
+    m.set(f.p, { p: f.p, s: st, shas: [...(prev?.shas || []), c.sha] });
+  }
+  return [...m.values()].sort((a, b) => a.p.localeCompare(b.p));
+}
+
+function initEvidence() {
+  const repos = evScoped();
+  evRepos = evRepos.filter(n => repos.some(x => x.name === n));
+  const el = jq("#evRepos");
+  el.empty();
+  report.repos.forEach(x => el.append(new Option(x.name, x.name, false, evRepos.includes(x.name))));
+  el.select2({
+    width: "360px", placeholder: "All repositories", allowClear: true, closeOnSelect: false, dropdownParent: jq(".ev"),
+    templateResult: o => o.id ? jq(`<span class="s2-repo">${repoTag(o.id)}<span class="ink-3">${pl(repos.find(x => x.name === o.id)?.commits.length || 0, "commit")}</span></span>`) : o.text,
+    templateSelection: o => o.id ? jq(repoTag(o.id)) : o.text,
+  }).on("change", () => { evRepos = el.val() || []; renderEvidence(); });
+  if ($("#evTicket")) jq("#evTicket").select2({ width: "300px", minimumResultsForSearch: 8, dropdownParent: jq(".ev") })
+    .on("change", e => { evTicket = e.target.value; initEvidence(); });
+  $("#evMine").onchange = e => { evMine = e.target.checked; initEvidence(); };
+  renderEvidence();
+}
+
+function renderEvidence() {
+  const all = evScoped(), shown = evShown();
+  const files = shown.reduce((n, x) => n + evFiles(x).length, 0), commits = shown.reduce((n, x) => n + x.commits.length, 0);
+  // footprint follows the ticket and author filters
+  const mrs = all.reduce((n, x) => n + x.merges.filter(m => keyHit(m.branch)).length, 0);
+  const cAll = all.flatMap(x => x.commits);
+  $("#figsFor").textContent = evTicket === "*" ? "all your tickets here" : evTicket;
+  $("#figs").innerHTML = `
+    <div class="fig"><div class="v">${all.length}</div><div class="l">Repositories</div></div>
+    <div class="fig"><div class="v">${mrs}</div><div class="l">Merge requests</div></div>
+    <div class="fig"><div class="v">${cAll.filter(c => c.inDefault).length}<small> / ${cAll.length}</small></div><div class="l">Commits merged</div></div>
+    <div class="fig"><div class="v">${all.reduce((n, x) => n + evFiles(x).length, 0)}</div><div class="l">Files changed</div></div>`;
+  const tabs = [["repos", "Repositories", shown.length], ["files", "Files", files], ["commits", "Commits", commits], ...(report.foreign.length ? [["foreign", "Other tickets", report.foreign.length]] : [])];
+  $("#evTabs").innerHTML = tabs.map(([id, l, c]) => `<button role="tab" aria-selected="${tab === id}" data-tab="${id}">${l}<span class="c">${c}</span></button>`).join("");
+  $$("#evTabs [data-tab]").forEach(b => {
+    b.onclick = () => { tab = b.dataset.tab; $$("#evTabs [data-tab]").forEach(x => x.setAttribute("aria-selected", x === b)); glide($("#evTabs"), b); renderPane(); };
+    b.onkeydown = e => { const k = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!k) return; e.preventDefault(); const t = $$("#evTabs [data-tab]"); const nx = t[(t.indexOf(b) + k + t.length) % t.length]; nx.focus(); nx.click(); };
+  });
+  renderPane();
+}
+
+const openBtns = (repo, path, sln) => `<span class="acts-i">
+  <button class="btn only small" data-open="code" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Open in VS Code" aria-label="Open in VS Code">${icon("vscode")}</button>
+  ${path || sln ? `<button class="btn only small" data-open="vs" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Open in Visual Studio${sln && !path ? ` (${esc(sln)})` : ""}" aria-label="Open in Visual Studio">${icon("vs")}</button>` : ""}
+  <button class="btn only small" data-open="folder" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Show in folder" aria-label="Show in folder">${icon("folder")}</button></span>`;
+
+function groupHtml(x, count, body, id) {
+  const open = groupOpen[id] !== false;
+  return `<section class="gbox" data-open="${open}" data-gid="${esc(id)}">
+    <div class="gbox-h"><button class="gtoggle" aria-expanded="${open}">${icon("chev", "ico chev")}${repoTag(x.name)}<span class="ink-3">${count}</span></button>${openBtns(x.name, null, x.sln)}</div>
+    <div class="gbox-b" ${open ? "" : "hidden"}>${body}</div></section>`;
+}
+
 function renderPane() {
-  const r = report, p = $("#pane");
+  const p = $("#pane"), shown = evShown();
+  // offer the one change that would actually show something
+  const anyByOthers = evMine && report.repos.some(x => x.commits.some(c => evTicket === "*" || c.ticket === evTicket));
+  const subs = report.scope.length > 1 && evTicket !== "*";
+  const empty = what => `<div class="pane-empty">${icon("list", "ico")}
+    <b>${subs && !anyByOthers ? `${esc(evTicket)} has no commits of its own` : `No ${what} here`}</b>
+    <span>${subs && !anyByOthers ? "The work is in its sub-tickets." : evRepos.length ? "Nothing in the selected repositories." : anyByOthers ? "Only your commits are counted, and others made these changes." : "Nothing matches the filters."}</span>
+    ${subs && !anyByOthers ? `<button class="btn line small" id="peAll">Show all ${report.scope.length} of your tickets</button>`
+      : evRepos.length ? `<button class="btn line small" id="peRepos">Show all repositories</button>`
+      : anyByOthers ? `<button class="btn line small" id="peMine">Include everyone's commits</button>` : ""}</div>`;
+  const wireEmpty = () => {
+    $("#peMine")?.addEventListener("click", () => { evMine = false; $("#evMine").checked = false; initEvidence(); });
+    $("#peAll")?.addEventListener("click", () => { evTicket = "*"; jq("#evTicket").val("*").trigger("change.select2"); initEvidence(); });
+    $("#peRepos")?.addEventListener("click", () => { evRepos = []; jq("#evRepos").val(null).trigger("change"); });
+  };
   if (tab === "repos") {
-    p.innerHTML = `<div class="wide"><table class="tb"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th class="r">Merged</th></tr></thead><tbody>
-      ${r.repos.map(x => `<tr><td>${x.webUrl ? `<a class="ln" href="${esc(x.webUrl)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
-        <td>${x.merges.map(m => m.url ? `<a class="ln" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="ink-3">${day(m.date)}</span>` : `<span class="ink-3">Direct merge, ${day(m.date)}</span>`).join("<br>") || `<span class="ink-3">None</span>`}</td>
-        <td>${x.branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--amber)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="ink-3">None</span>`}</td>
-        <td class="r">${x.commits.filter(c => c.inDefault).length} <span class="ink-3">of ${x.commits.length}</span></td></tr>`).join("")}</tbody></table></div>`;
+    if (!shown.length) { p.innerHTML = empty("repositories"); return wireEmpty(); }
+    p.innerHTML = `<div class="wide"><table class="tb"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th class="r">Merged</th><th class="r"><span class="sr">Open</span></th></tr></thead><tbody>
+      ${shown.map(x => {
+        const merges = x.merges.filter(m => keyHit(m.branch)), branches = x.branches.filter(b => keyHit(b.name));
+        return `<tr><td>${x.webUrl ? `<a class="ln" href="${esc(x.webUrl)}" target="_blank" rel="noopener">${repoTag(x.name)}</a>` : repoTag(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
+        <td>${merges.map(m => m.url ? `<a class="ln" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="ink-3">${day(m.date)}</span>` : `<span class="ink-3">Direct merge, ${day(m.date)}</span>`).join("<br>") || `<span class="ink-3">None</span>`}</td>
+        <td>${branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--amber)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="ink-3">None</span>`}</td>
+        <td class="r">${x.commits.filter(c => c.inDefault).length} <span class="ink-3">of ${x.commits.length}</span></td><td class="r">${openBtns(x.name, null, x.sln)}</td></tr>`;
+      }).join("")}</tbody></table></div>`;
   } else if (tab === "files") {
-    p.innerHTML = `<input class="filter" id="ff" placeholder="Filter by path" aria-label="Filter files">
-      <div id="fl">${r.repos.filter(x => x.files.length).map(x => `<div class="grp">${esc(x.name)} <span class="ink-3" style="font-weight:400">${x.files.length}</span></div><ul class="files">${x.files.map(f => `<li data-p="${esc((x.name + " " + f.path).toLowerCase())}"><span class="op ${esc(f.status)}" title="${({ A: "Added", M: "Modified", D: "Deleted", R: "Renamed" })[f.status] || ""}">${esc(f.status)}</span><span>${esc(f.path)}</span></li>`).join("")}</ul>`).join("")}</div>`;
-    $("#ff").oninput = e => { const q = e.target.value.toLowerCase(); $$("#fl li").forEach(li => li.hidden = q && !li.dataset.p.includes(q)); };
+    if (!shown.length) { p.innerHTML = empty("files"); return wireEmpty(); }
+    const many = shown.length > 1;
+    p.innerHTML = `<div class="tool"><input class="filter" id="ff" placeholder="Filter by path${evRepos.length === 1 ? ` in ${esc(evRepos[0])}` : ""}" aria-label="Filter files" value="${esc(fileQuery)}">${many ? `<button class="btn small" id="xAll">Collapse all</button>` : ""}</div>
+      <div id="fl">${shown.map(x => {
+        const fs = evFiles(x);
+        const body = `<ul class="files">${fs.map(f => `<li data-p="${esc(f.p.toLowerCase())}"><span class="op ${esc(f.s)}" title="${({ A: "Added", M: "Modified", D: "Deleted", R: "Renamed" })[f.s] || ""}">${esc(f.s)}</span>
+          <button class="fpath" data-preview="${esc(x.name)}" data-path="${esc(f.p)}" data-shas="${esc(f.shas.join(","))}" title="Preview the changes">${esc(f.p)}</button>
+          <span class="facts-i"><button class="btn only small" data-preview="${esc(x.name)}" data-path="${esc(f.p)}" data-shas="${esc(f.shas.join(","))}" title="Preview the changes" aria-label="Preview the changes">${icon("eye")}</button>${f.s === "D" ? "" : openBtns(x.name, f.p, x.sln)}</span></li>`).join("")}</ul>`;
+        return many ? groupHtml(x, pl(fs.length, "file"), body, "f:" + x.name) : body;
+      }).join("")}</div>`;
+    const filt = () => { const q = fileQuery.toLowerCase(); $$("#fl li").forEach(li => li.hidden = q && !li.dataset.p.includes(q)); $$("#fl .gbox").forEach(g => g.hidden = q && !g.querySelector("li:not([hidden])")); };
+    $("#ff").oninput = e => { fileQuery = e.target.value; filt(); };
+    filt();
   } else if (tab === "commits") {
-    const multi = r.scope.length > 1;
-    const repos = r.repos.map(x => ({ ...x, commits: x.commits.filter(c => !commitFilter || c.ticket === commitFilter) })).filter(x => x.commits.length);
-    p.innerHTML = `${multi ? `<select class="filter" id="cf" aria-label="Filter by ticket"><option value="">All tickets</option>${r.scope.filter(t => t.commits).map(t => `<option value="${esc(t.key)}" ${t.key === commitFilter ? "selected" : ""}>${esc(t.key)} · ${esc(t.summary)}</option>`).join("")}</select>` : ""}
-      ${repos.map(x => `<div class="grp">${esc(x.name)}</div>${x.commits.map(c => cmHtml(c, x.defaultRef, multi && c.ticket ? `${esc(c.ticket)} · ` : "")).join("")}`).join("") || `<p class="ink-3">None.</p>`}`;
-    $("#cf")?.addEventListener("change", e => { commitFilter = e.target.value; renderPane(); });
+    if (!shown.length) { p.innerHTML = empty("commits"); return wireEmpty(); }
+    const many = shown.length > 1, multi = evTicket === "*";
+    p.innerHTML = `${many ? `<div class="tool"><button class="btn small" id="xAll">Collapse all</button></div>` : ""}
+      ${shown.map(x => { const body = x.commits.map(c => cmHtml(c, x.defaultRef, multi && c.ticket ? `${esc(c.ticket)} · ` : "")).join(""); return many ? groupHtml(x, pl(x.commits.length, "commit"), body, "c:" + x.name) : body; }).join("")}`;
   } else {
-    p.innerHTML = `<p class="ink-3" style="margin:0 0 12px">Commits from tickets outside this scope that sit on these branches. They don't count toward any step.</p>${r.foreign.map(c => cmHtml(c, null, `${esc(c.otherKey)} · ${esc(c.repo)} · `)).join("")}`;
+    p.innerHTML = `<p class="ink-3" style="margin:0 0 12px">Commits from tickets outside this scope that sit on these branches. They don't count toward any step.</p>${report.foreign.map(c => cmHtml(c, null, `${esc(c.otherKey)} · ${repoTag(c.repo)} `)).join("")}`;
+  }
+  wirePane();
+}
+
+function wirePane() {
+  $$("#pane .gtoggle").forEach(b => b.onclick = () => {
+    const g = b.closest(".gbox"), open = g.dataset.open !== "true";
+    g.dataset.open = open; b.setAttribute("aria-expanded", open); groupOpen[g.dataset.gid] = open; slide(g.querySelector(".gbox-b"), open);
+  });
+  const xAll = $("#xAll");
+  if (xAll) {
+    const sync = () => { xAll.textContent = $$("#pane .gbox").some(g => g.dataset.open === "true") ? "Collapse all" : "Expand all"; };
+    sync();
+    xAll.onclick = () => {
+      const open = xAll.textContent === "Expand all";
+      $$("#pane .gbox").forEach(g => { if ((g.dataset.open === "true") !== open) { g.dataset.open = open; g.querySelector(".gtoggle").setAttribute("aria-expanded", open); groupOpen[g.dataset.gid] = open; slide(g.querySelector(".gbox-b"), open); } });
+      sync();
+    };
+    $$("#pane .gtoggle").forEach(b => b.addEventListener("click", () => setTimeout(sync)));
+  }
+  $$("#pane [data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
+  $$("#pane [data-preview]").forEach(b => b.onclick = () => preview(b.dataset.preview, b.dataset.path, b.dataset.shas.split(",")));
+}
+
+// slides a horizontal pill row so the chosen pill is fully in view, with an ease-in-out glide
+function glide(box, el) {
+  if (!box || !el) return;
+  const pad = 18, from = box.scrollLeft, left = el.getBoundingClientRect().left - box.getBoundingClientRect().left + from, right = left + el.offsetWidth;
+  let to = from;
+  if (left - pad < from) to = left - pad;
+  else if (right + pad > from + box.clientWidth) to = right + pad - box.clientWidth;
+  to = Math.max(0, Math.min(to, box.scrollWidth - box.clientWidth));
+  if (Math.abs(to - from) < 1) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { box.scrollLeft = to; return; }
+  const t0 = performance.now(), dur = 460, ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  cancelAnimationFrame(box._glide);
+  const step = now => { const t = Math.min(1, (now - t0) / dur); box.scrollLeft = from + (to - from) * ease(t); if (t < 1) box._glide = requestAnimationFrame(step); };
+  box._glide = requestAnimationFrame(step);
+}
+
+// smooth, unhurried expand and collapse, used everywhere something folds
+function slide(el, open) {
+  if (!el) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.hidden = !open; return; }
+  el.getAnimations().forEach(a => a.cancel());
+  if (open) {
+    el.hidden = false;
+    const h = el.scrollHeight;
+    el.animate([{ height: "0px", opacity: 0 }, { height: h + "px", opacity: 1 }], { duration: 380, easing: "cubic-bezier(.33, .8, .25, 1)" });
+  } else {
+    const h = el.scrollHeight;
+    const a = el.animate([{ height: h + "px", opacity: 1 }, { height: "0px", opacity: 0 }], { duration: 320, easing: "cubic-bezier(.45, 0, .3, 1)" });
+    a.onfinish = () => { el.hidden = true; };
   }
 }
-const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono ${c.url ? "ln" : ""}" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
+
+const APP = { code: "VS Code", vs: "Visual Studio", folder: "File Explorer" };
+async function openLocal(repo, app, path) {
+  try { await api("/api/open", { method: "POST", body: JSON.stringify({ repo, app, path: path || null }) }); toast(`Opening ${esc(path ? path.split("/").pop() : repo)} in ${APP[app]}.`); }
+  catch (e) { toast(esc(e.message)); }
+}
+
+/* change preview: a read-only diff, coloured like VS Code's */
+async function preview(repo, path, shas) {
+  const d = $("#diffDlg");
+  d.innerHTML = `<div class="dd-h"><div class="dd-t">${repoTag(repo)}<span class="mono">${esc(path)}</span></div>
+    <div class="dd-a"><button class="btn line small" id="ddCode">${icon("vscode")}Open diff in VS Code</button>${openBtns(repo, path, null)}<button class="btn only small" id="ddClose" aria-label="Close">${icon("x")}</button></div></div>
+    <div class="dd-b" id="ddBody"><div class="s2-msg" style="padding:20px"><span class="spinner"></span>Loading the changes</div></div>`;
+  d.showModal();
+  $("#ddClose").onclick = () => d.close();
+  $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo, path, shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { toast(esc(e.message)); } };
+  d.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
+  try {
+    const r = await api("/api/diff", { method: "POST", body: JSON.stringify({ repo, path, shas }) });
+    $("#ddBody").innerHTML = r.commits.map(c => `<section class="dd-c"><div class="dd-ch"><span class="mono ink-2">${esc(c.short)}</span><span class="dd-s">${esc(c.subject)}</span><span class="ink-3">${esc(c.author)} · ${day(c.date)}</span></div>${diffHtml(c.patch)}</section>`).join("");
+  } catch (e) { $("#ddBody").innerHTML = `<div class="pane-empty"><b>Couldn't load the changes</b><span>${esc(e.message)}</span></div>`; }
+}
+
+function diffHtml(patch) {
+  const rows = []; let o = 0, n = 0;
+  for (const line of (patch || "").replace(/\r/g, "").split("\n")) {
+    if (/^(diff --git|index |--- |\+\+\+ |new file mode|deleted file mode|similarity index|rename (from|to)|old mode|new mode)/.test(line)) continue;
+    const h = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(line);
+    if (h) { o = +h[1]; n = +h[2]; rows.push(`<tr class="hunk"><td></td><td></td><td>${esc(h[3].trim() || "…")}</td></tr>`); continue; }
+    if (line.startsWith("\\")) continue;
+    if (line.startsWith("+")) rows.push(`<tr class="add"><td></td><td>${n++}</td><td>${esc(line.slice(1)) || " "}</td></tr>`);
+    else if (line.startsWith("-")) rows.push(`<tr class="del"><td>${o++}</td><td></td><td>${esc(line.slice(1)) || " "}</td></tr>`);
+    else if (line.length || rows.length) rows.push(`<tr><td>${o++}</td><td>${n++}</td><td>${esc(line.slice(1)) || " "}</td></tr>`);
+  }
+  return rows.length ? `<div class="diffwrap"><table class="diff">${rows.join("")}</table></div>` : `<div class="pane-empty" style="padding:16px"><span>No text changes (binary file, or only renamed).</span></div>`;
+}const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono ${c.url ? "ln" : ""}" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
   <span class="m">${pre}${esc(c.author)} · ${day(c.date)} · ${c.inDefault ? "merged" : `<span style="color:var(--amber)">not in ${esc(branch(ref) || "main")}</span>`}</span>${c.note ? `<span class="nt">${esc(c.note)}</span>` : ""}</div>`;
 
 function wireTicket() {
   const r = report;
   $("#back").onclick = back;
   $("#hc")?.addEventListener("click", openSettings);
-  $("#kids")?.addEventListener("change", e => { includeKids = e.target.checked; load(r.key, false); });
+  $$(".seg [data-kids]").forEach(b => b.onclick = () => {
+    const want = b.dataset.kids === "1";
+    if (want === includeKids) return;
+    includeKids = want;
+    $$(".seg [data-kids]").forEach(x => x.setAttribute("aria-checked", x === b));
+    b.insertAdjacentHTML("afterbegin", `<span class="spinner"></span>`);
+    load(r.key, false, true);
+  });
   $("#recheck").onclick = () => load(r.key, true);
   $("#fetchNow")?.addEventListener("click", () => load(r.key, true));
   $("#voidFetch")?.addEventListener("click", () => load(r.key, true));
@@ -727,9 +1127,8 @@ function wireTicket() {
   $("#copy").onclick = async () => { try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Checklist copied."); } catch (e) { toast(`Couldn't copy: ${esc(e.message)}`); } };
   $$(".stp-h").forEach(h => h.onclick = () => {
     const s = h.closest(".stp"), open = s.dataset.open !== "true";
-    s.dataset.open = open; h.setAttribute("aria-expanded", open); s.querySelector(".stp-b").hidden = !open; if (open) openStep = s.dataset.id;
+    s.dataset.open = open; h.setAttribute("aria-expanded", open); slide(s.querySelector(".stp-b"), open); if (open) openStep = s.dataset.id;
   });
-  $$(".tabs [data-tab]").forEach(b => b.onclick = () => { tab = b.dataset.tab; $$(".tabs [data-tab]").forEach(x => x.setAttribute("aria-selected", x === b)); renderPane(); });
 }
 
 async function post() {
@@ -757,38 +1156,52 @@ async function checkAll() {
   renderList(); toast(`All ${pl(tickets.length, "ticket")} checked.`);
 }
 
-let hits = [], hi = 0, fseq = 0, ft;
-function openFind() {
-  if (!status?.account) return openSettings();
-  $("#fq").value = ""; hits = (tickets || []).slice(0, 10); hi = 0; drawHits("");
-  $("#find").showModal(); $("#fq").focus();
+/* ── find: a Select2 async select over your tickets ──
+   Empty or one letter: your open tickets, filtered locally. Two letters or more: also asks Jira (done and older tickets too). */
+function localHits(q) {
+  const ql = q.toLowerCase();
+  return (tickets || []).filter(t => !q || t.key.toLowerCase().includes(ql) || (t.summary || "").toLowerCase().includes(ql)).slice(0, 12);
 }
-function drawHits(q) {
-  const box = $("#fres");
-  if (!hits.length) { box.innerHTML = `<div class="none">${q ? `None of your tickets match “${esc(q)}”.` : "Type a key or words from the title."}</div>`; return; }
-  box.innerHTML = (q ? "" : `<div class="cap">Open tickets</div>`) + hits.map((h, k) => `<button role="option" aria-selected="${k === hi}" data-key="${esc(h.key)}">${mark(overall(statesOf((tickets || []).find(t => t.key === h.key)?.lastBuild)), false)}<span class="mono ink-2">${esc(h.key)}</span><span class="t">${esc(h.summary)}</span><span class="st">${esc(h.status)}</span></button>`).join("");
-  $$("#fres [data-key]").forEach((b, k) => { b.onclick = () => pick(b.dataset.key); b.onmousemove = () => { if (hi !== k) { hi = k; $$("#fres [data-key]").forEach((x, j) => x.setAttribute("aria-selected", j === k)); } }; });
+const hitHtml = t => `<span class="s2-hit">${mark(overall(statesOf((tickets || []).find(x => x.key === t.key)?.lastBuild)), false)}${typeTag(t.type)}<span class="mono">${esc(t.key)}</span><span class="t">${esc(t.summary)}</span>${jiraBadge(t.status, t.statusCategory)}</span>`;
+function initFinder() {
+  const el = jq("#finderSel");
+  if (el.data("select2")) el.select2("destroy");
+  el.select2({
+    width: "100%",
+    dropdownParent: jq(".finder-wrap"),
+    placeholder: "Find a ticket",
+    minimumInputLength: 0,
+    ajax: {
+      delay: 220,
+      transport(params, ok, fail) {
+        const q = (params.data.q || "").trim(), local = localHits(q);
+        if (q.length < 2) { ok(local); return { abort() {} }; }
+        const ctrl = new AbortController();
+        fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
+          .then(r => r.ok ? r.json() : Promise.reject(new Error(r.statusText)))
+          .then(r => { const seen = new Set(local.map(t => t.key)); ok([...local, ...r.filter(x => !seen.has(x.key))].slice(0, 20)); })
+          .catch(e => { if (e.name !== "AbortError") fail(e); });
+        return { abort: () => ctrl.abort() };
+      },
+      processResults: data => ({ results: data.map(t => ({ id: t.key, text: `${t.key} ${t.summary}`, t })) }),
+    },
+    templateResult: o => o.loading ? jq(`<span class="s2-msg"><span class="spinner"></span>Searching your tickets</span>`) : o.t ? jq(hitHtml(o.t)) : o.text,
+    templateSelection: () => jq(`<span class="s2-ph">Find a ticket</span>`),
+    language: {
+      noResults: () => "None of your tickets match.",
+      searching: () => "Searching your tickets",
+      errorLoading: () => "Couldn't reach Jira.",
+    },
+  });
+  el.on("select2:opening", e => { if (!status?.account) { e.preventDefault(); openSettings(); } });
+  el.on("select2:open", () => { const f = document.querySelector(".finder-wrap .select2-search__field"); if (f) { f.placeholder = "Key or words from the title"; f.focus(); } });
+  el.on("select2:select", e => { const k = e.params.data.id; el.val(null).trigger("change.select2"); select(k); });
 }
-function pick(key) { $("#find").close(); select(key); }
-$("#fq").addEventListener("input", () => {
-  const q = $("#fq").value.trim(), ql = q.toLowerCase();
-  clearTimeout(ft);
-  hits = (tickets || []).filter(t => !q || t.key.toLowerCase().includes(ql) || (t.summary || "").toLowerCase().includes(ql)).slice(0, 12); hi = 0; drawHits(q);
-  if (q.length < 2) return;
-  ft = setTimeout(async () => {
-    const n = ++fseq;
-    try { const r = await api(`/api/search?q=${encodeURIComponent(q)}`); if (n !== fseq) return; const seen = new Set(hits.map(h => h.key)); hits = [...hits, ...r.filter(x => !seen.has(x.key))].slice(0, 20); drawHits(q); } catch { }
-  }, 250);
-});
-$("#fq").addEventListener("keydown", e => {
-  if ((e.key === "ArrowDown" || e.key === "ArrowUp") && hits.length) { e.preventDefault(); hi = (hi + (e.key === "ArrowDown" ? 1 : -1) + hits.length) % hits.length; drawHits($("#fq").value.trim()); $("#fres [aria-selected=true]")?.scrollIntoView({ block: "nearest" }); }
-  if (e.key === "Enter" && hits[hi]) { e.preventDefault(); pick(hits[hi].key); }
-});
-["#find", "#settings"].forEach(id => $(id).addEventListener("click", e => { if (e.target === $(id)) $(id).close(); }));
-
+const openFind = () => jq("#finderSel").select2("open");
+$("#settings").addEventListener("click", e => { if (e.target === $("#settings")) $("#settings").close(); });
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openFind(); return; }
-  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName) || $("#find").open || $("#settings").open || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector(".select2-container--open") || $("#settings").open || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "/") { e.preventDefault(); openFind(); }
   else if (e.key === "j") move(1);
   else if (e.key === "k") move(-1);
@@ -796,13 +1209,13 @@ document.addEventListener("keydown", e => {
   else if (e.key === "Escape" && selected && innerWidth <= 900) back();
 });
 
-$("#finder").onclick = openFind;
 $("#checkAll").onclick = checkAll;
 $("#reload").onclick = () => status?.account && loadTickets();
 window.addEventListener("popstate", () => { const k = decodeURIComponent(location.hash.slice(1)).toUpperCase(); if (k) load(k, false); else back(); });
 
 async function boot() {
   await loadStatus();
+  initFinder();
   if (status?.account) await loadTickets(); else renderList();
   const k = decodeURIComponent(location.hash.slice(1)).toUpperCase();
   if (k) load(k, false); else blank();
