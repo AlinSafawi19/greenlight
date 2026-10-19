@@ -490,12 +490,9 @@ static class Git
         return p.ExitCode == 0 ? output : "";
     }
 
-    // Stable id of a commit's change, identical for the same patch under any SHA or message.
     // git's empty tree, to diff a file against "before it existed"
     public static string EmptyTree(string repo) => RunWithInput(repo, "", "hash-object", "-t", "tree", "--stdin").Trim();
 
-    public static string PatchId(string repo, string sha) =>
-        RunWithInput(repo, Run(repo, "diff-tree", "-p", "--no-color", sha), "patch-id", "--stable").Split(' ')[0].Trim();
 
     // One git process for many commits: `git log --no-walk` with the shas on stdin, split back per commit.
     // The format must start with %x1e%H so each record begins with its sha.
@@ -859,9 +856,6 @@ static class Scanner
                               branches.OrderBy(b => b.Name).ToList(), agg, dbItems);
     }
 
-    // nothing in target..sha means sha is already contained in target
-    static bool IsAncestor(string repo, string sha, string target) =>
-        Git.Run(repo, "rev-list", "-n", "1", $"{target}..{sha}").Trim() == "";
 
     // Locates every DB script the feature touched: still staged in dev/, already in a release tag, or lost.
     static List<DbItem> AnalyzeDb(string repo, string defaultRef, SortedDictionary<string, string> files, DbConfig cfg)
@@ -2803,7 +2797,6 @@ static class UiServer
                         ["keyPattern"] = ledger.KeyPattern,
                         ["reposRoot"] = ledger.ReposRoot,
                         ["repoCount"] = ledger.Repos.Count,
-                        ["recent"] = Recent(ledger),
                         ["gitlabBaseUrl"] = ledger.GitLabBaseUrl,
                         ["gitlab"] = await ledger.GitLabUser() is { } gu ? new JsonObject { ["name"] = gu.Name, ["username"] = gu.Username } : null,
                         ["gitlabRejected"] = ledger.GitLab.Configured && ledger.GitLab.Me is null,

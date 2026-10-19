@@ -221,13 +221,10 @@ img.face { object-fit: cover; background: var(--gl-fill-2); }
 .progress .pt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .progress .mono { color: var(--gl-text-2); }
 .hd .end > :not(.progress) { flex: none; }
-.progress .pg-t { display: inline-flex; align-items: center; gap: 7px; margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--gl-border); }
-.progress .pg-t .mono { color: var(--gl-text-2); }
 .finder-wrap { position: relative; width: min(320px, 28vw); }
 .finder-wrap .fglass { position: absolute; left: 11px; top: 11px; color: var(--gl-text-muted); z-index: 1; pointer-events: none; }
 .finder-wrap .fkbd { position: absolute; right: 8px; top: 8px; pointer-events: none; }
 /* narrower windows: tabs and buttons lose their words before anything else */
-@media (max-width: 1280px) { .progress .pg-t { display: none; } }
 @media (max-width: 1120px) { #checkAll .lbl { display: none; } #checkAll { width: 32px; padding: 0; } .finder-wrap { width: 220px; } }
 @media (max-width: 960px) { .nav-i .lbl, .brand .word { display: none; } .progress { display: none; } }
 @media (max-width: 640px) { .daymeter span { display: none; } .finder-wrap { width: auto; flex: 1; min-width: 120px; } .hd { gap: 8px; padding: 0 10px; } }
@@ -275,8 +272,6 @@ img.face { object-fit: cover; background: var(--gl-fill-2); }
 
 .row.busy .qbar i { animation: breathe 1.1s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: .3; } }
-.rail-note { padding: 28px 20px; color: var(--gl-text-muted); line-height: 1.6; }
-.rail-note b { display: block; color: var(--gl-text); font-weight: 600; margin-bottom: 2px; }
 .ghost-row { height: 54px; margin: 3px 0; border-radius: 10px; background: linear-gradient(90deg, var(--gl-fill-1) 30%, var(--gl-fill-3), var(--gl-fill-1) 70%); background-size: 300% 100%; animation: sweep 1.6s linear infinite; }
 @keyframes sweep { to { background-position: -300% 0; } }
 
@@ -554,7 +549,6 @@ button.ln::after { display: none; }
 .more { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 0; color: var(--gl-text-muted); font-size: 12.5px; }
 
 /* ── diff ── */
-.diffwrap { overflow-x: auto; border-radius: var(--r-md); background: var(--code-bg); box-shadow: var(--shadow-1); }
 .dpage { display: flex; flex-direction: column; min-height: 100%; }
 .dp-h { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 24px; background: var(--gl-bg); border-bottom: 1px solid var(--gl-border-soft); }
 .dp-t { flex: 1; min-width: 240px; }

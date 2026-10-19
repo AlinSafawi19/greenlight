@@ -168,7 +168,7 @@ async function loadStatus() {
   $("#whoBtn").onclick = openSettings;
   wireFaces($("#whoSlot"));
   $("#checkAll").hidden = !me;
-  renderShell();
+  navCounts();
 }
 
 function openSettings() {
@@ -251,7 +251,7 @@ function wireGitlab(msg) {
     try {
       const who = await api("/api/gitlab/account", { method: "POST", body: JSON.stringify({ baseUrl: base, token }) });
       await loadStatus(); openSettings(); msg(`Connected to GitLab as @${esc(who.username)}.`); renderList();
-      api("/api/reviews").then(r => { reviews = r; renderRailMode(); }).catch(() => {});
+      api("/api/reviews").then(r => { reviews = r; }).catch(() => {});
     } catch (e) { msg(esc(e.message), true); $("#glConn").disabled = false; }
   });
 }
@@ -297,7 +297,6 @@ const emptyNote = (title, text, action = "", mood = "empty") => `<div class="rai
 let groupBy = (() => { try { return localStorage.getItem("gl-group") || "story"; } catch { return "story"; } })();
 
 function renderList() {
-  renderRailMode();
   if (railMode === "review") return renderReviewList();
   $("#railTitle").textContent = "My tickets";
   if (!status?.account) {
@@ -402,7 +401,6 @@ async function load(key, fetchFirst, inPlace = false, retrying = false) {
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
   document.title = `${key} · greenlight`;
-  crumb(`<a href="#tickets">My tickets</a><span class="sl">/</span><span class="mono">${esc(key)}</span>`);
   const n = ++seq;
   // switching scope keeps the page and dims what is about to change, instead of blanking it;
   // a retry keeps the error on screen with a spinner on its button, so nothing flashes
@@ -479,7 +477,6 @@ function back() {
 
 function blank() {
   document.title = "My tickets · greenlight";
-  crumb(`<b>My tickets</b>`);
   const me = status?.account;
   $("#main").innerHTML = `<div class="blank"><div class="blank-in">
     ${glim(me ? "welcome" : "welcome")}
@@ -508,7 +505,6 @@ function renderTicket() {
     : ov === "done" ? ["done", "With QA", confirm ? `Handed over. ${pl(confirm, "item")} still worth a look.` : "Handed over, and every step is done."]
     : ["check", "Ready to hand over", `Nothing blocks QA. Confirm ${pl(confirm, "item")}, then post the handover.`];
 
-  crumb(`<a href="#tickets">My tickets</a><span class="sl">/</span><span class="mono">${esc(r.key)}</span>`);
   document.title = `${r.key} · greenlight`;
   const mood = nothing ? "empty" : ov === "todo" ? "warning" : ov === "wait" ? "thinking" : "success";
   $("#main").innerHTML = `<div class="page">
@@ -1172,12 +1168,8 @@ async function loadTicketReviews(key) {
 /* ── code review (GitLab) ── */
 let railMode = "mine", reviews = null, reviewing = null, reviewView = "all";
 
-// the sidebar switches between tickets and reviews now; the list no longer carries its own switch
-function renderRailMode() { $("#railMode").hidden = true; }
-
 async function loadReviews() {
   railMode = "review";
-  renderRailMode();
   $("#railTitle").textContent = "To review";
   $("#views").innerHTML = "";
   $("#list").innerHTML = Array(6).fill(`<div class="ghost-row"></div>`).join("");
@@ -1238,7 +1230,6 @@ async function loadReview(project, iid, retrying = false) {
     if (!reviewing || reviewing.iid !== iid || reviewing.project !== project) return;
     reviewing = { ...r, project, iid, fileQuery: "" };
     document.title = `!${iid} · ${r.repo} · greenlight`;
-    crumb(`<a href="#reviews">Reviews</a><span class="sl">/</span>${repoTag(r.repo)}<span class="mono">!${iid}</span>`);
     renderReview();
   } catch (e) {
     if (retrying) await settle(600);
@@ -1484,7 +1475,6 @@ function glim(mood = "welcome", label = "") {
 
 /* ─────────────────────────── shell: theme and counts ─────────────────────────── */
 let section = "tickets";
-const crumb = () => { };   // the header has tabs instead of a breadcrumb; pages show their own path
 const localDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 // one button: shows where it takes you (a sun in dark mode, a moon in light mode)
@@ -1505,10 +1495,6 @@ applyTheme(document.documentElement.dataset.themePref || "dark");
 
 $("#brandGlim").innerHTML = glim("welcome");$("#brandHome").onclick = e => { e.preventDefault(); history.pushState(null, "", "#tickets"); route(); };
 
-
-function renderShell() {
-  navCounts();
-}
 
 function navCounts() {
   const need = (tickets || []).filter(t => ["todo", "wait"].includes(overall(statesOf(t.lastBuild)))).length;
@@ -1559,7 +1545,6 @@ window.addEventListener("popstate", route);
 
 function reviewsBlank() {
   document.title = "Reviews · greenlight";
-  crumb(`<b>Reviews</b>`);
   if (!status?.gitlab) {
     $("#main").innerHTML = `<div class="blank"><div class="blank-in">${glim("thinking")}<h2>Connect GitLab for reviews</h2>
       <p>Merge requests waiting for your review, and the reviews on yours, appear here once GitLab is connected.</p>
@@ -1600,7 +1585,6 @@ const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.get
 
 async function renderWorklogs(from, pickDay) {
   document.title = "Worklogs · greenlight";
-  crumb(`<b>Worklogs</b>`);
   if (!status?.account) { $("#main").innerHTML = `<div class="page">${emptyNote("Connect Jira", "Worklogs come from Jira.", `<button class="btn success small" id="wlc">Connect Jira</button>`, "welcome")}</div>`; $("#wlc").onclick = openSettings; return; }
   const today = localDay(new Date());
   wlWeek = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? mondayOf(from + "T12:00:00") : mondayOf(new Date());
@@ -1821,7 +1805,7 @@ async function boot() {
   navCounts();
   // reviews load quietly, so the counts are ready when you look
   if (status?.gitlab) {
-    api("/api/reviews").then(r => { reviews = r; navCounts(); if (railMode === "review") renderList(); else renderRailMode(); if (section === "reviews" && !reviewing) reviewsBlank(); }).catch(() => {});
+    api("/api/reviews").then(r => { reviews = r; navCounts(); if (railMode === "review") renderList(); if (section === "reviews" && !reviewing) reviewsBlank(); }).catch(() => {});
   }
   remindTick(); setInterval(remindTick, 60 * 1000);
 }
