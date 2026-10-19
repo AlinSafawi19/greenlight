@@ -405,6 +405,125 @@ table.sbs-t tr.hunk td { background: rgba(92, 140, 235, .08); color: #8fb2f5; pa
 .dd-c + .dd-c { margin-top: 28px; }
 @media (max-width: 900px) { .dp-h { padding: 12px 16px; } .dp-b { padding: 14px 12px 48px; } table.sbs-t col.c-no { width: 40px; } }
 
+/* paging: the "more" row that loads the next page */
+.more { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 0; color: var(--ink-3); font-size: 12px; }
+
+/* rail: list switch and empty state */
+.rail-mode { padding: 16px 16px 0; }
+.rail-mode .seg { display: flex; width: 100%; }
+.rail-mode .seg button { flex: 1; justify-content: center; }
+.rail-mode .seg .c { margin-left: 6px; font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--amber-soft); color: var(--amber); }
+.rail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; min-height: 260px; height: 100%; padding: 32px 24px; color: var(--ink-3); }
+.rail-empty .ico.big { width: 28px; height: 28px; color: var(--ink-4); margin-bottom: 8px; }
+.rail-empty b { color: var(--ink); font-weight: 600; font-size: 13.5px; }
+.rail-empty span { max-width: 26ch; line-height: 1.5; }
+.rail-empty .btn { margin-top: 12px; }
+
+/* loading in parts */
+.ldprog { margin-top: 28px; }
+.ldprog .note { margin-bottom: 10px; }
+.ldbar { height: 3px; border-radius: 3px; background: var(--tint-2); overflow: hidden; max-width: 520px; }
+.ldbar i { display: block; height: 100%; width: 0; background: var(--ink-2); border-radius: 3px; transition: width .45s cubic-bezier(.33, .8, .25, 1); }
+.ldsteps .stp-h { cursor: default; }
+.ldsteps .stp-h .hl .line { display: block; height: 10px; }
+
+/* time */
+.daymeter { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 8px; border-radius: 8px; font-size: 12.5px; white-space: nowrap; }
+.daymeter:hover { background: var(--tint-2); }
+.daymeter svg { width: 18px; height: 18px; transform: rotate(-90deg); }
+.daymeter .trk { fill: none; stroke: var(--tint-3); stroke-width: 2.5; }
+.daymeter .val { fill: none; stroke: var(--ink-3); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dashoffset .6s cubic-bezier(.33, .8, .25, 1); }
+.daymeter.met .val { stroke: var(--green); } .daymeter.near .val { stroke: var(--amber); } .daymeter.low .val { stroke: var(--amber); opacity: .8; }
+.daymeter b { font-weight: 600; }
+.weekpop { width: 340px; padding: 14px; right: 0; }
+.wk-h { display: flex; justify-content: space-between; align-items: baseline; }
+.wk-note { margin: 6px 0 0; color: var(--ink-2); font-size: 12.5px; }
+.wk-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 14px 0 10px; }
+.wk-d { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; }
+.wk-col { position: relative; width: 100%; height: 70px; border-radius: 5px; background: var(--tint-1); overflow: hidden; }
+.wk-col .bar { position: absolute; left: 4px; right: 4px; bottom: 0; border-radius: 3px 3px 0 0; background: var(--amber); transition: height .5s cubic-bezier(.33, .8, .25, 1); }
+.wk-col .bar.met { background: var(--green); } .wk-col .bar.none { background: var(--tint-3); }
+.wk-col .tgt { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--ink-3); }
+.wk-d.off .wk-col .tgt { display: none; }
+.wk-d.today span:first-of-type { color: var(--ink); font-weight: 600; }
+.wk-list { max-height: 220px; overflow: auto; border-top: 1px solid var(--hair-2); padding-top: 8px; }
+.wk-day { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; font-size: 12px; }
+.wk-t { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; text-align: left; }
+.wk-t:hover { background: var(--tint-3); }
+.wk-t .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.timebox .tbar { display: flex; height: 6px; border-radius: 4px; background: var(--tint-2); overflow: hidden; }
+.timebox .tbar i { display: block; height: 100%; transition: width .6s cubic-bezier(.33, .8, .25, 1); }
+.timebox .tbar .mine { background: var(--green); } .timebox .tbar .others { background: var(--ink-3); }
+.timebox .tbar.over .mine { background: var(--amber); }
+.tnums { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.tnums b { color: var(--ink); font-weight: 600; }
+.tlog { margin-top: 12px; }
+.tlist { list-style: none; margin: 12px 0 0; padding: 0; font-size: 12.5px; }
+.tlist li { display: grid; grid-template-columns: 52px 56px minmax(0, 1fr); gap: 8px; padding: 5px 0; border-top: 1px solid var(--hair); }
+.tlist li:first-child { border-top: 0; }
+.tlist .c { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 28px; padding: 0 11px; border-radius: 999px; background: var(--tint-2); color: var(--ink-2); font-size: 12.5px; transition: background .15s, color .15s; }
+.chip:hover { color: var(--ink); background: var(--tint-3); }
+.chip.on { background: var(--ink); color: var(--canvas); }
+.hm { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--ink-3); }
+.hm input { width: 64px; }
+.fld textarea { border: 0; border-radius: 8px; background: var(--canvas); box-shadow: inset 0 0 0 1px var(--hair-2); padding: 9px 11px; resize: vertical; font: inherit; color: var(--ink); min-height: 70px; }
+.fld textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--ink-3); }
+.fld input[type="date"] { color-scheme: dark; }
+
+/* GitLab connect row */
+.glrow { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 6px; }
+.glrow input { height: 32px; border-radius: 8px; border: 0; background: var(--canvas); box-shadow: inset 0 0 0 1px var(--hair-2); padding: 0 10px; min-width: 0; }
+
+/* tags */
+.tagpill { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font: 500 11.5px/1 var(--mono); background: rgba(232, 163, 61, .1); color: #f0c27a; box-shadow: inset 0 0 0 1px rgba(232, 163, 61, .25); white-space: nowrap; }
+.tagpill.sm { height: 18px; padding: 0 6px; font-size: 11px; }
+.tagpill.next { background: transparent; color: var(--ink-2); box-shadow: none; border: 1px dashed var(--ink-4); }
+a.tagpill:hover { background: rgba(232, 163, 61, .18); }
+.tagbox { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.tg { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.tags-more { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+td.nw { white-space: nowrap; }
+
+/* review page */
+.people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.people li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.pipe-l { display: inline-flex; align-items: center; gap: 6px; }
+.pipe-l:hover { color: var(--ink); }
+.review-list .it { grid-template-columns: minmax(0, 1fr) auto; }
+.gbox-h .fst { font: 700 11px var(--mono); width: 12px; color: var(--ink-4); }
+.gbox-h .op-A { color: var(--green); } .gbox-h .op-D { color: var(--red); }
+.gbox-h .fp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); min-width: 0; }
+.gtoggle { min-width: 0; }
+.dstat { display: inline-flex; gap: 6px; font: 500 11.5px var(--mono); margin-left: auto; padding-left: 10px; }
+.dstat .a { color: var(--green); } .dstat .d { color: var(--red); }
+.ccount { display: inline-flex; align-items: center; gap: 4px; color: var(--amber); font-size: 11.5px; }
+.nokey { font-size: 11px; color: var(--amber); padding: 0 6px; border-radius: 4px; background: var(--amber-soft); margin-left: 6px; }
+.file-talk { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.talk { border-radius: 10px; background: var(--tint-1); box-shadow: inset 0 0 0 1px var(--hair); padding: 12px 14px; margin-bottom: 10px; }
+.talk.open { box-shadow: inset 2px 0 0 var(--amber), inset 0 0 0 1px var(--hair); }
+.talk.resolved { opacity: .75; }
+.talk header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
+.talk header:empty { display: none; }
+.talk .rstate { margin-left: auto; color: var(--ink-3); }
+.talk.open .rstate { color: var(--amber); }
+.talk .note + .note { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hair); }
+.talk .who { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+.talk .body { margin-top: 3px; color: var(--ink-2); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+
+/* code review on the developer's ticket page */
+.crv { margin-top: 56px; }
+.mrc { border-radius: 12px; background: var(--tint-1); box-shadow: inset 0 0 0 1px var(--hair); padding: 14px 16px; margin-bottom: 12px; }
+.mrc header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mrc header .t { flex: 1; min-width: 200px; font-weight: 500; }
+.rvs { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12.5px; align-items: center; }
+.rv { display: inline-flex; align-items: center; gap: 6px; }
+.talks { margin-top: 10px; }
+.talks > summary { cursor: pointer; color: var(--ink-2); font-size: 12.5px; padding: 4px 0; }
+.talks > summary .open-n { color: var(--amber); }
+.talks[open] > summary { margin-bottom: 8px; }
+
 /* centred error */
 .fail-c .ico.big { width: 30px; height: 30px; color: var(--red); margin-bottom: 14px; }
 .fail-c .why { margin-top: 26px; color: var(--ink-3); font-size: 12px; max-width: 100%; }
@@ -539,6 +658,7 @@ dialog[open] { animation: rise .16s var(--ease); }
     <div class="finder-wrap"><svg class="ico s fglass" aria-hidden="true"><use href="#i-search"/></svg><select id="finderSel" aria-label="Find a ticket"></select><kbd class="fkbd">Ctrl K</kbd></div>
     <div class="end">
       <span class="progress" id="progress" aria-live="polite"></span>
+      <div class="pop-wrap" id="dayWrap" hidden><button class="daymeter" id="dayBtn" aria-haspopup="dialog" aria-expanded="false" title="Time logged today against your daily target"></button><div class="pop weekpop" id="weekPop" hidden></div></div>
       <button class="btn" id="checkAll" hidden title="Fetch every repository, then check all your tickets"><svg class="ico s"><use href="#i-checkall"/></svg>Check all</button>
       <div id="whoSlot"></div>
     </div>
@@ -546,7 +666,8 @@ dialog[open] { animation: rise .16s var(--ease); }
 
   <div class="split" id="split">
     <aside class="rail" aria-label="Your tickets">
-      <div class="rail-h"><h1>My tickets</h1><span class="n" id="count"></span>
+      <div class="rail-mode" id="railMode" hidden></div>
+      <div class="rail-h"><h1 id="railTitle">My tickets</h1><span class="n" id="count"></span>
         <button class="btn only small" id="reload" title="Reload from Jira" aria-label="Reload from Jira"><svg class="ico s"><use href="#i-refresh"/></svg></button></div>
       <nav class="views" id="views" aria-label="Filter tickets"></nav>
       <div class="list" id="list" role="listbox" aria-label="Tickets"></div>
@@ -645,6 +766,8 @@ function openSettings() {
         <label class="fld"><span>Atlassian sign-in email</span><input id="fEmail" type="email" autocomplete="username" spellcheck="false"><small>Can differ from the email on your Jira profile.</small><span class="err" id="eEmail"></span></label>
         <label class="fld"><span>API token</span><input id="fToken" type="password" autocomplete="off"><small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create a token</a> while signed in as yourself.</small><span class="err" id="eToken"></span></label>`}
       <div class="rule"></div>
+      ${gitlabSection()}
+      <div class="rule"></div>
       <label class="fld"><span>Repositories folder</span><input id="fRoot" value="${esc(status?.reposRoot || "")}" spellcheck="false"><small>${status ? `${pl(status.repoCount, "repository", "repositories")} found. ` : ""}One git repository per subfolder.</small><span class="err" id="eRoot"></span></label>
     </div>
     <div class="dlg-f"><span class="msg" id="msg"></span>
@@ -673,8 +796,37 @@ function openSettings() {
     catch (e) { msg(esc(e.message), true); }
     finally { b.disabled = false; }
   };
+  wireGitlab(msg);
   if (!d.open) d.showModal();
   setTimeout(() => ($("#fEmail") || $("#cancel")).focus(), 30);
+}
+
+// GitLab, for code review: a personal access token with the api scope (approving needs it)
+function gitlabSection() {
+  const g = status?.gitlab, base = status?.gitlabBaseUrl || "https://gitlab.com";
+  const create = `${base}/-/user_settings/personal_access_tokens?name=Ledger&scopes=api`;
+  return g ? `<div class="fld"><span>GitLab · code review</span>
+      <div class="acct"><span class="face">${esc(initials(g.name))}</span><div style="flex:1;min-width:0">${esc(g.name)}<small>@${esc(g.username)} · ${esc(base.replace("https://", ""))}</small></div><button class="btn danger small" id="glDisc">Disconnect</button></div></div>`
+    : `<div class="fld"><span>GitLab · code review <span class="ink-3">(optional)</span></span>
+      <small style="margin-top:-2px">Connect to see the merge requests you're asked to review, and the reviews on yours.</small>
+      ${status?.gitlabRejected ? `<small style="color:var(--red)">The saved GitLab token stopped working. Enter a new one.</small>` : ""}
+      <div class="glrow"><input id="glBase" value="${esc(base)}" spellcheck="false" aria-label="GitLab address"><input id="glToken" type="password" placeholder="Personal access token" autocomplete="off" aria-label="GitLab personal access token"><button class="btn success small" id="glConn">Connect</button></div>
+      <small><a href="${esc(create)}" target="_blank" rel="noopener">Create a token</a> with the <b>api</b> scope (needed to approve).</small><span class="err" id="glErr"></span></div>`;
+}
+
+function wireGitlab(msg) {
+  $("#glDisc")?.addEventListener("click", async () => { await api("/api/gitlab/disconnect", { method: "POST" }); reviews = null; railMode = "mine"; await loadStatus(); openSettings(); renderList(); toast("GitLab disconnected. The token was removed from this computer."); });
+  $("#glConn")?.addEventListener("click", async () => {
+    const base = $("#glBase").value.trim(), token = $("#glToken").value.trim();
+    $("#glErr").textContent = !/^https:\/\/[^/]+/.test(base) ? "Use the full address, starting with https://" : token.length < 20 ? "Paste your personal access token." : "";
+    if ($("#glErr").textContent) return;
+    $("#glConn").disabled = true; msg(`<span class="spinner"></span>Checking with GitLab`);
+    try {
+      const who = await api("/api/gitlab/account", { method: "POST", body: JSON.stringify({ baseUrl: base, token }) });
+      await loadStatus(); openSettings(); msg(`Connected to GitLab as @${esc(who.username)}.`); renderList();
+      api("/api/reviews").then(r => { reviews = r; renderRailMode(); }).catch(() => {});
+    } catch (e) { msg(esc(e.message), true); $("#glConn").disabled = false; }
+  });
 }
 
 async function loadTickets() {
@@ -683,10 +835,45 @@ async function loadTickets() {
   renderList();
 }
 
+/* shows a long list a page at a time: the next page arrives as the end scrolls into view */
+function paged(box, items, size = 40, onAdd) {
+  if (!box) return;
+  box._pager?.disconnect();
+  box.innerHTML = "";
+  if (!items.length) return;
+  let i = 0;
+  const more = document.createElement("div");
+  more.className = "more";
+  const add = () => {
+    const next = items.slice(i, i + size); i += next.length;
+    more.insertAdjacentHTML("beforebegin", next.join(""));
+    onAdd?.();
+    if (i >= items.length) { box._pager?.disconnect(); more.remove(); }
+    else more.innerHTML = `<span class="spinner"></span>${items.length - i} more`;
+  };
+  box.appendChild(more);
+  add();
+  if (i < items.length) {
+    box._pager = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) add(); }, { rootMargin: "600px 0px" });
+    box._pager.observe(more);
+  }
+}
+
+/* a gentle fade and lift for content that just changed */
+function soften(el, delay = 0) {
+  if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  el.animate([{ opacity: 0, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay, easing: "cubic-bezier(.33, .8, .25, 1)", fill: "backwards" });
+}
+
+const emptyNote = (title, text, action = "") => `<div class="rail-empty">${icon("list", "ico big")}<b>${title}</b><span>${text}</span>${action}</div>`;
+
 function renderList() {
+  renderRailMode();
+  if (railMode === "review") return renderReviewList();
+  $("#railTitle").textContent = "My tickets";
   if (!status?.account) {
     $("#count").textContent = ""; $("#views").innerHTML = "";
-    $("#list").innerHTML = `<div class="rail-note"><b>Not connected</b>Connect your Jira account to see the tickets assigned to you.<div style="margin-top:14px"><button class="btn success" id="rc">Connect Jira</button></div></div>`;
+    $("#list").innerHTML = emptyNote("Not connected", "Connect your Jira account to see the tickets assigned to you.", `<button class="btn success small" id="rc">Connect Jira</button>`);
     $("#rc").onclick = openSettings; return;
   }
   const all = tickets || [];
@@ -697,7 +884,7 @@ function renderList() {
   viewsScroll = $("#views").scrollLeft;
   $("#views").innerHTML = V.map(([id, l, n]) => `<button aria-pressed="${view === id}" data-v="${id}">${l}<span class="c">${n}</span></button>`).join("");
   $$("#views [data-v]").forEach(b => {
-    b.onclick = () => { view = b.dataset.v; renderList(); $(`#views [data-v="${view}"]`)?.focus({ preventScroll: true }); };
+    b.onclick = () => { if (view === b.dataset.v) return; view = b.dataset.v; renderList(); soften($("#list")); $(`#views [data-v="${view}"]`)?.focus({ preventScroll: true }); };
     b.onkeydown = e => {
       const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
       e.preventDefault(); const all = $$("#views [data-v]"); all[(all.indexOf(b) + d + all.length) % all.length].click();
@@ -707,11 +894,16 @@ function renderList() {
   glide($("#views"), $("#views [aria-pressed=true]"));
   const order = view === "all" ? ["todo", "wait", "check", "none", "done"] : view === "todo" ? ["todo", "wait"] : [view];
   const secs = order.map(k => [k, g[k]]).filter(([, l]) => l.length);
-  if (!secs.length) { $("#list").innerHTML = `<div class="rail-note"><b>${all.length ? "Nothing here" : "All clear"}</b>${all.length ? "No tickets in this view." : "Nothing open is assigned to you in Jira."}</div>`; return; }
-  $("#list").innerHTML = secs.map(([k, l]) => `${view === "all" ? `<div class="sec-l">${GROUP[k]}</div>` : ""}${l.map(rowHtml).join("")}`).join("");
-  $$("#list .row").forEach(b => b.onclick = () => select(b.dataset.key));
+  if (!secs.length) {
+    const words = { todo: ["Nothing needs you", "No ticket is blocked right now."], check: ["Nothing ready yet", "Tickets with every step clear show up here."], done: ["Nothing with QA", "Tickets you've handed over show up here."], none: ["Everything is checked", "Each of your tickets has been checked at least once."] };
+    const [t, x] = !all.length ? ["All clear", "Nothing open is assigned to you in Jira."] : words[view] || ["Nothing here", "No tickets in this view."];
+    $("#list").innerHTML = emptyNote(t, x, all.length && view !== "all" ? `<button class="btn line small" id="showAll">Show all ${all.length}</button>` : "");
+    $("#showAll")?.addEventListener("click", () => $(`#views [data-v="all"]`).click());
+    return;
+  }
+  // one flat list of section labels and rows, paged
+  paged($("#list"), secs.flatMap(([k, l]) => [...(view === "all" ? [`<div class="sec-l">${GROUP[k]}</div>`] : []), ...l.map(rowHtml)]), 30);
 }
-
 function rowHtml(t) {
   const st = statesOf(t.lastBuild);
   return `<button class="row ${t._busy ? "busy" : ""}" role="option" aria-selected="${t.key === selected}" data-key="${esc(t.key)}">
@@ -734,6 +926,25 @@ function select(key, fetchFirst = false) {
   load(key, fetchFirst);
 }
 
+// reads the check as it is sent: one JSON object per line
+async function stream(url, onEvent) {
+  const res = await fetch(url);
+  if (!res.ok) { let m = res.statusText; try { m = (await res.json()).error || m; } catch { } throw new Error(m); }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    for (let i; (i = buf.indexOf("\n")) >= 0;) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (line.trim()) onEvent(JSON.parse(line)); }
+  }
+}
+
+const headHtml = (key, k, ancestors = []) => `<div class="path">${ancestors.map(a => `<span>${esc(a.type)} <span class="mono">${esc(a.key)}</span></span><span class="sl">/</span>`).join("")}<span class="mono">${esc(key)}</span></div>
+  ${k ? `<div class="title-row"><h2>${esc(k.summary)}</h2></div>
+    <div class="facts"><span class="tag">${typeTag(k.type, true)}</span><span class="tag">${jiraBadge(k.status, k.statusCategory)}</span>${k.assignee ? `<span><b>${esc(cap(k.assignee))}</b></span>` : ""}</div>`
+  : `<div class="line" style="width:64%;height:22px;margin-top:14px"></div><div class="line" style="width:30%"></div>`}`;
+
 async function load(key, fetchFirst, inPlace = false) {
   if (key !== selected) { evTicket = "*"; evRepos = []; fileQuery = ""; groupOpen = {}; }
   selected = key; commitFilter = ""; openStep = null;
@@ -744,28 +955,49 @@ async function load(key, fetchFirst, inPlace = false) {
   // switching scope keeps the page and dims what is about to change, instead of blanking it
   if (inPlace && $(".page")) $(".page").classList.add("dim");
   else {
-    // what we already know about the ticket shows straight away; only the check result is a placeholder
+    // what we already know shows straight away; the rest fills in part by part as the check runs
     const k = tickets?.find(t => t.key === key) || (report?.issue?.key === key ? report.issue : null);
     $("#main").innerHTML = `<div class="loading">
       <button class="btn back" id="back">${icon("back")}My tickets</button>
-      ${k ? `<div class="path"><span class="mono">${esc(key)}</span></div>
-        <div class="title-row"><h2>${esc(k.summary)}</h2></div>
-        <div class="facts"><span class="tag">${typeTag(k.type, true)}</span><span class="tag">${jiraBadge(k.status, k.statusCategory)}</span>${k.assignee ? `<span><b>${esc(cap(k.assignee))}</b></span>` : ""}</div>
-        <div style="height:32px"></div>`
-      : `<div class="line" style="width:38%;height:14px"></div><div class="line" style="width:64%;height:22px"></div><div class="line" style="width:30%"></div><div style="height:30px"></div>`}
-      <div class="note"><span class="spinner"></span>${fetchFirst ? `Fetching ${pl(status?.repoCount ?? 0, "repository", "repositories")}, then checking ${esc(key)}` : `Checking ${esc(key)}`}</div>
-      ${[72, 58, 66, 49, 61, 54].map(w => `<div class="line" style="width:${w}%"></div>`).join("")}</div>`;
+      <div id="ldHead">${headHtml(key, k)}</div>
+      <div class="ldprog"><div class="note" id="ldNote"><span class="spinner"></span>${fetchFirst ? "Fetching the latest from GitLab" : "Reading Jira"}</div><div class="ldbar"><i id="ldBar"></i></div></div>
+      <h3 class="h3" style="margin-top:30px">Steps to QA</h3>
+      <ol class="steps ldsteps" id="ldSteps">${STEPS.map((s, k2) => `<li class="stp" data-id="${s.id}"><div class="stp-h">${mark("none")}<span class="nm">${s.name}</span><span class="hl"><span class="line" style="width:${[60, 48, 55, 40, 52, 44][k2]}%;margin:0"></span></span><span class="ct"></span><span></span></div></li>`).join("")}</ol></div>`;
   }
   if ($("#back")) $("#back").onclick = back;
+  const progress = (text, frac) => { const nt = $("#ldNote"), b = $("#ldBar"); if (nt) nt.innerHTML = `<span class="spinner"></span>${text}`; if (b && frac != null) b.style.width = `${Math.round(frac * 100)}%`; };
   try {
-    const r = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=1`);
+    let r = null;
+    await stream(`/api/manifest-stream?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=${reviewerMode ? 0 : 1}`, ev => {
+      if (n !== seq) return;
+      if (ev.type === "issue") {
+        if ($("#ldHead") && ev.issue) { $("#ldHead").innerHTML = headHtml(key, ev.issue, ev.ancestors); soften($("#ldHead")); }
+        progress(fetchFirst ? "Fetching the latest from GitLab" : "Reading your repositories", fetchFirst ? .02 : .1);
+      } else if (ev.type === "progress") {
+        // fetching is the slow half when it happens; reading local history the rest
+        const f = ev.done / Math.max(1, ev.total);
+        if (ev.phase === "fetch") progress(`Fetching ${ev.done} of ${ev.total} repositories`, .02 + f * .58);
+        else progress(`Reading ${ev.done} of ${ev.total} repositories`, (fetchFirst ? .6 : .1) + f * (fetchFirst ? .25 : .65));
+      } else if (ev.type === "station") {
+        const s = ev.station, row = $(`#ldSteps [data-id="${s.id}"]`);
+        if (row) {
+          const k2 = STEPS.findIndex(x => x.id === s.id);
+          row.innerHTML = `<div class="stp-h">${mark(s.state)}<span class="nm">${STEPS[k2].name}</span><span class="hl">${esc(s.headline)}</span><span class="ct ${s.state === "todo" ? "need" : ""}">${WORD[s.state]}</span><span></span></div>`;
+          soften(row);
+          progress("Working out what QA needs", .85 + (k2 + 1) / STEPS.length * .15);
+        }
+      } else if (ev.type === "done") r = ev.report;
+      else if (ev.type === "error") throw new Error(ev.message);
+    });
     if (n !== seq) return;
+    if (!r) throw new Error("The check stopped before it finished.");
     r.fetched = fetchFirst; report = r;
     const t = tickets?.find(x => x.key === key);
     if (t) { t.lastBuild = { generated: r.generated, stations: r.stations }; renderList(); }
     const st = r.stations.map(s => s.state);
     openStep = r.stations[["todo", "wait", "check"].map(x => st.indexOf(x)).find(i => i !== -1) ?? 5].id;
     renderTicket();
+    soften($(".page .body"), 40); soften($(".page .ev"), 90);
   } catch (e) {
     if (n !== seq) return;
     const disk = /disk was full|not enough space/i.test(e.message);
@@ -779,8 +1011,7 @@ async function load(key, fetchFirst, inPlace = false) {
     $("#back").onclick = back; $("#retry").onclick = () => load(key, fetchFirst);
   }
 }
-
-function back() { history.pushState(null, "", location.pathname); selected = null; report = null; $("#split").classList.remove("open"); renderList(); blank(); }
+function back() { history.pushState(null, "", location.pathname); selected = null; report = null; reviewing = null; reviewerMode = false; $("#split").classList.remove("open"); renderList(); blank(); }
 
 function blank() {
   document.title = "Ledger";
@@ -847,6 +1078,7 @@ function renderTicket() {
         <ol class="steps">${r.stations.map((s, k) => stepHtml(s, k)).join("")}</ol>
       </section>
       <aside class="side">
+        <div id="timeBox" class="timebox"></div>
         <div><h3 class="h3">Your footprint<span id="figsFor"></span></h3><div class="figs" id="figs"></div></div>
         ${kids ? `<div><h3 class="h3">Your tickets in scope</h3><ul class="scope">${r.scope.map(t => `<li><button data-go="${esc(t.key)}"><span class="k"><span class="kk">${typeTag(t.type)}<span class="mono ln">${esc(t.key)}</span>${jiraBadge(t.status, t.statusCategory)}</span><span>${t.commits ? `${t.merged}/${t.commits} merged` : "no code"}</span></span><span class="s">${esc(t.summary)}</span></button></li>`).join("")}</ul></div>` : ""}
       </aside>
@@ -863,9 +1095,12 @@ function renderTicket() {
       <div class="tabs" role="tablist" id="evTabs"></div>
       <div class="pane" id="pane"></div>
     </section>`}
+    ${status?.gitlab ? `<section class="crv" id="crv"></section>` : ""}
   </div>`;
   wireTicket();
   if (!nothing) initEvidence();
+  if (me) loadTicketTime(r.key);
+  if (status?.gitlab) loadTicketReviews(r.key);
 }
 
 /* service / repository names: one stable colour per name, so a service looks the same everywhere */
@@ -988,15 +1223,15 @@ function initEvidence() {
       : o.id ? jq(`<span class="s2-repo">${repoTag(o.id)}<span class="ink-3">${pl(repos.find(x => x.name === o.id)?.commits.length || 0, "commit")}</span></span>`) : o.text,
     templateSelection: o => o.id === "*" ? jq(`<span class="s2-all">All repositories</span>`) : o.id ? jq(repoTag(o.id)) : o.text,
   });
-  const apply = vals => { el.val(vals).trigger("change.select2"); evRepos = vals.filter(v => v !== "*"); renderEvidence(); };
+  const apply = vals => { el.val(vals).trigger("change.select2"); evRepos = vals.filter(v => v !== "*"); renderEvidence(); soften($("#pane")); soften($("#figs")); };
   el.on("select2:select.ev", e => {
     const vals = el.val() || [];
     apply(e.params.data.id === "*" ? ["*"] : vals.filter(v => v !== "*"));
   });
   el.on("select2:unselect.ev", () => { const vals = el.val() || []; apply(vals.length ? vals : ["*"]); });
   if ($("#evTicket")) jq("#evTicket").select2({ width: "300px", minimumResultsForSearch: 8, dropdownParent: jq(".ev") })
-    .on("change", e => { evTicket = e.target.value; initEvidence(); });
-  $("#evMine").onchange = e => { evMine = e.target.checked; initEvidence(); };
+    .on("change", e => { evTicket = e.target.value; initEvidence(); soften($("#pane")); soften($("#figs")); });
+  $("#evMine").onchange = e => { evMine = e.target.checked; initEvidence(); soften($("#pane")); soften($("#figs")); };
   renderEvidence();
 }
 
@@ -1015,7 +1250,7 @@ function renderEvidence() {
   const tabs = [["repos", "Repositories", shown.length], ["files", "Files", files], ["commits", "Commits", commits], ...(report.foreign.length ? [["foreign", "Other tickets", report.foreign.length]] : [])];
   $("#evTabs").innerHTML = tabs.map(([id, l, c]) => `<button role="tab" aria-selected="${tab === id}" data-tab="${id}">${l}<span class="c">${c}</span></button>`).join("");
   $$("#evTabs [data-tab]").forEach(b => {
-    b.onclick = () => { tab = b.dataset.tab; $$("#evTabs [data-tab]").forEach(x => x.setAttribute("aria-selected", x === b)); glide($("#evTabs"), b); renderPane(); };
+    b.onclick = () => { tab = b.dataset.tab; $$("#evTabs [data-tab]").forEach(x => x.setAttribute("aria-selected", x === b)); glide($("#evTabs"), b); renderPane(); soften($("#pane")); };
     b.onkeydown = e => { const k = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!k) return; e.preventDefault(); const t = $$("#evTabs [data-tab]"); const nx = t[(t.indexOf(b) + k + t.length) % t.length]; nx.focus(); nx.click(); };
   });
   renderPane();
@@ -1032,6 +1267,14 @@ function groupHtml(x, count, body, id) {
     <div class="gbox-h"><button class="gtoggle" aria-expanded="${open}">${icon("chev", "ico chev")}${repoTag(x.name)}<span class="ink-3">${count}</span></button>${openBtns(x.name, null, x.sln)}</div>
     <div class="gbox-b" ${open ? "" : "hidden"}>${body}</div></section>`;
 }
+
+const fileRow = (x, f) => `<li><span class="op ${esc(f.s)}" title="${({ A: "Added", M: "Modified", D: "Deleted", R: "Renamed" })[f.s] || ""}">${esc(f.s)}</span>
+  <button class="fpath" data-preview="${esc(x.name)}" data-path="${esc(f.p)}" data-shas="${esc(f.shas.join(","))}" title="Preview the changes">${esc(f.p)}</button>
+  <span class="facts-i"><button class="btn only small" data-preview="${esc(x.name)}" data-path="${esc(f.p)}" data-shas="${esc(f.shas.join(","))}" title="Preview the changes" aria-label="Preview the changes">${icon("eye")}</button>${f.s === "D" ? "" : openBtns(x.name, f.p, x.sln)}</span></li>`;
+
+const tagCell = t => !t ? `<span class="ink-3">—</span>`
+  : t.containing?.length ? `<a class="tagpill ln" href="${esc(t.containing[0].url || "#")}" target="_blank" rel="noopener" title="First tag with this work, ${esc(t.containing[0].date)}">${esc(t.containing[0].name)}</a>${t.containing.length > 1 ? `<span class="ink-3"> +${t.containing.length - 1}</span>` : ""}`
+  : `<span class="ink-3">not tagged</span>${t.next ? ` <span class="tagpill next" title="Suggested next version${t.latest ? `; latest is ${esc(t.latest.name)}` : ""}">${esc(t.next)}</span>` : ""}`;
 
 function renderPane() {
   const p = $("#pane"), shown = evShown();
@@ -1051,59 +1294,83 @@ function renderPane() {
   };
   if (tab === "repos") {
     if (!shown.length) { p.innerHTML = empty("repositories"); return wireEmpty(); }
-    p.innerHTML = `<div class="wide"><table class="tb"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th class="r num">Merged</th><th class="r act"><span class="sr">Open</span></th></tr></thead><tbody>
-      ${shown.map(x => {
-        const merges = x.merges.filter(m => keyHit(m.branch)), branches = x.branches.filter(b => keyHit(b.name));
-        return `<tr><td>${x.webUrl ? `<a class="ln" href="${esc(x.webUrl)}" target="_blank" rel="noopener">${repoTag(x.name)}</a>` : repoTag(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
+    p.innerHTML = `<div class="wide"><table class="tb"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th>Tag</th><th class="r num">Merged</th><th class="r act"><span class="sr">Open</span></th></tr></thead><tbody id="repoRows"></tbody></table></div>`;
+    paged($("#repoRows"), shown.map(x => {
+      const merges = x.merges.filter(m => keyHit(m.branch)), branches = x.branches.filter(b => keyHit(b.name));
+      return `<tr><td>${x.webUrl ? `<a class="ln" href="${esc(x.webUrl)}" target="_blank" rel="noopener">${repoTag(x.name)}</a>` : repoTag(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
         <td>${merges.map(m => m.url ? `<a class="ln" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="ink-3">${day(m.date)}</span>` : `<span class="ink-3">Direct merge, ${day(m.date)}</span>`).join("<br>") || `<span class="ink-3">None</span>`}</td>
         <td>${branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--amber)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="ink-3">None</span>`}</td>
+        <td class="nw">${tagCell(x.tags)}</td>
         <td class="r num"><span class="cnt"><b>${x.commits.filter(c => c.inDefault).length}</b><span class="ink-3"> of ${x.commits.length}</span></span></td><td class="r act">${openBtns(x.name, null, x.sln)}</td></tr>`;
-      }).join("")}</tbody></table></div>`;
+    }), 25);
   } else if (tab === "files") {
     if (!shown.length) { p.innerHTML = empty("files"); return wireEmpty(); }
-    const many = shown.length > 1;
-    p.innerHTML = `<div class="tool"><input class="filter" id="ff" placeholder="Filter by path${evRepos.length === 1 ? ` in ${esc(evRepos[0])}` : ""}" aria-label="Filter files" value="${esc(fileQuery)}">${many ? `<button class="btn small" id="xAll">Collapse all</button>` : ""}</div>
-      <div id="fl">${shown.map(x => {
-        const fs = evFiles(x);
-        const body = `<ul class="files">${fs.map(f => `<li data-p="${esc(f.p.toLowerCase())}"><span class="op ${esc(f.s)}" title="${({ A: "Added", M: "Modified", D: "Deleted", R: "Renamed" })[f.s] || ""}">${esc(f.s)}</span>
-          <button class="fpath" data-preview="${esc(x.name)}" data-path="${esc(f.p)}" data-shas="${esc(f.shas.join(","))}" title="Preview the changes">${esc(f.p)}</button>
-          <span class="facts-i"><button class="btn only small" data-preview="${esc(x.name)}" data-path="${esc(f.p)}" data-shas="${esc(f.shas.join(","))}" title="Preview the changes" aria-label="Preview the changes">${icon("eye")}</button>${f.s === "D" ? "" : openBtns(x.name, f.p, x.sln)}</span></li>`).join("")}</ul>`;
-        return many ? groupHtml(x, pl(fs.length, "file"), body, "f:" + x.name) : body;
-      }).join("")}</div>`;
-    const filt = () => { const q = fileQuery.toLowerCase(); $$("#fl li").forEach(li => li.hidden = q && !li.dataset.p.includes(q)); $$("#fl .gbox").forEach(g => g.hidden = q && !g.querySelector("li:not([hidden])")); };
-    $("#ff").oninput = e => { fileQuery = e.target.value; filt(); };
-    filt();
+    p.innerHTML = `<div class="tool"><input class="filter" id="ff" placeholder="Filter by path${evRepos.length === 1 ? ` in ${esc(evRepos[0])}` : ""}" aria-label="Filter files" value="${esc(fileQuery)}"><button class="btn small" id="xAll" hidden>Collapse all</button></div><div id="fl"></div>`;
+    const draw = () => {
+      const q = fileQuery.toLowerCase();
+      const groups = shown.map(x => ({ x, fs: evFiles(x).filter(f => !q || f.p.toLowerCase().includes(q)) })).filter(g => g.fs.length);
+      const many = groups.length > 1;
+      $("#xAll").hidden = !many;
+      if (!groups.length) { $("#fl").innerHTML = `<div class="pane-empty"><b>No files match “${esc(fileQuery)}”</b></div>`; return; }
+      $("#fl").innerHTML = groups.map(g => many ? groupHtml(g.x, pl(g.fs.length, "file"), `<ul class="files" data-fill="${esc(g.x.name)}"></ul>`, "f:" + g.x.name) : `<ul class="files" data-fill="${esc(g.x.name)}"></ul>`).join("");
+      groups.forEach(g => paged($(`#fl ul[data-fill="${CSS.escape(g.x.name)}"]`), g.fs.map(f => fileRow(g.x, f)), 60));
+      syncAll();
+    };
+    $("#ff").oninput = e => { fileQuery = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); soften($("#fl")); }, 120); };
+    draw();
   } else if (tab === "commits") {
     if (!shown.length) { p.innerHTML = empty("commits"); return wireEmpty(); }
     const many = shown.length > 1, multi = evTicket === "*";
     p.innerHTML = `${many ? `<div class="tool"><button class="btn small" id="xAll">Collapse all</button></div>` : ""}
-      ${shown.map(x => { const body = x.commits.map(c => cmHtml(c, x.defaultRef, multi && c.ticket ? `${esc(c.ticket)} · ` : "")).join(""); return many ? groupHtml(x, pl(x.commits.length, "commit"), body, "c:" + x.name) : body; }).join("")}`;
+      ${shown.map(x => { const body = `<div data-fill="${esc(x.name)}"></div>`; return many ? groupHtml(x, pl(x.commits.length, "commit"), body, "c:" + x.name) : body; }).join("")}`;
+    shown.forEach(x => paged(p.querySelector(`[data-fill="${CSS.escape(x.name)}"]`), x.commits.map(c => cmHtml(c, x.defaultRef, multi && c.ticket ? `${esc(c.ticket)} · ` : "")), 40));
   } else {
-    p.innerHTML = `<p class="ink-3" style="margin:0 0 12px">Commits from tickets outside this scope that sit on these branches. They don't count toward any step.</p>${report.foreign.map(c => cmHtml(c, null, `${esc(c.otherKey)} · ${repoTag(c.repo)} `)).join("")}`;
+    p.innerHTML = `<p class="ink-3" style="margin:0 0 12px">Commits from tickets outside this scope that sit on these branches. They don't count toward any step.</p><div id="fx"></div>`;
+    paged($("#fx"), report.foreign.map(c => cmHtml(c, null, `${esc(c.otherKey)} · ${repoTag(c.repo)} `)), 40);
   }
   wirePane();
 }
 
+// collapse / expand all, kept in step with the groups
+function syncAll() {
+  const xAll = $("#xAll"); if (!xAll) return;
+  xAll.textContent = $$("#pane .gbox").some(g => g.dataset.open === "true") ? "Collapse all" : "Expand all";
+}
 function wirePane() {
-  $$("#pane .gtoggle").forEach(b => b.onclick = () => {
-    const g = b.closest(".gbox"), open = g.dataset.open !== "true";
-    g.dataset.open = open; b.setAttribute("aria-expanded", open); groupOpen[g.dataset.gid] = open; slide(g.querySelector(".gbox-b"), open);
-  });
   const xAll = $("#xAll");
-  if (xAll) {
-    const sync = () => { xAll.textContent = $$("#pane .gbox").some(g => g.dataset.open === "true") ? "Collapse all" : "Expand all"; };
-    sync();
-    xAll.onclick = () => {
-      const open = xAll.textContent === "Expand all";
-      $$("#pane .gbox").forEach(g => { if ((g.dataset.open === "true") !== open) { g.dataset.open = open; g.querySelector(".gtoggle").setAttribute("aria-expanded", open); groupOpen[g.dataset.gid] = open; slide(g.querySelector(".gbox-b"), open); } });
-      sync();
-    };
-    $$("#pane .gtoggle").forEach(b => b.addEventListener("click", () => setTimeout(sync)));
-  }
-  $$("#pane [data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
-  $$("#pane [data-preview]").forEach(b => b.onclick = () => preview(b.dataset.preview, b.dataset.path, b.dataset.shas.split(",")));
+  if (!xAll) return;
+  syncAll();
+  xAll.onclick = () => {
+    const open = xAll.textContent === "Expand all";
+    $$("#pane .gbox").forEach(g => { if ((g.dataset.open === "true") !== open) toggleGroup(g, open); });
+    syncAll();
+  };
 }
 
+function toggleGroup(g, open = g.dataset.open !== "true") {
+  g.dataset.open = open;
+  g.querySelector(".gtoggle")?.setAttribute("aria-expanded", open);
+  if (g.dataset.gid) groupOpen[g.dataset.gid] = open;
+  const body = g.querySelector(".gbox-b");
+  // review files build their diff the first time they open
+  if (open && g.dataset.path && !body.dataset.built && reviewing?.files) { body.innerHTML = reviewFileBody(g.dataset.path); body.dataset.built = "1"; }
+  slide(body, open);
+}
+
+// one listener for everything clickable in the main area, so rows added later by paging work too
+function mainClicks(e) {
+  const t = e.target;
+  const tog = t.closest(".gtoggle");
+  if (tog) { toggleGroup(tog.closest(".gbox")); syncAll(); return; }
+  const op = t.closest("[data-open]");
+  if (op && op.closest("#main") && !op.closest("#pop") && !op.closest(".dpage")) { openLocal(op.dataset.repo, op.dataset.open, op.dataset.path); return; }
+  const pv = t.closest("[data-preview]");
+  if (pv) { preview(pv.dataset.preview, pv.dataset.path, pv.dataset.shas.split(",")); return; }
+  const ol = t.closest("[data-open-line]");
+  if (ol) { openLocal(ol.dataset.repo, "code", ol.dataset.openLine, +ol.dataset.line); return; }
+  const rw = t.closest(".gbox[data-path] .lnb");
+  if (rw && reviewing?.local) openLocal(reviewing.repo, "code", rw.closest(".gbox").dataset.path, +rw.dataset.line);
+}
 // slides a horizontal pill row so the chosen pill is fully in view, with an ease-in-out glide
 function glide(box, el) {
   if (!box || !el) return;
@@ -1283,9 +1550,372 @@ async function checkAll() {
 
 /* ── find: a Select2 async select over your tickets ──
    Empty or one letter: your open tickets, filtered locally. Two letters or more: also asks Jira (done and older tickets too). */
-function localHits(q) {
+/* ── time: my day against the target, and what's logged on a ticket ── */
+let week = null;
+const hm = s => { s = Math.round((s || 0) / 60); const h = Math.floor(s / 60), m = s % 60; return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`; };
+
+async function loadWeek() {
+  if (!status?.account) { $("#dayWrap").hidden = true; return; }
+  try { week = await api("/api/time/week"); renderDayMeter(); } catch { $("#dayWrap").hidden = true; }
+}
+
+function renderDayMeter() {
+  const today = week.days.find(d => d.date === week.today);
+  if (!today) return;
+  const target = today.target || week.target, done = today.seconds, pct = target ? Math.min(1, done / target) : 1, left = Math.max(0, target - done);
+  const r = 7, c = 2 * Math.PI * r;
+  $("#dayWrap").hidden = false;
+  $("#dayBtn").className = `daymeter ${!today.workday ? "off" : pct >= 1 ? "met" : pct >= .6 ? "near" : "low"}`;
+  $("#dayBtn").innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}" class="trk"/><circle cx="9" cy="9" r="${r}" class="val" style="stroke-dasharray:${c};stroke-dashoffset:${c * (1 - pct)}"/></svg>
+    <span><b>${hm(done)}</b><span class="ink-3"> / ${hm(target)}</span></span>`;
+  $("#dayBtn").setAttribute("aria-label", `Logged today: ${hm(done)} of ${hm(target)}${left ? `, ${hm(left)} to go` : ""}`);
+  $("#dayBtn").onclick = e => {
+    e.stopPropagation();
+    const pop = $("#weekPop"), open = pop.hidden;
+    pop.hidden = !open; $("#dayBtn").setAttribute("aria-expanded", open);
+    if (open) { renderWeek(); soften(pop); document.addEventListener("click", function close(ev) { if (!pop.contains(ev.target)) { pop.hidden = true; $("#dayBtn").setAttribute("aria-expanded", "false"); document.removeEventListener("click", close); } }); }
+  };
+}
+
+function renderWeek() {
+  const max = Math.max(week.target, ...week.days.map(d => d.seconds));
+  const work = week.days.filter(d => d.workday), done = work.reduce((n, d) => n + d.seconds, 0), goal = work.reduce((n, d) => n + d.target, 0);
+  const today = week.days.find(d => d.date === week.today);
+  const missing = week.days.filter(d => d.workday && d.date < week.today && d.seconds < d.target);
+  $("#weekPop").innerHTML = `<div class="wk-h"><b>This week</b><span class="ink-3">${hm(done)} of ${hm(goal)}</span></div>
+    ${today?.workday ? `<p class="wk-note">${today.seconds >= today.target ? "Today's target is met." : `${hm(today.target - today.seconds)} still to log today.`}${missing.length ? ` ${pl(missing.length, "earlier day")} short.` : ""}</p>` : ""}
+    <div class="wk-bars">${week.days.map(d => `<div class="wk-d ${d.date === week.today ? "today" : ""} ${d.workday ? "" : "off"}" title="${esc(d.date)}: ${hm(d.seconds)}${d.workday ? ` of ${hm(d.target)}` : ""}">
+      <div class="wk-col"><i class="tgt" style="bottom:${(d.target / max) * 100}%"></i><i class="bar ${d.seconds >= d.target && d.workday ? "met" : d.seconds ? "" : "none"}" style="height:${Math.max(2, (d.seconds / max) * 100)}%"></i></div>
+      <span>${d.weekday}</span><span class="ink-3">${d.seconds ? hm(d.seconds) : "–"}</span></div>`).join("")}</div>
+    <div class="wk-list">${week.days.filter(d => d.tickets.length).slice().reverse().map(d => `<div class="wk-day"><span class="ink-3">${d.weekday} ${day(d.date)}</span>${d.tickets.map(t => `<button class="wk-t" data-k="${esc(t.key)}"><span class="mono">${esc(t.key)}</span><span class="s">${esc(t.summary)}</span><b>${hm(t.seconds)}</b></button>`).join("")}</div>`).join("") || `<p class="ink-3" style="margin:6px 0 0">Nothing logged yet this week.</p>`}</div>`;
+  $$("#weekPop [data-k]").forEach(b => b.onclick = () => { $("#weekPop").hidden = true; select(b.dataset.k); });
+}
+
+async function loadTicketTime(key) {
+  const box = $("#timeBox"); if (!box) return;
+  box.innerHTML = `<h3 class="h3">Time</h3><div class="line" style="height:8px;width:100%"></div>`;
+  try {
+    const t = await api(`/api/time?key=${encodeURIComponent(key)}`);
+    if (report?.key !== key || !$("#timeBox")) return;
+    renderTimeBox(key, t);
+  } catch (e) { box.innerHTML = `<h3 class="h3">Time</h3><p class="ink-3" style="margin:0;font-size:12.5px">${esc(e.message)}</p>`; }
+}
+
+function renderTimeBox(key, t) {
+  const est = t.estimate || 0, spent = t.spent || 0, rem = t.remaining ?? Math.max(0, est - spent);
+  const total = Math.max(est, spent + rem, 1), over = est && spent > est;
+  const mine = t.entries.filter(e => e.mine);
+  $("#timeBox").innerHTML = `<h3 class="h3">Time<span>${est ? `estimate ${hm(est)}` : "no estimate"}</span></h3>
+    <div class="tbar ${over ? "over" : ""}"><i class="mine" style="width:${(t.mine / total) * 100}%"></i><i class="others" style="width:${((spent - t.mine) / total) * 100}%"></i></div>
+    <div class="tnums"><span><b>${hm(spent)}</b> logged${spent !== t.mine ? `, ${hm(t.mine)} by you` : ""}</span><span class="ink-3">${over ? `${hm(spent - est)} over` : `${hm(rem)} left`}</span></div>
+    <button class="btn line small tlog" id="logBtn">${icon("checkall")}Log time</button>
+    ${mine.length ? `<ul class="tlist" id="tList"></ul>` : `<p class="ink-3" style="margin:8px 0 0;font-size:12.5px">You haven't logged time on ${esc(key)} yet.</p>`}`;
+  if (mine.length) paged($("#tList"), mine.map(e => `<li><span>${day(e.date)}</span><b>${hm(e.seconds)}</b><span class="c ink-3" title="${esc(e.comment)}">${esc(e.comment || "")}</span></li>`), 8);
+  $("#logBtn").onclick = () => logDialog(key);
+  soften($("#timeBox"));
+}
+
+function logDialog(key) {
+  const d = $("#settings"), today = new Date().toISOString().slice(0, 10);
+  const left = week?.days.find(x => x.date === week.today);
+  const gap = left ? Math.max(0, left.target - left.seconds) : 0;
+  d.innerHTML = `<div class="dlg-in">
+    <h2>Log time on ${esc(key)}</h2>
+    <p class="intro">Added to Jira as a worklog under your name.${gap ? ` You have ${hm(gap)} left to reach today's target.` : ""}</p>
+    <div class="fld"><span>How long</span>
+      <div class="quick">${[15, 30, 60, 120, 240].map(m => `<button class="chip" data-m="${m}">${hm(m * 60)}</button>`).join("")}${gap ? `<button class="chip" data-m="${Math.round(gap / 60)}">Rest of today (${hm(gap)})</button>` : ""}</div>
+      <div class="hm"><input id="lgH" type="number" min="0" max="24" value="1" aria-label="Hours"><span>h</span><input id="lgM" type="number" min="0" max="59" step="5" value="0" aria-label="Minutes"><span>m</span></div>
+      <span class="err" id="lgErr"></span></div>
+    <label class="fld"><span>Day</span><input id="lgD" type="date" value="${today}" max="${today}"></label>
+    <label class="fld"><span>What you did <span class="ink-3">(optional)</span></span><textarea id="lgC" rows="3"></textarea></label>
+  </div>
+  <div class="dlg-f"><span class="msg" id="lgMsg"></span><button class="btn" id="lgCancel">Cancel</button><button class="btn success" id="lgSave">Log time</button></div>`;
+  $$("#settings .quick [data-m]").forEach(b => b.onclick = () => { const m = +b.dataset.m; $("#lgH").value = Math.floor(m / 60); $("#lgM").value = m % 60; $$("#settings .chip").forEach(x => x.classList.toggle("on", x === b)); });
+  $("#lgCancel").onclick = () => d.close();
+  $("#lgSave").onclick = async () => {
+    const minutes = (+$("#lgH").value || 0) * 60 + (+$("#lgM").value || 0);
+    if (minutes < 1) { $("#lgErr").textContent = "Enter how long you worked."; return; }
+    if (minutes > 24 * 60) { $("#lgErr").textContent = "That's more than a day."; return; }
+    $("#lgSave").disabled = true; $("#lgMsg").innerHTML = `<span class="spinner"></span>Saving to Jira`;
+    try {
+      await api("/api/time/log", { method: "POST", body: JSON.stringify({ key, minutes, date: $("#lgD").value, comment: $("#lgC").value }) });
+      d.close(); toast(`Logged ${hm(minutes * 60)} on ${esc(key)}.`);
+      loadTicketTime(key); loadWeek();
+    } catch (e) { $("#lgMsg").className = "msg bad"; $("#lgMsg").textContent = e.message; $("#lgSave").disabled = false; }
+  };
+  d.showModal();
+}
+
+/* the developer's view of code review: every merge request of the ticket, its reviewers and their comments */
+async function loadTicketReviews(key) {
+  const box = $("#crv"); if (!box) return;
+  box.innerHTML = `<h3 class="h3">Code review</h3><div class="s2-msg"><span class="spinner"></span>Reading merge requests from GitLab</div>`;
+  try {
+    const list = await api(`/api/ticket-reviews?key=${encodeURIComponent(key)}`);
+    if (report?.key !== key || !$("#crv")) return;
+    const open = list.reduce((n, m) => n + m.discussions.filter(d => d.resolvable && !d.resolved).length, 0);
+    box.innerHTML = `<h3 class="h3">Code review<span>${list.length ? `${pl(list.length, "merge request")}${open ? ` · ${pl(open, "open comment")}` : ""}` : "no merge requests found"}</span></h3>
+      <div id="crvList"></div>`;
+    if (!list.length) { $("#crvList").innerHTML = `<div class="pane-empty"><b>No merge requests yet</b><span>Reviews and comments on this ticket's merge requests will show up here.</span></div>`; return; }
+    paged($("#crvList"), list.map(m => {
+      const st = m.state === "merged" ? "done" : m.state === "closed" ? "skip" : m.reviewers.some(r => r.state === "requested_changes") ? "todo" : m.approvals && !m.approvals.left ? "done" : "wait";
+      return `<article class="mrc">
+        <header>${mark(st, false)}${repoTag(m.repo)}<a class="mono ln" href="${esc(m.url)}" target="_blank" rel="noopener">!${m.iid}</a><span class="t">${esc(m.title)}</span><span class="ink-3">${esc(m.state)}</span></header>
+        <div class="rvs">${m.reviewers.map(r => { const s = RS[r.state] || ["wait", r.state]; return `<span class="rv ${s[0]}">${mark(s[0], false)}${esc(r.user.name)}<span class="ink-3"> · ${s[1]}</span></span>`; }).join("") || `<span class="ink-3">No reviewers assigned</span>`}
+          ${m.approvals ? `<span class="ink-3">${m.approvals.left ? `${pl(m.approvals.left, "approval")} still needed` : "Approvals complete"}</span>` : ""}</div>
+        ${m.discussions.length ? `<details class="talks"><summary>${pl(m.discussions.length, "discussion")}${m.discussions.some(d => d.resolvable && !d.resolved) ? ` · <span class="open-n">${m.discussions.filter(d => d.resolvable && !d.resolved).length} open</span>` : ""}</summary>
+          ${m.discussions.map(d => discussionHtml(d, m.repo, !!report.repos.find(x => x.name === m.repo))).join("")}</details>` : ""}
+      </article>`;
+    }), 10);
+    soften(box);
+  } catch (e) { box.innerHTML = `<h3 class="h3">Code review</h3><p class="ink-3" style="margin:0">${esc(e.message)}</p>`; }
+}
+
+/* ── code review (GitLab) ── */
+let railMode = "mine", reviews = null, reviewing = null, reviewView = "all";
+
+function renderRailMode() {
+  const box = $("#railMode");
+  if (!status?.gitlab) { box.hidden = true; railMode = "mine"; return; }
+  box.hidden = false;
+  const n = reviews?.filter(r => !r.approvedByMe).length;
+  box.innerHTML = `<div class="seg" role="tablist" aria-label="List">
+    <button role="tab" aria-selected="${railMode === "mine"}" data-rm="mine">My tickets</button>
+    <button role="tab" aria-selected="${railMode === "review"}" data-rm="review">To review${n ? `<span class="c">${n}</span>` : ""}</button></div>`;
+  $$("#railMode [data-rm]").forEach(b => b.onclick = () => {
+    if (railMode === b.dataset.rm) return;
+    railMode = b.dataset.rm;
+    if (railMode === "review" && !reviews) loadReviews(); else { renderList(); soften($("#list")); }
+  });
+}
+
+async function loadReviews() {
+  railMode = "review";
+  renderRailMode();
+  $("#railTitle").textContent = "To review";
+  $("#views").innerHTML = "";
+  $("#list").innerHTML = Array(6).fill(`<div class="ghost-row"></div>`).join("");
+  try { reviews = await api("/api/reviews"); }
+  catch (e) { reviews = null; $("#list").innerHTML = emptyNote("Couldn't load your reviews", esc(e.message), `<button class="btn line small" id="rvRetry">Try again</button>`); $("#rvRetry").onclick = loadReviews; return; }
+  renderList();
+  soften($("#list"));
+}
+
+function renderReviewList() {
+  $("#railTitle").textContent = "To review";
+  const all = reviews || [];
+  const waiting = all.filter(r => !r.approvedByMe), done = all.filter(r => r.approvedByMe);
+  $("#count").textContent = all.length || "";
+  const V = [["all", "All", all.length], ["waiting", "Waiting for you", waiting.length], ["approved", "Approved", done.length]];
+  $("#views").innerHTML = V.map(([id, l, c]) => `<button aria-pressed="${reviewView === id}" data-rv="${id}">${l}<span class="c">${c}</span></button>`).join("");
+  $$("#views [data-rv]").forEach(b => b.onclick = () => { reviewView = b.dataset.rv; renderList(); soften($("#list")); });
+  glide($("#views"), $("#views [aria-pressed=true]"));
+  const list = reviewView === "waiting" ? waiting : reviewView === "approved" ? done : [...waiting, ...done];
+  if (!list.length) {
+    $("#list").innerHTML = emptyNote(all.length ? "Nothing here" : "No reviews waiting", all.length ? "No merge requests in this view." : "Nobody has asked you to review a merge request.", `<button class="btn line small" id="rvReload">Check again</button>`);
+    $("#rvReload").onclick = loadReviews; return;
+  }
+  paged($("#list"), list.map(reviewRowHtml), 30);
+}
+
+function reviewRowHtml(r) {
+  const state = r.approvedByMe ? "done" : r.conflicts || r.draft ? "wait" : "todo";
+  const on = reviewing && reviewing.project === r.project && reviewing.iid === r.iid;
+  return `<button class="row" role="option" aria-selected="${!!on}" data-project="${esc(r.project)}" data-iid="${r.iid}">
+    ${mark(state)}<span class="t">${esc(r.title)}</span>
+    <span class="m">${repoTag(r.repo)}<span class="mono">!${r.iid}</span><span class="s">${esc(r.author?.name || "")}${r.draft ? " · draft" : ""}${r.conflicts ? " · conflicts" : ""}</span>${r.key ? `<span class="mono">${esc(r.key)}</span>` : ""}</span></button>`;
+}
+
+function openReview(project, iid) {
+  history.pushState(null, "", `#review/${encodeURIComponent(project)}/${iid}`);
+  loadReview(project, +iid);
+}
+
+async function loadReview(project, iid) {
+  reviewing = { project, iid };
+  selected = null; report = null; diffState = null;
+  $("#split").classList.add("open");
+  $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.project === project && +b.dataset.iid === iid));
+  const known = reviews?.find(r => r.project === project && r.iid === iid);
+  $("#main").innerHTML = `<div class="loading">
+    <button class="btn back" id="back">${icon("back")}To review</button>
+    ${known ? `<div class="path">${repoTag(known.repo)}<span class="mono">!${iid}</span></div><div class="title-row"><h2>${esc(known.title)}</h2></div><div style="height:28px"></div>` : ""}
+    <div class="note"><span class="spinner"></span>Reading the merge request, its changes and its discussions from GitLab</div>
+    ${[72, 58, 66, 49, 61, 54].map(w => `<div class="line" style="width:${w}%"></div>`).join("")}</div>`;
+  $("#back").onclick = back;
+  try {
+    const r = await api(`/api/review?project=${encodeURIComponent(project)}&iid=${iid}`);
+    if (!reviewing || reviewing.iid !== iid || reviewing.project !== project) return;
+    reviewing = { ...r, project, iid, fileQuery: "" };
+    document.title = `!${iid} · ${r.repo} · Ledger`;
+    renderReview();
+  } catch (e) {
+    $("#main").innerHTML = `<div class="page"><button class="btn back" id="back">${icon("back")}To review</button>
+      <div class="void fail-c">${icon("alert", "ico big")}<h3>Couldn't open !${iid}</h3><p>${esc(e.message)}</p>
+      <div class="void-acts"><button class="btn solid" id="retry">${icon("refresh")}Try again</button></div></div></div>`;
+    $("#back").onclick = back; $("#retry").onclick = () => loadReview(project, iid);
+  }
+}
+
+const RS = { approved: ["done", "Approved"], requested_changes: ["todo", "Changes requested"], reviewed: ["check", "Reviewed"], unreviewed: ["wait", "Not reviewed yet"], unapproved: ["wait", "Approval revoked"] };
+const PIPE = { success: ["done", "Pipeline passed"], failed: ["todo", "Pipeline failed"], running: ["wait", "Pipeline running"], pending: ["wait", "Pipeline pending"], canceled: ["check", "Pipeline canceled"] };
+
+function renderReview() {
+  const r = reviewing, unresolved = r.discussions.filter(d => d.resolvable && !d.resolved).length;
+  const todo = r.checklist.filter(c => c.state === "todo").length;
+  const pipe = r.pipeline ? PIPE[r.pipeline.status] || ["check", `Pipeline ${r.pipeline.status}`] : null;
+  const t = r.tags;
+  $("#main").innerHTML = `<div class="page review">
+    <button class="btn back" id="back">${icon("back")}To review</button>
+    <div class="path">${repoTag(r.repo)}<a class="mono ln" href="${esc(r.url)}" target="_blank" rel="noopener" title="Open in GitLab">!${r.iid}</a>${r.key ? `<span class="sl">/</span><button class="mono ln" id="rvTicket" title="Open the ticket page with everyone's work">${esc(r.key)}</button>` : ""}</div>
+    <div class="title-row"><h2>${esc(r.title)}</h2>
+      <div class="acts">
+        ${r.approvedByMe ? `<button class="btn danger" id="rvUnapprove">Revoke approval</button>` : `<button class="btn success" id="rvApprove">${icon("checkall")}Approve</button>`}
+        <button class="btn danger" id="rvChanges">Request changes</button>
+        <div class="pop-wrap"><button class="btn only" id="more" aria-haspopup="menu" aria-expanded="false" aria-label="More">${icon("more", "ico")}</button>
+          <div class="pop" id="pop" role="menu" hidden>
+            <button role="menuitem" id="rvComment">${icon("copy")}Add a comment</button>
+            <a role="menuitem" href="${esc(r.url)}" target="_blank" rel="noopener">${icon("out")}Open in GitLab</a>
+            ${r.local ? `<hr><button role="menuitem" data-open="code" data-repo="${esc(r.repo)}">${icon("vscode")}Open repository in VS Code</button>${r.sln ? `<button role="menuitem" data-open="vs" data-repo="${esc(r.repo)}">${icon("vs")}Open in Visual Studio</button>` : ""}` : ""}
+          </div></div>
+      </div></div>
+    <div class="facts">
+      <span><b>${esc(r.author?.name || "")}</b> wants to merge</span>
+      <span><code>${esc(r.source)}</code> → <code>${esc(r.target)}</code></span>
+      ${r.issue ? `<span class="tag">${typeTag(r.issue.type)}&nbsp;${jiraBadge(r.issue.status, r.issue.statusCategory)}</span>` : ""}
+      ${pipe ? `<span class="tag"><a class="pipe-l ${pipe[0]}" href="${esc(r.pipeline.url)}" target="_blank" rel="noopener">${mark(pipe[0], false)}${pipe[1]}</a></span>` : ""}
+    </div>
+
+    <div class="state">
+      <div class="say">${mark(todo ? "todo" : unresolved ? "check" : "done")}${todo ? `${pl(todo, "thing")} to sort out` : unresolved ? `${pl(unresolved, "open discussion")}` : "Nothing blocks approval"}</div>
+      <div class="sub">${r.approvals ? `${r.approvals.by.length ? `Approved by ${r.approvals.by.map(esc).join(", ")}. ` : ""}${r.approvals.left ? `${pl(r.approvals.left, "more approval")} needed.` : "No more approvals needed."}` : ""}</div>
+      <div class="fresh">${r.files.length} files · +${r.files.reduce((n, f) => n + f.adds, 0)} −${r.files.reduce((n, f) => n + f.dels, 0)}<br>${pl(r.commits.length, "commit")}</div>
+    </div>
+
+    <div class="body">
+      <section>
+        <h3 class="h3">Review checklist<span>${todo ? pl(todo, "action") : "No actions"}</span></h3>
+        <ul class="its review-list">${r.checklist.map(c => `<li class="it"><div class="lead"><span class="dot ${c.state}"></span><span class="tx">${esc(c.title)}</span>${c.detail ? `<span class="dt">${esc(c.detail)}</span>` : ""}</div>${c.url ? `<a class="btn line small" href="${esc(c.url)}" target="_blank" rel="noopener">Open${icon("out")}</a>` : ""}</li>`).join("")}</ul>
+      </section>
+      <aside class="side">
+        <div><h3 class="h3">Reviewers</h3><ul class="people">${r.reviewers.map(x => { const s = RS[x.state] || ["wait", x.state]; return `<li>${mark(s[0], false)}<span>${esc(x.user.name)}${x.user.username === r.me ? " (you)" : ""}</span><span class="ink-3">${s[1]}</span></li>`; }).join("") || `<li class="ink-3">No reviewers assigned</li>`}</ul></div>
+        ${t ? `<div><h3 class="h3">Tags</h3>${tagBlock(t, r.repo)}</div>` : ""}
+      </aside>
+    </div>
+
+    <section class="ev">
+      <div class="tabs" role="tablist" id="rvTabs">
+        <button role="tab" aria-selected="${(r.tab || "files") === "files"}" data-rt="files">Changes<span class="c">${r.files.length}</span></button>
+        <button role="tab" aria-selected="${r.tab === "talk"}" data-rt="talk">Discussions<span class="c">${r.discussions.length}</span></button>
+        <button role="tab" aria-selected="${r.tab === "commits"}" data-rt="commits">Commits<span class="c">${r.commits.length}</span></button>
+      </div>
+      <div class="pane" id="rvPane"></div>
+    </section>
+  </div>`;
+  $("#back").onclick = back;
+  $("#rvTicket")?.addEventListener("click", () => openAsReviewer(r.key));
+  $("#rvApprove")?.addEventListener("click", () => reviewAct("approve"));
+  $("#rvUnapprove")?.addEventListener("click", () => reviewAct("unapprove"));
+  $("#rvChanges").onclick = () => reviewDialog(true);
+  $("#rvComment").onclick = () => reviewDialog(false);
+  const more = $("#more"), pop = $("#pop");
+  more.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; more.setAttribute("aria-expanded", !pop.hidden); if (!pop.hidden) document.addEventListener("click", () => { pop.hidden = true; more.setAttribute("aria-expanded", "false"); }, { once: true }); };
+  $$("#pop [data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open));
+  $$("#rvTabs [data-rt]").forEach(b => b.onclick = () => { r.tab = b.dataset.rt; $$("#rvTabs [data-rt]").forEach(x => x.setAttribute("aria-selected", x === b)); glide($("#rvTabs"), b); renderReviewPane(); soften($("#rvPane")); });
+  renderReviewPane();
+}
+
+function renderReviewPane() {
+  const r = reviewing, p = $("#rvPane"), tab = r.tab || "files";
+  if (tab === "files") {
+    p.innerHTML = `<div class="tool"><input class="filter" id="rvf" placeholder="Filter by path" aria-label="Filter files" value="${esc(r.fileQuery)}"><button class="btn small" id="rvAll">Expand all</button></div><div id="rvFiles"></div>`;
+    const draw = () => {
+      const q = r.fileQuery.toLowerCase();
+      const list = r.files.filter(f => !q || f.path.toLowerCase().includes(q));
+      const notes = path => r.discussions.filter(d => d.notes.some(n => n.path === path)).length;
+      if (!list.length) { $("#rvFiles").innerHTML = `<div class="pane-empty"><b>No files match</b></div>`; return; }
+      paged($("#rvFiles"), list.map(f => `<section class="gbox" data-open="false" data-path="${esc(f.path)}">
+        <div class="gbox-h"><button class="gtoggle" aria-expanded="false">${icon("chev", "ico chev")}<span class="op-${esc(f.status)} fst">${esc(f.status)}</span><span class="mono fp">${esc(f.path)}</span><span class="dstat"><span class="a">+${f.adds}</span><span class="d">−${f.dels}</span></span>${notes(f.path) ? `<span class="ccount" title="Discussions on this file">${icon("eye")}${notes(f.path)}</span>` : ""}</button>
+        ${r.local && f.status !== "D" ? openBtns(r.repo, f.path, r.sln) : ""}</div><div class="gbox-b" hidden></div></section>`), 25);
+    };
+    draw();
+    $("#rvf").oninput = e => { r.fileQuery = e.target.value; draw(); };
+    $("#rvAll").onclick = () => $$("#rvFiles .gbox[data-open=false] .gtoggle").slice(0, 25).forEach(b => b.click());
+  } else if (tab === "talk") {
+    if (!r.discussions.length) { p.innerHTML = `<div class="pane-empty">${icon("list", "ico")}<b>No discussions yet</b><span>Comments from GitLab show up here.</span></div>`; return; }
+    p.innerHTML = `<div id="rvTalk"></div>`;
+    paged($("#rvTalk"), r.discussions.map(d => discussionHtml(d, r.repo, r.local)), 15);
+  } else {
+    p.innerHTML = `<div id="rvCommits"></div>`;
+    paged($("#rvCommits"), r.commits.map(c => `<div class="cm"><a class="h mono ln" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.short)}</a><span>${esc(c.subject)}${c.hasKey ? "" : ` <span class="nokey" title="No ticket key in this commit">no key</span>`}</span><span class="m">${esc(c.author)} · ${day(c.date)}</span></div>`), 40);
+  }
+}
+
+// a review diff, built when the file is first opened
+function reviewFileBody(path) {
+  const f = reviewing.files.find(x => x.path === path);
+  const here = reviewing.discussions.filter(d => d.notes.some(n => n.path === path));
+  return `<div class="sbs-cols"><span>Before</span><span>After</span></div>${sideBySide(f?.diff || "")}${here.length ? `<div class="file-talk">${here.map(d => discussionHtml(d, reviewing.repo, reviewing.local)).join("")}</div>` : ""}`;
+}
+
+function discussionHtml(d, repo, local) {
+  const first = d.notes[0];
+  const where = first.path ? `<span class="where">${local ? `<button class="mono ln" data-open-line="${esc(first.path)}" data-line="${first.newLine || first.oldLine || 1}" data-repo="${esc(repo)}" title="Open in VS Code at this line">${esc(first.path.split("/").pop())}:${first.newLine || first.oldLine || ""}</button>` : `<span class="mono">${esc(first.path)}:${first.newLine || first.oldLine || ""}</span>`}</span>` : "";
+  return `<article class="talk ${d.resolvable ? (d.resolved ? "resolved" : "open") : ""}">
+    <header>${where}${d.resolvable ? `<span class="rstate">${d.resolved ? "Resolved" : "Open"}</span>` : ""}</header>
+    ${d.notes.map(n => `<div class="note"><div class="who"><b>${esc(n.author?.name || "")}</b><span class="ink-3">${esc(ago((n.created || "").replace("T", " ").slice(0, 16)) || "")}</span></div><div class="body">${esc(n.body || "").replace(/\n/g, "<br>")}</div></div>`).join("")}
+  </article>`;
+}
+
+function tagBlock(t, repo) {
+  const first = t.containing?.[0];
+  return `<div class="tagbox">
+    ${first ? `<div class="tg"><span class="ink-3">First in</span><a class="tagpill ln" href="${esc(first.url || "#")}" target="_blank" rel="noopener">${esc(first.name)}</a><span class="ink-3">${esc(first.date)}</span></div>
+      ${t.containing.length > 1 ? `<div class="tg"><span class="ink-3">Also in</span><span class="tags-more">${t.containing.slice(1, 6).map(x => `<a class="tagpill sm" href="${esc(x.url || "#")}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join("")}${t.containing.length > 6 ? `<span class="ink-3">+${t.containing.length - 6}</span>` : ""}</span></div>` : ""}`
+    : `<div class="tg"><span class="ink-3">Not tagged yet</span>${t.next ? `<span class="tagpill next" title="Suggested next version">next ${esc(t.next)}</span>` : ""}</div>`}
+    ${t.latest ? `<div class="tg"><span class="ink-3">Latest</span><a class="tagpill sm ln" href="${esc(t.latest.url || "#")}" target="_blank" rel="noopener">${esc(t.latest.name)}</a><span class="ink-3">${esc(t.latest.date)}</span></div>` : ""}
+  </div>`;
+}
+
+async function reviewAct(what, body = "", requestChanges = false, jira = true) {
+  const r = reviewing;
+  try {
+    const res = await api(`/api/review/${what}`, { method: "POST", body: JSON.stringify({ project: r.project, iid: r.iid, key: r.key, body, requestChanges, jira }) });
+    toast({ approve: "Approved.", unapprove: "Approval revoked.", comment: requestChanges ? "Changes requested." : "Comment posted." }[what] + (res.jiraUrl ? ` <a href="${esc(res.jiraUrl)}" target="_blank" rel="noopener">See it on ${esc(r.key)}</a>` : ""), 6000);
+    reviews = null;
+    await loadReview(r.project, r.iid);
+    loadReviews().then(() => { railMode = "review"; renderList(); });
+  } catch (e) { toast(esc(e.message), 6000); }
+}
+
+function reviewDialog(requestChanges) {
+  const d = $("#settings"), r = reviewing;
+  d.innerHTML = `<div class="dlg-in">
+    <h2>${requestChanges ? "Request changes" : "Add a comment"}</h2>
+    <p class="intro">Posted on !${r.iid} in GitLab${r.key ? `, and on ${esc(r.key)} in Jira if you keep the box ticked` : ""}.</p>
+    <label class="fld"><span>${requestChanges ? "What needs to change" : "Comment"}</span><textarea id="rvText" rows="6" placeholder="${requestChanges ? "Be specific: what, where, and why." : ""}"></textarea><span class="err" id="rvErr"></span></label>
+    ${r.key ? `<label class="tgl"><input type="checkbox" id="rvJira" checked><span class="knob"></span>Also post it on ${esc(r.key)}</label>` : ""}
+  </div>
+  <div class="dlg-f"><span class="msg" id="rvMsg"></span><button class="btn" id="rvCancel">Cancel</button><button class="btn ${requestChanges ? "danger" : "solid"}" id="rvSend">${requestChanges ? "Request changes" : "Post comment"}</button></div>`;
+  $("#rvCancel").onclick = () => d.close();
+  $("#rvSend").onclick = async () => {
+    const text = $("#rvText").value.trim();
+    if (!text) { $("#rvErr").textContent = "Write something first."; $("#rvText").focus(); return; }
+    $("#rvSend").disabled = true; $("#rvMsg").innerHTML = `<span class="spinner"></span>Posting`;
+    d.close();
+    await reviewAct("comment", text, requestChanges, $("#rvJira")?.checked ?? false);
+  };
+  d.showModal(); setTimeout(() => $("#rvText").focus(), 30);
+}
+
+// the reviewer can open the developer's ticket page with everyone's work and every sub-ticket
+let reviewerMode = false;
+function openAsReviewer(key) { reviewerMode = true; evMine = false; reviewing = null; select(key); }
+
+const finderNext = {}, finderSeen = {};
+function localHits(q, max = 12) {
   const ql = q.toLowerCase();
-  return (tickets || []).filter(t => !q || t.key.toLowerCase().includes(ql) || (t.summary || "").toLowerCase().includes(ql)).slice(0, 12);
+  return (tickets || []).filter(t => !q || t.key.toLowerCase().includes(ql) || (t.summary || "").toLowerCase().includes(ql)).slice(0, max);
 }
 const hitHtml = t => `<span class="s2-hit">${mark(overall(statesOf((tickets || []).find(x => x.key === t.key)?.lastBuild)), false)}${typeTag(t.type)}<span class="mono">${esc(t.key)}</span><span class="t">${esc(t.summary)}</span>${jiraBadge(t.status, t.statusCategory)}</span>`;
 function initFinder() {
@@ -1298,17 +1928,27 @@ function initFinder() {
     minimumInputLength: 0,
     ajax: {
       delay: 220,
+      // page 1: your open tickets that match, then Jira's first page; scrolling to the end asks Jira for the next page
       transport(params, ok, fail) {
-        const q = (params.data.q || "").trim(), local = localHits(q);
-        if (q.length < 2) { ok(local); return { abort() {} }; }
+        const q = (params.data.q || "").trim(), page = params.data.page || 1;
+        if (q.length < 2) { const all = localHits(q, 999), from = (page - 1) * 20; ok({ items: all.slice(from, from + 20), more: from + 20 < all.length }); return { abort() {} }; }
+        const local = page === 1 ? localHits(q) : [];
+        const token = page === 1 ? "" : finderNext[q] || "";
+        if (page > 1 && !token) { ok({ items: [], more: false }); return { abort() {} }; }
         const ctrl = new AbortController();
-        fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
+        fetch(`/api/search?q=${encodeURIComponent(q)}${token ? `&next=${encodeURIComponent(token)}` : ""}`, { signal: ctrl.signal })
           .then(r => r.ok ? r.json() : Promise.reject(new Error(r.statusText)))
-          .then(r => { const seen = new Set(local.map(t => t.key)); ok([...local, ...r.filter(x => !seen.has(x.key))].slice(0, 20)); })
+          .then(r => {
+            finderNext[q] = r.next || "";
+            if (page === 1) finderSeen[q] = new Set(local.map(t => t.key));
+            const seen = finderSeen[q] ||= new Set();
+            const fresh = r.items.filter(x => !seen.has(x.key)); fresh.forEach(x => seen.add(x.key));
+            ok({ items: [...local, ...fresh], more: !!r.next });
+          })
           .catch(e => { if (e.name !== "AbortError") fail(e); });
         return { abort: () => ctrl.abort() };
       },
-      processResults: data => ({ results: data.map(t => ({ id: t.key, text: `${t.key} ${t.summary}`, t })) }),
+      processResults: data => ({ results: data.items.map(t => ({ id: t.key, text: `${t.key} ${t.summary}`, t })), pagination: { more: data.more } }),
     },
     templateResult: o => o.loading ? jq(`<span class="s2-msg"><span class="spinner"></span>Searching your tickets</span>`) : o.t ? jq(hitHtml(o.t)) : o.text,
     templateSelection: () => jq(`<span class="s2-ph">Find a ticket</span>`),
@@ -1336,7 +1976,17 @@ document.addEventListener("keydown", e => {
 
 $("#checkAll").onclick = checkAll;
 $("#reload").onclick = () => status?.account && loadTickets();
+// #review/<group/project>/<iid> opens a merge request; project paths are case-sensitive, so they are not upper-cased
+function reviewRoute() {
+  const raw = decodeURIComponent(location.hash.slice(1));
+  if (!raw.startsWith("review/")) return false;
+  const rest = raw.slice(7), cut = rest.lastIndexOf("/");
+  if (cut > 0 && +rest.slice(cut + 1) > 0) { railMode = status?.gitlab ? "review" : railMode; loadReview(rest.slice(0, cut), +rest.slice(cut + 1)); return true; }
+  return false;
+}
+
 window.addEventListener("popstate", () => {
+  if (reviewRoute()) return;
   const h = decodeURIComponent(location.hash.slice(1)).toUpperCase(), [k, sub] = h.split("/");
   if (sub === "DIFF" && diffState && report?.key === k) return renderDiffPage();
   if (k && report?.key === k && !sub) { diffState = null; renderTicket(); return; }   // back from a diff: no re-check
@@ -1346,10 +1996,22 @@ window.addEventListener("popstate", () => {
 // the app frame never scrolls as a whole; only its panes do. If focus ever nudges the document, put it back.
 addEventListener("scroll", () => { if (scrollX || scrollY) scrollTo(0, 0); }, { passive: true });
 
+$("#main").addEventListener("click", mainClicks);
+// opened comment threads ease in like everything else that unfolds
+$("#main").addEventListener("toggle", e => { if (e.target.matches?.("details.talks, details.why") && e.target.open) [...e.target.children].slice(1).forEach((c, i) => soften(c, i * 30)); }, true);
+$("#list").addEventListener("click", e => {
+  const r = e.target.closest(".row"); if (!r) return;
+  if (r.dataset.project) openReview(r.dataset.project, +r.dataset.iid); else { reviewing = null; if (reviewerMode) { reviewerMode = false; evMine = true; } select(r.dataset.key); }
+});
+
 async function boot() {
   await loadStatus();
   initFinder();
   if (status?.account) await loadTickets(); else renderList();
+  // reviews load quietly, so the "To review" count is ready when the switch appears
+  if (status?.gitlab) api("/api/reviews").then(r => { reviews = r; if (railMode === "review") renderList(); else renderRailMode(); }).catch(() => {});
+  loadWeek();
+  if (reviewRoute()) return;
   const k = decodeURIComponent(location.hash.slice(1)).toUpperCase().split("/")[0];
   if (k) load(k, false); else blank();
 }

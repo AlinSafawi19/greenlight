@@ -18,5 +18,6 @@
     "Configuration": "(?i)(appsettings[^/]*\\.json$|\\.env(\\.|$)|(^|/)config/)",
     "Pipeline / deployment": "(?i)(\\.gitlab-ci\\.yml$|dockerfile|(^|/)helm/|(^|/)k8s/|\\.csproj$|package\\.json$)"
   },
-  "jiraMaxFilesPerRepo": 25
+  "jiraMaxFilesPerRepo": 25,
+  "time": { "dailyTargetHours": 5, "workDays": [1, 2, 3, 4, 5] }
 }
