@@ -1171,6 +1171,7 @@ let railMode = "mine", reviews = null, reviewing = null, reviewView = "all";
 async function loadReviews() {
   railMode = "review";
   $("#railTitle").textContent = "To review";
+  $("#railTools").innerHTML = "";
   $("#views").innerHTML = "";
   $("#list").innerHTML = Array(6).fill(`<div class="ghost-row"></div>`).join("");
   try { reviews = await api("/api/reviews"); }
@@ -1181,6 +1182,7 @@ async function loadReviews() {
 
 function renderReviewList() {
   $("#railTitle").textContent = "To review";
+  $("#railTools").innerHTML = "";   // story / readiness grouping belongs to My tickets
   const all = reviews || [];
   const waiting = all.filter(r => !r.approvedByMe), done = all.filter(r => r.approvedByMe);
   $("#count").textContent = all.length || "";
@@ -1509,7 +1511,8 @@ function navCounts() {
 function setSection(s) {
   section = s;
   $$(".nav-i").forEach(a => { if (a.dataset.nav === s) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
-  const listy = s === "tickets" || s === "reviews";
+  // the review list only exists once GitLab is connected; before that Reviews is a single "connect" page
+  const listy = s === "tickets" || (s === "reviews" && !!status?.gitlab);
   $("#split").classList.toggle("solo", !listy);
   if (!listy) $("#split").classList.remove("open");
   if (listy) {
