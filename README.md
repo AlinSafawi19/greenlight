@@ -15,7 +15,24 @@ No manual notes and no third-party tools: just Git, the Jira REST API and VS Cod
 3. **DB scripts are traced through `db-migration-scripts`.** Every touched `DBMigrations/<Service>/<folder>/...` file is
    reported as *in release tag X*, *graduated from dev/ to tag X* (routine file name or the `-- from dev/...` marker),
    *still staged in dev/*, or *removed from dev/ and not found in any tag*.
-4. **Jira gets one living comment.** `--post` creates the manifest comment on the ticket, or replaces the previous one.
+4. **Jira gets one living comment.** `--post` creates the manifest comment on the ticket, or replaces your previous one
+   (someone else's manifest comment is never touched).
+
+## Tickets, stories and epics
+
+A ticket's scope is the ticket **plus everything under it in Jira** (the `parent` link, up to three levels):
+
+| You build | Scanned keys | Typical use |
+|---|---|---|
+| Bug / Task / Enhancement without children | that key | standalone work |
+| Story | the story + its sub-tasks and QA sub-tasks, whoever they're assigned to | QA tests the story |
+| Epic | the epic + its stories/tasks/bugs + their sub-tasks | release-level view |
+
+Every commit is attributed to exactly one ticket: the key in its message, otherwise the key of the branch or MR
+that brought it in. The **Tickets** tab shows each ticket's assignee, Jira status and its own commits (merged/total),
+so a story with five people on it shows who still has unmerged work. Readiness (*Needs attention*) rolls up across all
+of them; Jira tickets that are not done are listed separately. Parents (story, epic) are shown as breadcrumbs.
+Untick *Child tickets* to scan a single key only.
 
 ## Usage
 
@@ -32,14 +49,21 @@ In VS Code: *Terminal → Run Task → Ledger: ...*
 
 The UI (`ui.html`, served by `ledger.cs`) listens on localhost only. It builds the same manifest as the CLI,
 shows readiness for QA, merge requests, DB scripts, changed files and commits, and posts to Jira with one click.
-Deep link: `http://localhost:5199/#MM-1234`.
+The sidebar always lists **your open tickets** (assigned to you, status not Done), grouped under their story or epic;
+click the group header to build the whole story. Deep link: `http://localhost:5199/#MM-1234`.
 
-## Setup
+## Setup (each person, once)
 
-- .NET 10 SDK and Git.
-- For `--post` and for showing the ticket's summary and status: create a Jira API token at
-  <https://id.atlassian.com/manage-profile/security/api-tokens>, then set the user environment variables
-  `JIRA_EMAIL` and `JIRA_API_TOKEN`.
+1. .NET 10 SDK and Git.
+2. `dotnet run ledger.cs -- --ui`, then **Connect Jira** (top right): your Jira site, your Atlassian email and an
+   API token created at <https://id.atlassian.com/manage-profile/security/api-tokens> while logged in as yourself.
+   The token is checked against Jira and stored in **your Windows Credential Manager** (entry `feature-ledger:<site>`),
+   never in this folder. *Disconnect* removes it.
+3. In the same dialog, set your **repositories folder** if your clones aren't next to this folder.
+   Per-user settings live in `%APPDATA%\feature-ledger\settings.json`.
+
+Everything you do in Jira (reading your tickets, posting comments) runs as your own account.
+The environment variables `JIRA_EMAIL` / `JIRA_API_TOKEN` still work as a fallback for the CLI.
 
 ## Configuration (`ledger.json`)
 

@@ -14,6 +14,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -56,7 +57,10 @@ return 0;
 
 // ───────────────────────────── ledger: one build, shared by the CLI and the UI ─────────────────────────────
 
-record Report(string Key, DateTime Generated, IssueInfo? Issue, List<RepoResult> Repos, Doc Doc,
+// Scope: every child ticket included in the scan (an epic's stories and their sub-tasks, a story's sub-tasks).
+// Ancestors: the parent chain above the ticket, for context only (not scanned).
+record Report(string Key, DateTime Generated, IssueInfo? Issue, List<IssueInfo> Scope, List<IssueInfo> Ancestors,
+              List<RepoResult> Repos, Doc Doc,
               List<List<Span>> Warnings, List<(string Name, List<(string Repo, string Path)> Hits)> Highlights,
               string Markdown, string MarkdownPath);
 
@@ -65,11 +69,15 @@ class Ledger
     public string AppDir { get; }
     public string KeyPattern { get; }
     public string OutDir { get; }
-    public Jira Jira { get; }
-    public List<string> Repos { get; }
+    public Jira Jira { get; private set; } = null!;
+    public string JiraBaseUrl { get; private set; }
+    public string? CredentialSource { get; private set; }   // where the current Jira credentials came from
+    public string ReposRoot { get; private set; } = "";
+    public List<string> Repos { get; private set; } = [];
     readonly JsonNode cfg;
     readonly DbConfig dbCfg;
     readonly List<(string Name, Regex Rx)> highlights;
+    readonly UserSettings settings = UserSettings.Load();
 
     public Ledger(string appDir)
     {
@@ -77,47 +85,131 @@ class Ledger
         cfg = JsonNode.Parse(File.ReadAllText(Path.Combine(appDir, "ledger.json")))!;
         KeyPattern = (string)cfg["keyPattern"]!;
         OutDir = Path.Combine(appDir, "out");
-        var reposRoot = Path.GetFullPath(Path.Combine(appDir, (string)cfg["reposRoot"]!));
-        var exclude = cfg["excludeRepos"]!.AsArray().Select(n => (string)n!).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Repos = Directory.GetDirectories(reposRoot)
-            .Where(d => Directory.Exists(Path.Combine(d, ".git")) && !exclude.Contains(Path.GetFileName(d)))
-            .Where(d => !string.Equals(Path.GetFullPath(d).TrimEnd('\\'), appDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
-            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
-            .ToList();
         var db = cfg["db"]!;
         dbCfg = new DbConfig((string)db["repo"]!, (string)db["root"]!, (string)db["stagingFolder"]!);
         highlights = cfg["highlights"]!.AsObject().Select(kv => (Name: kv.Key, Rx: new Regex((string)kv.Value!))).ToList();
-        Jira = new Jira((string)cfg["jira"]!["baseUrl"]!, Env((string)cfg["jira"]!["emailEnv"]!), Env((string)cfg["jira"]!["tokenEnv"]!));
+        JiraBaseUrl = (settings.JiraBaseUrl ?? (string)cfg["jira"]!["baseUrl"]!).TrimEnd('/');
+        LoadRepos(settings.ReposRoot ?? Path.GetFullPath(Path.Combine(appDir, (string)cfg["reposRoot"]!)));
+        LoadJira();
     }
 
-    public string JiraBaseUrl => ((string)cfg["jira"]!["baseUrl"]!).TrimEnd('/');
+    // ── per-user account: each person connects their own Jira account; the token lives in their Windows Credential Manager ──
+
+    static string CredTarget(string baseUrl) => $"feature-ledger:{new Uri(baseUrl).Host}";
+
+    void LoadJira()
+    {
+        if (CredStore.Read(CredTarget(JiraBaseUrl)) is { } c)
+        {
+            Jira = new Jira(JiraBaseUrl, c.User, c.Secret);
+            CredentialSource = "Windows Credential Manager";
+            return;
+        }
+        var email = Env((string)cfg["jira"]!["emailEnv"]!);
+        var token = Env((string)cfg["jira"]!["tokenEnv"]!);
+        Jira = new Jira(JiraBaseUrl, email, token);
+        CredentialSource = Jira.Configured ? "environment variables" : null;
+    }
+
+    public async Task<JiraUser> Connect(string baseUrl, string email, string token)
+    {
+        baseUrl = baseUrl.Trim().TrimEnd('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var u) || u.Scheme != "https")
+            throw new Exception("Jira site must be an https URL, e.g. https://yourcompany.atlassian.net");
+        var candidate = new Jira(baseUrl, email, token);
+        if (!candidate.Configured) throw new Exception("Enter your Atlassian email and API token.");
+        var me = await candidate.Verify();   // nothing is saved unless Jira accepts the credentials
+        CredStore.Write(CredTarget(baseUrl), email.Trim(), token.Trim());
+        settings.JiraBaseUrl = baseUrl;
+        settings.Save();
+        JiraBaseUrl = baseUrl;
+        Jira = candidate;
+        CredentialSource = "Windows Credential Manager";
+        return me;
+    }
+
+    public void Disconnect()
+    {
+        CredStore.Delete(CredTarget(JiraBaseUrl));
+        LoadJira();   // falls back to environment variables if those are still set
+    }
+
+    public async Task<JiraUser?> CurrentUser()
+    {
+        if (!Jira.Configured) return null;
+        try { return Jira.Me ?? await Jira.Verify(); }
+        catch { return null; }
+    }
+
+    // ── per-user repos folder ──
+
+    public void SetReposRoot(string path)
+    {
+        path = Path.GetFullPath(path.Trim());
+        if (!Directory.Exists(path)) throw new Exception($"Folder not found: {path}");
+        LoadRepos(path);
+        if (Repos.Count == 0) throw new Exception($"No git repositories found in {path}");
+        settings.ReposRoot = path;
+        settings.Save();
+    }
+
+    void LoadRepos(string root)
+    {
+        var exclude = cfg["excludeRepos"]!.AsArray().Select(n => (string)n!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ReposRoot = root;
+        Repos = !Directory.Exists(root) ? [] : Directory.GetDirectories(root)
+            .Where(d => Directory.Exists(Path.Combine(d, ".git")) && !exclude.Contains(Path.GetFileName(d)))
+            .Where(d => !string.Equals(Path.GetFullPath(d).TrimEnd('\\'), AppDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
     public bool IsValidKey(string key) => Regex.IsMatch(key, $"^(?:{KeyPattern})$");
 
-    public async Task<Report> Build(string key, bool fetch, Action<string> progress)
+    public async Task<Report> Build(string key, bool fetch, Action<string> progress, bool includeChildren = true)
     {
+        IssueInfo? issue = null;
+        var scope = new List<IssueInfo>();
+        var ancestors = new List<IssueInfo>();
+        if (Jira.Configured)
+        {
+            issue = await Jira.GetIssue(key);
+            if (issue is not null && includeChildren)
+            {
+                progress($"Reading child tickets of {key} from Jira...");
+                scope = await Jira.Descendants(key);
+            }
+            for (var (pk, depth) = (issue?.ParentKey, 0); pk is not null && depth < 3; depth++)
+            {
+                if (await Jira.GetIssue(pk) is not { } p) break;
+                ancestors.Insert(0, p);
+                pk = p.ParentKey;
+            }
+        }
+
         if (fetch)
         {
             progress($"Fetching {Repos.Count} repos...");
             Parallel.ForEach(Repos, r => Git.Run(r, "fetch", "--all", "--prune", "--quiet"));
         }
 
-        progress($"Scanning {Repos.Count} repos for {key}...");
-        var keyRx = new Regex($@"(?<![A-Za-z0-9]){Regex.Escape(key)}(?!\d)", RegexOptions.IgnoreCase);
+        var keys = new HashSet<string>(scope.Select(s => s.Key).Prepend(key), StringComparer.OrdinalIgnoreCase);
+        progress($"Scanning {Repos.Count} repos for {keys.Count} ticket(s)...");
+        var alternation = string.Join("|", keys.OrderByDescending(k => k.Length).Select(Regex.Escape));
+        var keyRx = new Regex($@"(?<![A-Za-z0-9])(?:{alternation})(?!\d)", RegexOptions.IgnoreCase);
         var anyKeyRx = new Regex($@"(?<![A-Za-z0-9])(?:{KeyPattern})(?!\d)", RegexOptions.IgnoreCase);
         var found = new ConcurrentBag<RepoResult>();
-        Parallel.ForEach(Repos, r => { var res = Scanner.Scan(r, key, keyRx, anyKeyRx, dbCfg); if (res is not null) found.Add(res); });
+        Parallel.ForEach(Repos, r => { var res = Scanner.Scan(r, keys, keyRx, anyKeyRx, dbCfg); if (res is not null) found.Add(res); });
         var results = found.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
-        var issue = Jira.Configured ? await Jira.GetIssue(key) : null;
-        var doc = Manifest.Build(key, issue, results, highlights, dbCfg, (int)cfg["jiraMaxFilesPerRepo"]!);
+        var doc = Manifest.Build(key, issue, scope, results, highlights, dbCfg, (int)cfg["jiraMaxFilesPerRepo"]!);
 
         Directory.CreateDirectory(OutDir);
         var mdPath = Path.Combine(OutDir, $"{key}.md");
         var markdown = doc.Markdown();
         File.WriteAllText(mdPath, markdown);
 
-        var report = new Report(key, DateTime.Now, issue, results, doc, Manifest.Warnings(key, results),
+        var report = new Report(key, DateTime.Now, issue, scope, ancestors, results, doc, Manifest.Warnings(key, results),
                                 Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath);
         File.WriteAllText(Path.Combine(OutDir, $"{key}.json"), ReportJson.Summary(report).ToJsonString());
         return report;
@@ -125,6 +217,87 @@ class Ledger
 
     static string? Env(string name) =>
         Environment.GetEnvironmentVariable(name) ?? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User);
+}
+
+// Per-user settings, outside the repo: %APPDATA%\feature-ledger\settings.json
+class UserSettings
+{
+    static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "feature-ledger", "settings.json");
+    public string? JiraBaseUrl { get; set; }
+    public string? ReposRoot { get; set; }
+
+    public static UserSettings Load()
+    {
+        try
+        {
+            var j = JsonNode.Parse(File.ReadAllText(FilePath))!;
+            return new UserSettings { JiraBaseUrl = (string?)j["jiraBaseUrl"], ReposRoot = (string?)j["reposRoot"] };
+        }
+        catch { return new UserSettings(); }
+    }
+
+    public void Save()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        File.WriteAllText(FilePath, new JsonObject { ["jiraBaseUrl"] = JiraBaseUrl, ["reposRoot"] = ReposRoot }.ToJsonString(new() { WriteIndented = true }));
+    }
+}
+
+// Windows Credential Manager (per Windows user, encrypted by the OS). No token is ever written to a file.
+static class CredStore
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct CREDENTIAL
+    {
+        public int Flags; public int Type; public string TargetName; public string? Comment;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+        public int CredentialBlobSize; public IntPtr CredentialBlob; public int Persist;
+        public int AttributeCount; public IntPtr Attributes; public string? TargetAlias; public string UserName;
+    }
+
+    [DllImport("advapi32.dll", EntryPoint = "CredReadW", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CredRead(string target, int type, int flags, out IntPtr credential);
+    [DllImport("advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CredWrite(ref CREDENTIAL credential, int flags);
+    [DllImport("advapi32.dll", EntryPoint = "CredDeleteW", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CredDelete(string target, int type, int flags);
+    [DllImport("advapi32.dll")]
+    static extern void CredFree(IntPtr buffer);
+
+    const int Generic = 1, PersistLocalMachine = 2;
+
+    public static (string User, string Secret)? Read(string target)
+    {
+        if (!OperatingSystem.IsWindows() || !CredRead(target, Generic, 0, out var p)) return null;
+        try
+        {
+            var c = Marshal.PtrToStructure<CREDENTIAL>(p);
+            var secret = c.CredentialBlobSize == 0 ? "" : Marshal.PtrToStringUni(c.CredentialBlob, c.CredentialBlobSize / 2);
+            return (c.UserName, secret);
+        }
+        finally { CredFree(p); }
+    }
+
+    public static void Write(string target, string user, string secret)
+    {
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Saving credentials needs Windows Credential Manager.");
+        var blob = Marshal.StringToCoTaskMemUni(secret);
+        try
+        {
+            var c = new CREDENTIAL
+            {
+                Type = Generic, TargetName = target, UserName = user, Persist = PersistLocalMachine,
+                CredentialBlob = blob, CredentialBlobSize = secret.Length * 2, Comment = "feature-ledger Jira API token",
+            };
+            if (!CredWrite(ref c, 0)) throw new Exception($"Could not save the credential (error {Marshal.GetLastWin32Error()}).");
+        }
+        finally { Marshal.ZeroFreeCoTaskMemUnicode(blob); }
+    }
+
+    public static void Delete(string target)
+    {
+        if (OperatingSystem.IsWindows()) CredDelete(target, Generic, 0);
+    }
 }
 
 // ───────────────────────────── git ─────────────────────────────
@@ -189,6 +362,7 @@ record Commit(string Sha, string Short, string Author, string Date, string Subje
               string? OtherKey, List<(string Status, string Path)> Files)
 {
     public string? Note { get; set; }   // e.g. carries this ticket's change under another ticket's message
+    public string? Ticket { get; set; } // which key in scope this commit belongs to (story, sub-task, ...)
     public bool IsForeign => OtherKey is not null && Note is null;
 }
 record MergeInfo(string Sha, string Date, string SourceBranch, string? Target, string? MrUrl, bool InDefault);
@@ -202,29 +376,33 @@ static class Scanner
     static readonly Regex MergeSubject = new(@"^Merge (?:remote-tracking )?branch '([^']+)'(?: into '?([^'\s]+)'?)?");
     static readonly Regex MergeRequest = new(@"See merge request (\S+)!(\d+)");
 
-    public static RepoResult? Scan(string repo, string key, Regex keyRx, Regex anyKeyRx, DbConfig dbCfg)
+    // keys: the ticket plus, for a story or epic, every child ticket in scope. keyRx matches any of them.
+    public static RepoResult? Scan(string repo, IReadOnlySet<string> keys, Regex keyRx, Regex anyKeyRx, DbConfig dbCfg)
     {
         var defaultRef = Git.Run(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD").Trim();
         if (defaultRef == "") defaultRef = "HEAD";
         var web = Git.WebUrl(repo);
         var sources = new Dictionary<string, string>();
+        var via = new Dictionary<string, string>();   // sha -> key of the branch/merge that brought it in
+        var greps = keys.Select(k => $"--grep={k}").ToArray();
+        string? KeyIn(string text) => keyRx.Match(text) is { Success: true } m ? m.Value.ToUpperInvariant() : null;
 
-        // 1. commits whose message mentions the key (branches and tags only: --all would include stash entries)
-        foreach (var r in Git.Records(Git.Run(repo, "log", "--branches", "--remotes", "--tags", "--no-merges", "-i", "-F", $"--grep={key}", "--format=%H%x1f%B%x1e")))
-            if (r.Length >= 2 && keyRx.IsMatch(r[1])) sources.TryAdd(r[0], "message");
+        // 1. commits whose message mentions a key (branches and tags only: --all would include stash entries)
+        foreach (var r in Git.Records(Git.Run(repo, ["log", "--branches", "--remotes", "--tags", "--no-merges", "-i", "-F", .. greps, "--format=%H%x1f%B%x1e"])))
+            if (r.Length >= 2 && KeyIn(r[1]) is { } msgKey && sources.TryAdd(r[0], "message")) via[r[0]] = msgKey;
 
-        // 2. commits brought in by merges of a branch named after the key
+        // 2. commits brought in by merges of a branch named after a key
         var merges = new List<MergeInfo>();
-        foreach (var r in Git.Records(Git.Run(repo, "log", "--branches", "--remotes", "--tags", "--merges", "-i", "-F", $"--grep={key}", "--date=short",
-                                              "--format=%H%x1f%P%x1f%ad%x1f%s%x1f%b%x1e")))
+        foreach (var r in Git.Records(Git.Run(repo, ["log", "--branches", "--remotes", "--tags", "--merges", "-i", "-F", .. greps, "--date=short",
+                                              "--format=%H%x1f%P%x1f%ad%x1f%s%x1f%b%x1e"])))
         {
             if (r.Length < 5) continue;
             var m = MergeSubject.Match(r[3]);
-            if (!m.Success || !keyRx.IsMatch(m.Groups[1].Value)) continue;   // skips "Merge branch 'main' into MM-…"
+            if (!m.Success || KeyIn(m.Groups[1].Value) is not { } mergeKey) continue;   // skips "Merge branch 'main' into MM-…"
             var parents = r[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parents.Length < 2) continue;
             foreach (var sha in Git.Lines(Git.Run(repo, "rev-list", "--no-merges", $"{parents[0]}..{parents[1]}")))
-                sources.TryAdd(sha, "merge");
+                if (sources.TryAdd(sha, "merge")) via[sha] = mergeKey;
             var mr = MergeRequest.Match(r[4]);
             var mrUrl = mr.Success && web != "" ? $"{web}/-/merge_requests/{mr.Groups[2].Value}" : null;
             merges.Add(new MergeInfo(r[0], r[2], m.Groups[1].Value, m.Groups[2].Success ? m.Groups[2].Value : null, mrUrl,
@@ -239,11 +417,12 @@ static class Scanner
         foreach (var group in refs.GroupBy(b => b.StartsWith("origin/") ? b["origin/".Length..] : b))
         {
             var unmerged = new HashSet<string>();
+            var branchKey = KeyIn(group.Key)!;
             foreach (var b in group)
                 foreach (var sha in Git.Lines(Git.Run(repo, "rev-list", "--no-merges", "--cherry-pick", "--right-only", $"{defaultRef}...{b}")))
                 {
                     unmerged.Add(sha);
-                    sources.TryAdd(sha, "branch");
+                    if (sources.TryAdd(sha, "branch")) via[sha] = branchKey;
                 }
             var pushed = group.Any(b => b.StartsWith("origin/"));
             branchShas.Add((group.Key + (pushed ? "" : " (local only, never pushed)"), unmerged));
@@ -271,9 +450,13 @@ static class Scanner
                 if (parts.Length < 2 || parts[0].Length == 0) continue;
                 files.Add((parts[0][..1], parts[^1]));
             }
-            var otherKey = keyRx.IsMatch(head[3]) ? null
-                : anyKeyRx.Matches(head[3]).Select(m => m.Value.ToUpperInvariant()).FirstOrDefault(k => k != key);
-            commits.Add(new Commit(sha, head[0], head[1], head[2], head[3], source, merged, otherKey, files));
+            var subjectKey = KeyIn(head[3]);
+            var otherKey = subjectKey is not null ? null
+                : anyKeyRx.Matches(head[3]).Select(m => m.Value.ToUpperInvariant()).FirstOrDefault(k => !keys.Contains(k));
+            commits.Add(new Commit(sha, head[0], head[1], head[2], head[3], source, merged, otherKey, files)
+            {
+                Ticket = subjectKey ?? via.GetValueOrDefault(sha),
+            });
         }
         commits = commits.OrderBy(c => c.Date).ThenBy(c => c.Short).ToList();
 
@@ -287,8 +470,9 @@ static class Scanner
             foreach (var sha in copies)
             {
                 var subject = Git.Run(repo, "log", "-1", "--format=%s", sha).Trim();
-                if (!keyRx.IsMatch(subject) || !twins.TryGetValue(Git.PatchId(repo, sha), out var twin)) continue;
-                twin.Note = $"contains this ticket's change {sha[..8]} \"{subject}\", merged under this commit's message";
+                if (KeyIn(subject) is not { } copyKey || !twins.TryGetValue(Git.PatchId(repo, sha), out var twin)) continue;
+                twin.Note = $"contains {copyKey}'s change {sha[..8]} \"{subject}\", merged under this commit's message";
+                twin.Ticket = copyKey;
             }
         }
 
@@ -432,7 +616,10 @@ class Doc
     }
 }
 
-record IssueInfo(string Summary, string Status, string Assignee, string FixVersions);
+// Level is Jira's hierarchy level: 1 epic, 0 story/task/bug, -1 sub-task. StatusCategory: new | indeterminate | done.
+record IssueInfo(string Key, string Summary, string Type, int Level, string Status, string StatusCategory,
+                 string Assignee, string? AssigneeId, string? ParentKey, string? ParentSummary, string? ParentType,
+                 string FixVersions, string Updated);
 
 static class Manifest
 {
@@ -466,7 +653,15 @@ static class Manifest
                 .Select(f => (r.Name, f.Key))).ToList()))
             .Where(h => h.Hits.Count > 0).ToList();
 
-    public static Doc Build(string key, IssueInfo? issue, List<RepoResult> repos,
+    // Per ticket in scope: its own commits (merged/total) and the repos they are in.
+    public static (int Total, int Merged, List<string> Repos) TicketActivity(string key, List<RepoResult> repos)
+    {
+        var mine = repos.SelectMany(r => r.Commits.Where(c => !c.IsForeign && string.Equals(c.Ticket, key, StringComparison.OrdinalIgnoreCase))
+                                                  .Select(c => (r.Name, c))).ToList();
+        return (mine.Count, mine.Count(x => x.c.InDefault), mine.Select(x => x.Name).Distinct().ToList());
+    }
+
+    public static Doc Build(string key, IssueInfo? issue, List<IssueInfo> scope, List<RepoResult> repos,
                             List<(string Name, Regex Rx)> highlights, DbConfig dbCfg, int maxFiles)
     {
         var d = new Doc();
@@ -484,6 +679,21 @@ static class Manifest
         var warn = Warnings(key, repos);
         b.Add(new Heading(3, "Needs attention before QA"));
         b.Add(warn.Count == 0 ? new Para(T("Nothing: all work is merged and every DB script is in a release tag.")) : new Bullets(warn));
+
+        if (scope.Count > 0)
+        {
+            b.Add(new Heading(3, $"Tickets in scope ({scope.Count + 1})"));
+            b.Add(new Table(["Ticket", "Type", "Summary", "Assignee", "Status", "Commits merged", "Repos"],
+                (issue is null ? scope : scope.Prepend(issue)).Select(t =>
+                {
+                    var a = TicketActivity(t.Key, repos);
+                    return new List<Span>[]
+                    {
+                        T((t.Level < 0 ? "↳ " : "") + t.Key), T(t.Type), T(t.Summary), T(t.Assignee), T(t.Status),
+                        T(a.Total == 0 ? "-" : $"{a.Merged}/{a.Total}"), T(a.Repos.Count == 0 ? "-" : string.Join(", ", a.Repos)),
+                    };
+                }).ToList()));
+        }
 
         b.Add(new Heading(3, "Repositories"));
         b.Add(new Table(["Repo", "Merge requests", "Branches", "Commits", "In default branch"],
@@ -529,7 +739,8 @@ static class Manifest
         List<Span> CommitLine(RepoResult r, Commit c) =>
         [
             r.WebUrl == "" ? new(c.Short, Code: true) : new(c.Short, $"{r.WebUrl}/-/commit/{c.Sha}"),
-            new($" {c.Date} {c.Author} - {c.Subject}{(c.InDefault ? "" : "  (not in " + r.DefaultRef + ")")}" +
+            new($" {c.Date} {c.Author} - {(c.Ticket is null || c.Subject.Contains(c.Ticket, StringComparison.OrdinalIgnoreCase) ? "" : $"[{c.Ticket}] ")}" +
+                $"{c.Subject}{(c.InDefault ? "" : "  (not in " + r.DefaultRef + ")")}" +
                 (c.Note is not null ? $"  ({c.Note})" : "")),
         ];
 
@@ -553,46 +764,127 @@ static class Manifest
 
 // ───────────────────────────── Jira ─────────────────────────────
 
+record JiraUser(string AccountId, string DisplayName, string Email);
+
 class Jira
 {
+    const string Fields = "summary,status,issuetype,parent,assignee,fixVersions,updated";
     readonly HttpClient? http;
     readonly string baseUrl;
     public bool Configured => http is not null;
+    public string Email { get; } = "";
+    public JiraUser? Me { get; private set; }
 
     public Jira(string baseUrl, string? email, string? token)
     {
         this.baseUrl = baseUrl.TrimEnd('/');
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(token)) return;
+        Email = email.Trim();
         http = new HttpClient { BaseAddress = new Uri(this.baseUrl), Timeout = TimeSpan.FromSeconds(30) };
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
-            Convert.ToBase64String(Encoding.UTF8.GetBytes($"{email}:{token}")));
+            Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Email}:{token.Trim()}")));
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    // Confirms the credentials and remembers whose account this is (comments are only ever replaced if they are ours).
+    public async Task<JiraUser> Verify()
+    {
+        var res = await http!.GetAsync("/rest/api/3/myself");
+        if (res.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            throw new Exception("Jira rejected the email/API token.");
+        if (!res.IsSuccessStatusCode) throw new Exception($"Jira returned {(int)res.StatusCode}.");
+        var j = JsonNode.Parse(await res.Content.ReadAsStringAsync())!;
+        Me = new JiraUser((string)j["accountId"]!, (string?)j["displayName"] ?? Email, (string?)j["emailAddress"] ?? Email);
+        return Me;
+    }
+
+    public async Task<List<IssueInfo>> Search(string jql, int max = 200)
+    {
+        var all = new List<IssueInfo>();
+        string? next = null;
+        do
+        {
+            var body = new JsonObject
+            {
+                ["jql"] = jql,
+                ["fields"] = new JsonArray(Fields.Split(',').Select(f => (JsonNode)f).ToArray()),
+                ["maxResults"] = Math.Min(100, max - all.Count),
+            };
+            if (next is not null) body["nextPageToken"] = next;
+            var res = await http!.PostAsync("/rest/api/3/search/jql", new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"));
+            if (!res.IsSuccessStatusCode) throw new Exception($"Jira search returned {(int)res.StatusCode}: {await res.Content.ReadAsStringAsync()}");
+            var page = JsonNode.Parse(await res.Content.ReadAsStringAsync())!;
+            all.AddRange(page["issues"]!.AsArray().Select(i => Parse(i!)));
+            next = (bool?)page["isLast"] == true ? null : (string?)page["nextPageToken"];
+        } while (next is not null && all.Count < max);
+        return all;
     }
 
     public async Task<IssueInfo?> GetIssue(string key)
     {
         try
         {
-            var res = await http!.GetAsync($"/rest/api/2/issue/{key}?fields=summary,status,assignee,fixVersions");
+            var res = await http!.GetAsync($"/rest/api/3/issue/{key}?fields={Fields}");
             if (!res.IsSuccessStatusCode) { Console.Error.WriteLine($"Jira: could not read {key} ({(int)res.StatusCode})."); return null; }
-            var f = JsonNode.Parse(await res.Content.ReadAsStringAsync())!["fields"]!;
-            var fix = f["fixVersions"]?.AsArray().Select(v => (string?)v?["name"]).Where(v => v is not null).ToList() ?? [];
-            return new IssueInfo((string?)f["summary"] ?? "", (string?)f["status"]?["name"] ?? "",
-                                 (string?)f["assignee"]?["displayName"] ?? "Unassigned", fix.Count == 0 ? "none" : string.Join(", ", fix));
+            return Parse(JsonNode.Parse(await res.Content.ReadAsStringAsync())!);
         }
         catch (Exception e) { Console.Error.WriteLine($"Jira: {e.Message}"); return null; }
     }
 
-    // Replaces the previous manifest comment if there is one, so the ticket always shows a single, current manifest.
+    // Every ticket below this one: an epic's stories/tasks/bugs and their sub-tasks, a story's sub-tasks.
+    public async Task<List<IssueInfo>> Descendants(string key)
+    {
+        var found = new List<IssueInfo>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { key };
+        var level = new List<string> { key };
+        for (var depth = 0; depth < 3 && level.Count > 0; depth++)
+        {
+            var next = new List<string>();
+            foreach (var chunk in level.Chunk(50))
+                foreach (var i in await Search($"parent in ({string.Join(",", chunk)}) ORDER BY key", 500))
+                    if (seen.Add(i.Key)) { found.Add(i); next.Add(i.Key); }
+            level = next;
+        }
+        return found;
+    }
+
+    public Task<List<IssueInfo>> MyOpenIssues() =>
+        Search("assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC", 200);
+
+    static IssueInfo Parse(JsonNode i)
+    {
+        var f = i["fields"]!;
+        var fix = f["fixVersions"]?.AsArray().Select(v => (string?)v?["name"]).Where(v => v is not null).ToList() ?? [];
+        var p = f["parent"];
+        return new IssueInfo(
+            Key: (string)i["key"]!,
+            Summary: (string?)f["summary"] ?? "",
+            Type: (string?)f["issuetype"]?["name"] ?? "",
+            Level: (int?)f["issuetype"]?["hierarchyLevel"] ?? 0,
+            Status: (string?)f["status"]?["name"] ?? "",
+            StatusCategory: (string?)f["status"]?["statusCategory"]?["key"] ?? "",
+            Assignee: (string?)f["assignee"]?["displayName"] ?? "Unassigned",
+            AssigneeId: (string?)f["assignee"]?["accountId"],
+            ParentKey: (string?)p?["key"],
+            ParentSummary: (string?)p?["fields"]?["summary"],
+            ParentType: (string?)p?["fields"]?["issuetype"]?["name"],
+            FixVersions: fix.Count == 0 ? "none" : string.Join(", ", fix),
+            Updated: ((string?)f["updated"])?[..Math.Min(10, ((string?)f["updated"])!.Length)] ?? "");
+    }
+
+    // Replaces our previous manifest comment if there is one, so the ticket always shows a single, current manifest.
+    // Only comments written by the connected account are replaced; someone else's manifest comment is left alone.
     public async Task<string> UpsertManifestComment(string key, string wiki)
     {
+        var me = Me ?? await Verify();
         string? existing = null;
         for (var start = 0; existing is null; start += 100)
         {
             var page = JsonNode.Parse(await (await http!.GetAsync($"/rest/api/2/issue/{key}/comment?startAt={start}&maxResults=100")).EnsureSuccessStatusCode()
                                           .Content.ReadAsStringAsync())!;
             var comments = page["comments"]!.AsArray();
-            existing = comments.FirstOrDefault(c => ((string?)c?["body"])?.Contains(Doc.Marker) == true)?["id"]?.ToString();
+            existing = comments.FirstOrDefault(c => ((string?)c?["body"])?.Contains(Doc.Marker) == true
+                                                     && (string?)c?["author"]?["accountId"] == me.AccountId)?["id"]?.ToString();
             if (start + comments.Count >= (int)page["total"]!) break;
         }
         var body = new StringContent(new JsonObject { ["body"] = wiki }.ToJsonString(), Encoding.UTF8, "application/json");
@@ -618,7 +910,15 @@ static class ReportJson
     static JsonObject CommitJson(RepoResult r, Commit c) => new()
     {
         ["sha"] = c.Sha, ["short"] = c.Short, ["date"] = c.Date, ["author"] = c.Author, ["subject"] = c.Subject,
-        ["inDefault"] = c.InDefault, ["note"] = c.Note, ["url"] = CommitUrl(r, c),
+        ["inDefault"] = c.InDefault, ["note"] = c.Note, ["url"] = CommitUrl(r, c), ["ticket"] = c.Ticket,
+    };
+
+    public static JsonObject Issue(IssueInfo i) => new()
+    {
+        ["key"] = i.Key, ["summary"] = i.Summary, ["type"] = i.Type, ["level"] = i.Level,
+        ["status"] = i.Status, ["statusCategory"] = i.StatusCategory, ["assignee"] = i.Assignee, ["assigneeId"] = i.AssigneeId,
+        ["parentKey"] = i.ParentKey, ["parentSummary"] = i.ParentSummary, ["parentType"] = i.ParentType,
+        ["fixVersions"] = i.FixVersions, ["updated"] = i.Updated,
     };
 
     public static JsonObject Summary(Report rep) => new()
@@ -627,6 +927,8 @@ static class ReportJson
         ["generated"] = rep.Generated.ToString("yyyy-MM-dd HH:mm"),
         ["summary"] = rep.Issue?.Summary,
         ["status"] = rep.Issue?.Status,
+        ["type"] = rep.Issue?.Type,
+        ["children"] = rep.Scope.Count,
         ["warnings"] = rep.Warnings.Count,
         ["repos"] = rep.Repos.Count,
     };
@@ -639,11 +941,17 @@ static class ReportJson
             ["key"] = rep.Key,
             ["generated"] = rep.Generated.ToString("yyyy-MM-dd HH:mm"),
             ["jiraUrl"] = $"{jiraBase}/browse/{rep.Key}",
-            ["issue"] = rep.Issue is null ? null : new JsonObject
+            ["issue"] = rep.Issue is null ? null : Issue(rep.Issue),
+            ["ancestors"] = new JsonArray(rep.Ancestors.Select(a => (JsonNode)Issue(a)).ToArray()),
+            ["scope"] = new JsonArray((rep.Issue is null ? rep.Scope : rep.Scope.Prepend(rep.Issue)).Select(t =>
             {
-                ["summary"] = rep.Issue.Summary, ["status"] = rep.Issue.Status,
-                ["assignee"] = rep.Issue.Assignee, ["fixVersions"] = rep.Issue.FixVersions,
-            },
+                var j = Issue(t);
+                var a = Manifest.TicketActivity(t.Key, rep.Repos);
+                j["commits"] = a.Total;
+                j["merged"] = a.Merged;
+                j["repos"] = new JsonArray(a.Repos.Select(x => (JsonNode)x).ToArray());
+                return (JsonNode)j;
+            }).ToArray()),
             ["warnings"] = new JsonArray(rep.Warnings.Select(w => (JsonNode)Spans(w)).ToArray()),
             ["stats"] = new JsonObject
             {
@@ -737,24 +1045,73 @@ static class UiServer
                     return;
 
                 case ("GET", "/api/status"):
+                {
+                    var me = await ledger.CurrentUser();
                     await Send(res, 200, new JsonObject
                     {
-                        ["jiraConfigured"] = ledger.Jira.Configured,
+                        ["jiraConfigured"] = me is not null,
                         ["jiraBaseUrl"] = ledger.JiraBaseUrl,
+                        ["account"] = me is null ? null : new JsonObject
+                        {
+                            ["name"] = me.DisplayName, ["email"] = me.Email, ["accountId"] = me.AccountId,
+                            ["source"] = ledger.CredentialSource,
+                        },
+                        ["credentialsRejected"] = ledger.Jira.Configured && me is null,
                         ["keyPattern"] = ledger.KeyPattern,
+                        ["reposRoot"] = ledger.ReposRoot,
                         ["repoCount"] = ledger.Repos.Count,
                         ["recent"] = Recent(ledger),
                     });
                     return;
+                }
+
+                case ("POST", "/api/account"):
+                {
+                    if (!Trusted(req)) { await Send(res, 403, Err("Forbidden")); return; }
+                    var body = await ReadJson(req);
+                    var me = await ledger.Connect((string?)body["baseUrl"] ?? ledger.JiraBaseUrl, (string?)body["email"] ?? "", (string?)body["token"] ?? "");
+                    await Send(res, 200, new JsonObject { ["name"] = me.DisplayName, ["email"] = me.Email });
+                    return;
+                }
+
+                case ("POST", "/api/account/disconnect"):
+                    if (!Trusted(req)) { await Send(res, 403, Err("Forbidden")); return; }
+                    ledger.Disconnect();
+                    await Send(res, 200, new JsonObject { ["ok"] = true, ["stillConfigured"] = ledger.Jira.Configured });
+                    return;
+
+                case ("POST", "/api/settings"):
+                {
+                    if (!Trusted(req)) { await Send(res, 403, Err("Forbidden")); return; }
+                    var body = await ReadJson(req);
+                    if ((string?)body["reposRoot"] is { Length: > 0 } root) ledger.SetReposRoot(root);
+                    await Send(res, 200, new JsonObject { ["reposRoot"] = ledger.ReposRoot, ["repoCount"] = ledger.Repos.Count });
+                    return;
+                }
+
+                case ("GET", "/api/my-tickets"):
+                {
+                    if (await ledger.CurrentUser() is null) { await Send(res, 401, Err("Connect your Jira account first")); return; }
+                    var issues = await ledger.Jira.MyOpenIssues();
+                    var built = Recent(ledger, 1000).Select(n => n!).ToDictionary(n => (string)n["key"]!, n => n, StringComparer.OrdinalIgnoreCase);
+                    await Send(res, 200, new JsonArray(issues.Select(i =>
+                    {
+                        var j = ReportJson.Issue(i);
+                        if (built.TryGetValue(i.Key, out var b)) j["lastBuild"] = b.DeepClone();
+                        return (JsonNode)j;
+                    }).ToArray()));
+                    return;
+                }
 
                 case ("GET", "/api/manifest"):
                 {
                     if (key is null || !ledger.IsValidKey(key)) { await Send(res, 400, Err($"Enter a key matching {ledger.KeyPattern}")); return; }
                     var fetch = req.QueryString["fetch"] == "1";
+                    var children = req.QueryString["children"] != "0";
                     await buildLock.WaitAsync();
                     try
                     {
-                        var rep = await ledger.Build(key, fetch, msg => Console.WriteLine($"[{key}] {msg}"));
+                        var rep = await ledger.Build(key, fetch, msg => Console.WriteLine($"[{key}] {msg}"), children);
                         cache[key] = rep;
                         await Send(res, 200, ReportJson.Full(rep, ledger.JiraBaseUrl));
                     }
@@ -773,9 +1130,9 @@ static class UiServer
 
                 case ("POST", "/api/post"):
                 {
-                    if (req.Headers["X-Ledger"] != "1") { await Send(res, 403, Err("Missing X-Ledger header")); return; }
+                    if (!Trusted(req)) { await Send(res, 403, Err("Missing X-Ledger header")); return; }
                     if (key is null || !ledger.IsValidKey(key)) { await Send(res, 400, Err("Invalid key")); return; }
-                    if (!ledger.Jira.Configured) { await Send(res, 400, Err("Jira credentials missing: set JIRA_EMAIL and JIRA_API_TOKEN, then restart the UI.")); return; }
+                    if (await ledger.CurrentUser() is null) { await Send(res, 400, Err("Connect your Jira account first (Account button, top right).")); return; }
                     if (!cache.TryGetValue(key, out var rep)) { await Send(res, 400, Err("Build the manifest first")); return; }
                     var commentUrl = await ledger.Jira.UpsertManifestComment(key, rep.Doc.JiraWiki());
                     await Send(res, 200, new JsonObject { ["url"] = commentUrl });
@@ -794,16 +1151,26 @@ static class UiServer
         }
     }
 
-    static JsonArray Recent(Ledger ledger)
+    static JsonArray Recent(Ledger ledger, int take = 30)
     {
         if (!Directory.Exists(ledger.OutDir)) return [];
         return new JsonArray(Directory.GetFiles(ledger.OutDir, "*.json")
             .Select(f => { try { return JsonNode.Parse(File.ReadAllText(f)); } catch { return null; } })
             .Where(n => n?["key"] is not null)
             .OrderByDescending(n => (string?)n!["generated"])
-            .Take(30)
+            .Take(take)
             .Select(n => n!)
             .ToArray());
+    }
+
+    // State-changing calls must come from our own page: a custom header can't be sent cross-site without CORS, which we never allow.
+    static bool Trusted(HttpListenerRequest req) => req.Headers["X-Ledger"] == "1";
+
+    static async Task<JsonNode> ReadJson(HttpListenerRequest req)
+    {
+        using var reader = new StreamReader(req.InputStream, Encoding.UTF8);
+        var text = await reader.ReadToEndAsync();
+        return string.IsNullOrWhiteSpace(text) ? new JsonObject() : JsonNode.Parse(text) ?? new JsonObject();
     }
 
     static JsonObject Err(string message) => new() { ["error"] = message };
