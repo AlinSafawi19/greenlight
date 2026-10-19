@@ -294,6 +294,8 @@ table.tb a:hover { text-decoration: underline; text-decoration-color: var(--ink-
 .select2-container .select2-search--inline .select2-search__field { margin: 0; height: 24px; color: var(--ink); font: inherit; padding-left: 4px; }
 .select2-container .select2-search--inline .select2-search__field::placeholder { color: var(--ink-3); }
 .select2-container--default .select2-selection--single .select2-selection__clear { color: var(--ink-3); }
+.s2-all { font-weight: 600; color: var(--ink); }
+.select2-selection__choice .s2-all { font-weight: 500; font-size: 12px; padding: 1px 6px; border-radius: 4px; background: var(--tint-3); }
 .s2-repo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .select2-results__option[aria-selected="true"] .rt::before, .select2-results__option--selected .rt::before { content: "✓ "; }
 .tgl { display: inline-flex; align-items: center; gap: 9px; color: var(--ink-2); font-weight: 500; cursor: pointer; user-select: none; margin-left: 4px; }
@@ -932,13 +934,24 @@ function initEvidence() {
   const repos = evScoped();
   evRepos = evRepos.filter(n => repos.some(x => x.name === n));
   const el = jq("#evRepos");
-  el.empty();
-  report.repos.forEach(x => el.append(new Option(x.name, x.name, false, evRepos.includes(x.name))));
+  if (el.data("select2")) el.select2("destroy");
+  el.off(".ev").empty();
+  // "All repositories" is a real option: chosen by default, and it replaces / is replaced by specific repositories
+  const total = repos.reduce((n, x) => n + x.commits.length, 0);
+  el.append(new Option("All repositories", "*", false, !evRepos.length));
+  repos.forEach(x => el.append(new Option(x.name, x.name, false, evRepos.includes(x.name))));
   el.select2({
-    width: "360px", placeholder: "All repositories", allowClear: true, closeOnSelect: false, dropdownParent: jq(".ev"),
-    templateResult: o => o.id ? jq(`<span class="s2-repo">${repoTag(o.id)}<span class="ink-3">${pl(repos.find(x => x.name === o.id)?.commits.length || 0, "commit")}</span></span>`) : o.text,
-    templateSelection: o => o.id ? jq(repoTag(o.id)) : o.text,
-  }).on("change", () => { evRepos = el.val() || []; renderEvidence(); });
+    width: "360px", closeOnSelect: false, dropdownParent: jq(".ev"),
+    templateResult: o => o.id === "*" ? jq(`<span class="s2-repo"><b class="s2-all">All repositories</b><span class="ink-3">${pl(total, "commit")}</span></span>`)
+      : o.id ? jq(`<span class="s2-repo">${repoTag(o.id)}<span class="ink-3">${pl(repos.find(x => x.name === o.id)?.commits.length || 0, "commit")}</span></span>`) : o.text,
+    templateSelection: o => o.id === "*" ? jq(`<span class="s2-all">All repositories</span>`) : o.id ? jq(repoTag(o.id)) : o.text,
+  });
+  const apply = vals => { el.val(vals).trigger("change.select2"); evRepos = vals.filter(v => v !== "*"); renderEvidence(); };
+  el.on("select2:select.ev", e => {
+    const vals = el.val() || [];
+    apply(e.params.data.id === "*" ? ["*"] : vals.filter(v => v !== "*"));
+  });
+  el.on("select2:unselect.ev", () => { const vals = el.val() || []; apply(vals.length ? vals : ["*"]); });
   if ($("#evTicket")) jq("#evTicket").select2({ width: "300px", minimumResultsForSearch: 8, dropdownParent: jq(".ev") })
     .on("change", e => { evTicket = e.target.value; initEvidence(); });
   $("#evMine").onchange = e => { evMine = e.target.checked; initEvidence(); };
@@ -992,7 +1005,7 @@ function renderPane() {
   const wireEmpty = () => {
     $("#peMine")?.addEventListener("click", () => { evMine = false; $("#evMine").checked = false; initEvidence(); });
     $("#peAll")?.addEventListener("click", () => { evTicket = "*"; jq("#evTicket").val("*").trigger("change.select2"); initEvidence(); });
-    $("#peRepos")?.addEventListener("click", () => { evRepos = []; jq("#evRepos").val(null).trigger("change"); });
+    $("#peRepos")?.addEventListener("click", () => { evRepos = []; jq("#evRepos").val(["*"]).trigger("change.select2"); renderEvidence(); });
   };
   if (tab === "repos") {
     if (!shown.length) { p.innerHTML = empty("repositories"); return wireEmpty(); }
