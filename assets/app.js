@@ -1763,7 +1763,7 @@ function errBox(title, msg, retry) {
 // date picker (flatpickr), themed; the field keeps yyyy-mm-dd while showing a friendly date
 function datePicker(el, opts = {}) {
   if (!el || !window.flatpickr) return null;
-  return flatpickr(el, { dateFormat: "Y-m-d", altInput: !el.classList.contains("sr"), altFormat: "D j M Y", disableMobile: true, locale: { firstDayOfWeek: 1 }, ...opts });
+  return flatpickr(el, { dateFormat: "Y-m-d", altInput: !el.classList.contains("sr"), altFormat: "D j M Y", disableMobile: true, monthSelectorType: "static", locale: { firstDayOfWeek: 1 }, ...opts });
 }
 
 /* ─────────────────────────── notifications and the end-of-day reminder ─────────────────────────── */
