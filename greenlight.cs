@@ -5,6 +5,7 @@
 //   dotnet run greenlight.cs -- MM-1234 --fetch    git fetch all repos first
 //   dotnet run greenlight.cs -- MM-1234 --post     also create/update the manifest comment on Jira
 //   dotnet run greenlight.cs -- --ui               open the browser UI on http://localhost:5199
+//   dotnet run greenlight.cs -- --selftest         check the core rules (no network, no changes)
 //
 // Every item in the manifest comes from git with a deterministic rule:
 //   1. commits whose message contains the key
@@ -24,6 +25,7 @@ var flags = args.Where(a => a.StartsWith("--")).Select(a => a.ToLowerInvariant()
 var key = args.FirstOrDefault(a => !a.StartsWith("--"))?.Trim().ToUpperInvariant();
 
 var appDir = AppContext.GetData("EntryPointFileDirectoryPath") as string ?? Directory.GetCurrentDirectory();
+if (flags.Contains("--selftest")) return SelfTest.Run(appDir);
 var ledger = new Ledger(appDir);
 
 if (flags.Contains("--ui"))
@@ -1527,13 +1529,13 @@ static class Tags
             .Select(p => new TagRef(p[0], p[1], web == "" ? null : $"{web}/-/tags/{Uri.EscapeDataString(p[0])}"))
             .OrderByDescending(t => Numbers(t.Name), VersionOrder.Instance).ThenByDescending(t => t.Date, StringComparer.Ordinal).ToList();
 
-    static long[] Numbers(string tag)
+    internal static long[] Numbers(string tag)
     {
         var m = Version.Match(tag);
         return m.Success ? m.Groups["nums"].Value.Split('.').Select(n => long.TryParse(n, out var v) ? v : 0).ToArray() : [];
     }
 
-    sealed class VersionOrder : IComparer<long[]>
+    internal sealed class VersionOrder : IComparer<long[]>
     {
         public static readonly VersionOrder Instance = new();
         public int Compare(long[]? a, long[]? b)
@@ -2284,6 +2286,54 @@ static class Work
     }
 
     public static long DiskFree(string path) { try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!).AvailableFreeSpace; } catch { return -1; } }
+}
+
+// ───────────────────────────── self test: the rules that decide readiness, checked without network ─────────────────────────────
+
+static class SelfTest
+{
+    public static int Run(string appDir)
+    {
+        var fails = 0; var n = 0;
+        void Is<T>(string what, T got, T want) { n++; if (!EqualityComparer<T>.Default.Equals(got, want)) { fails++; Console.WriteLine($"FAIL {what}: got {got}, want {want}"); } }
+
+        // next version tag
+        Is("bump patch", Tags.Bump("5.0.10"), "5.0.11");
+        Is("bump keeps prefix", Tags.Bump("v5.0.84"), "v5.0.85");
+        Is("bump four parts", Tags.Bump("4.6.18.1.8"), "4.6.18.1.9");
+        Is("bump suffix", Tags.Bump("2.1.9-rc"), "2.1.10-rc");
+        Is("bump none", Tags.Bump(null), (string?)null);
+
+        // newest release by version number, whatever the prefix or creation date
+        var order = new[] { "5.0.9", "v5.0.10", "4.6.18.1.8", "5.0.10", "v5.0.2" }.OrderByDescending(Tags.Numbers, Tags.VersionOrder.Instance).ToList();
+        Is("newest first", order[0] is "v5.0.10" or "5.0.10", true);
+        Is("hotfix of old line is not newest", order.IndexOf("4.6.18.1.8") == order.Count - 1, true);
+
+        // file paths from the page must stay inside the repository
+        var repo = Path.Combine(Path.GetTempPath(), "greenlight-selftest-repo");
+        Is("path inside", LocalApps.SafeFile(repo, "src/a.cs") is not null, true);
+        Is("path parent", LocalApps.SafeFile(repo, "../x"), (string?)null);
+        Is("path rooted", LocalApps.SafeFile(repo, @"C:\Windows\win.ini"), (string?)null);
+        Is("path wildcard", LocalApps.SafeFile(repo, "src/*.cs"), (string?)null);
+        Is("path stream", LocalApps.SafeFile(repo, "a.cs:secret"), (string?)null);
+
+        // ticket keys in branch names and messages: whole keys only
+        var rx = new Regex(@"(?<![A-Za-z0-9])(?:MM-[0-9]+)(?!\d)", RegexOptions.IgnoreCase);
+        Is("key in branch", rx.Match("feature/MM-8725-dashboard").Value, "MM-8725");
+        var one = new Regex(@"(?<![A-Za-z0-9])(?:MM-8725)(?!\d)", RegexOptions.IgnoreCase);   // how a check looks for one ticket
+        Is("one key is not a prefix of another", one.IsMatch("MM-87250 other ticket"), false);
+        Is("one key found", one.IsMatch("fix(MM-8725): dashboard"), true);
+        Is("key inside word", rx.IsMatch("XMM-8725"), false);
+        Is("key lower case", rx.Match("mm-12 fix").Value, "mm-12");
+
+        // configuration keys that the Config step looks for
+        Is("json key", QaPrep.JsonKey.Match("  \"Scheduler:Enabled\": true,").Groups[1].Value, "Scheduler:Enabled");
+        Is("config file", QaPrep.ConfigFile.IsMatch("API/appsettings.Development.json"), true);
+        Is("not config", QaPrep.ConfigFile.IsMatch("src/settings.ts"), false);
+
+        Console.WriteLine(fails == 0 ? $"All {n} checks passed." : $"{fails} of {n} checks failed.");
+        return fails == 0 ? 0 : 1;
+    }
 }
 
 record JiraUser(string AccountId, string DisplayName, string Email);

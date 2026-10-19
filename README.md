@@ -74,3 +74,23 @@ The environment variables `JIRA_EMAIL` / `JIRA_API_TOKEN` still work as a fallba
 | `db` | migration repo name, its root folder and its staging folder |
 | `highlights` | path regexes that get their own section (permissions/scopes/menus, config, pipeline) |
 | `jiraMaxFilesPerRepo` | file list cap in the Jira comment (the .md file is always complete) |
+
+## What's in the app
+
+- **Overview**: what needs you, what's ready, reviews waiting, today's time, yesterday's standup.
+- **My tickets**: grouped by story (the header checks the whole story with its sub-tickets) or by readiness; sprint, priority, labels and due date on each row. A ticket page shows the six steps to QA, your footprint, time, code review, and where each service is deployed. It can create a merge request or a version tag, move the ticket in Jira, and post the handover.
+- **Reviews** (GitLab): merge requests waiting for you, with a grouped checklist, side-by-side changes, discussions, tags, and approve, request changes or comment.
+- **Worklogs**: the week against the daily target, suggestions from your commits, standup text, and an end-of-day reminder.
+- **Sprint release**: check every ticket in a sprint, then see blockers, the tag to deploy per service, database releases, settings and access, with release notes to copy.
+- **Team**: open sprint work by person.
+- **Ctrl K** opens search and commands. Light, dark (default) or follow Windows, from the sidebar.
+
+## More settings (`greenlight.json`)
+
+- `time.dailyTargetHours`, `time.workDays` (0 = Sunday), `time.reminderAt` ("17:00").
+- `team.jql`: who the Team page shows; by default the open sprint of the key's project.
+
+## Checks
+
+`dotnet run greenlight.cs -- --selftest` checks the core rules (tags, versions, ticket keys, path safety, config keys) without network.
+`GREENLIGHT_TIMING=1` prints how long each phase of a check takes.
