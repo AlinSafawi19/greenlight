@@ -811,6 +811,10 @@ class Jira
     // Confirms the credentials and remembers whose account this is (comments are only ever replaced if they are ours).
     public async Task<JiraUser> Verify()
     {
+        if (!Email.Contains('@')) throw new Exception($"\"{Email}\" isn't an email address.");
+        if (token.Length < 100)
+            throw new Exception($"That token is only {token.Length} characters; Atlassian API tokens are about 190. " +
+                                "Make sure you pasted the API token and not your password (browsers sometimes autofill this box).");
         var res = await http!.GetAsync("rest/api/3/myself");
         if (res.StatusCode == HttpStatusCode.Unauthorized && await GatewayClient() is { } gateway)
         {
@@ -820,7 +824,16 @@ class Jira
                 throw new Exception("This is a scoped API token that is missing scopes. Create a new one with read:jira-user, read:jira-work and write:jira-work, or use a classic token (\"Create API token\").");
         }
         if (res.StatusCode == HttpStatusCode.Unauthorized)
-            throw new Exception($"Jira didn't accept {Email} with this token. Use the email you sign in to Atlassian with, and paste the whole token (about 190 characters, starting with ATATT).");
+        {
+            var reason = res.Headers.TryGetValues("X-Seraph-LoginReason", out var v) ? string.Join(",", v) : "";
+            if (reason.Contains("AUTHENTICATION_DENIED"))
+                throw new Exception("Atlassian is asking for a CAPTCHA after failed attempts. Sign out of Jira in your browser, sign in again, then retry here.");
+            var said = (await res.Content.ReadAsStringAsync()).Trim();
+            if (said.Length > 200) said = said[..200];
+            throw new Exception($"Jira didn't accept {Email} with this token{(said.Length > 0 ? $" (Jira says: {said})" : "")}. " +
+                                "The token must be created while you're signed in to id.atlassian.com as this same email. " +
+                                "Check the account in the top-right corner of that page, then create a new token.");
+        }
         if (res.StatusCode == HttpStatusCode.Forbidden)
             throw new Exception("Jira accepted the token but refused access. Your account may not have access to this site.");
         if (!res.IsSuccessStatusCode) throw new Exception($"Jira returned {(int)res.StatusCode}.");
