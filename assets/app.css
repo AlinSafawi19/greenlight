@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    greenlight. — design system
-   Two themes share one language: Deep Forest (dark, default) and Warm Electric
+   Two themes share one language: neutral black (dark, default) and Warm Electric
    Lime (light). Colours are tokens; components never hard-code a hex value.
    Lime is the brand and the primary action. It never means "verified": readiness
    has its own status colours, and always an icon and a word as well.
@@ -61,56 +61,55 @@
   --selection: #DCF7A2;
 }
 
-/* ── tokens: dark (Deep Forest) ── */
+/* ── tokens: dark (neutral black) ── */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --gl-bg: #111E19;
-  --gl-sidebar: #0D1814;
-  --gl-surface: #1E3028;
-  --gl-surface-raised: #294035;
-  --gl-text: #F2F8EB;
-  --gl-text-2: #D2E0D5;
-  --gl-text-muted: #A8BDB0;
-  --gl-text-faint: #758A7D;
-  --gl-border: #405147;
-  --gl-border-soft: #26382F;
-  --gl-border-strong: #56685D;
+  --gl-bg: #0E0F10;
+  --gl-sidebar: #0A0A0B;
+  --gl-surface: #17181A;
+  --gl-surface-raised: #1F2023;
+  --gl-text: #F3F4F5;
+  --gl-text-2: #D0D2D5;
+  --gl-text-muted: #9EA2A7;
+  --gl-text-faint: #6C7076;
+  --gl-border: #303236;
+  --gl-border-soft: #212226;
+  --gl-border-strong: #45484D;
   --gl-brand: #C8F75A;
   --gl-brand-hover: #D8FF80;
   --gl-on-brand: #15210A;
-  --gl-soft-green: #294735;
+  --gl-soft-green: #191A1D;
   --gl-accent: #B0A7FF;
   --gl-accent-hover: #C6BFFF;
   --gl-accent-soft: rgba(176, 167, 255, .13);
-  --gl-fill-1: rgba(242, 248, 235, .035);
-  --gl-fill-2: rgba(242, 248, 235, .065);
-  --gl-fill-3: rgba(242, 248, 235, .11);
+  --gl-fill-1: rgba(255, 255, 255, .03);
+  --gl-fill-2: rgba(255, 255, 255, .06);
+  --gl-fill-3: rgba(255, 255, 255, .10);
 
-  --st-done: #7FE0A1;   --st-done-bg: rgba(127, 224, 161, .13);
-  --st-todo: #FFC06A;   --st-todo-bg: rgba(255, 192, 106, .13);
+  --st-done: #7FE0A1;   --st-done-bg: rgba(127, 224, 161, .12);
+  --st-todo: #FFC06A;   --st-todo-bg: rgba(255, 192, 106, .12);
   --st-wait: #9DBBFF;   --st-wait-bg: rgba(157, 187, 255, .12);
-  --st-check: #C9D6CC;  --st-check-bg: rgba(201, 214, 204, .10);
-  --st-skip: #8CA195;   --st-skip-bg: rgba(140, 161, 149, .10);
-  --st-fail: #FF8F82;   --st-fail-bg: rgba(255, 143, 130, .13);
+  --st-check: #C8CBCF;  --st-check-bg: rgba(200, 203, 207, .10);
+  --st-skip: #8A8E94;   --st-skip-bg: rgba(138, 142, 148, .10);
+  --st-fail: #FF8F82;   --st-fail-bg: rgba(255, 143, 130, .12);
   --st-info: #92C8FF;   --st-info-bg: rgba(146, 200, 255, .12);
-  --st-disabled: #4E6056;
+  --st-disabled: #4A4D52;
 
   --vscode: #4CB0F5; --vs: #B595F2;
   --rt-l: 76%; --rt-s: 62%; --rt-bg: .16;
 
-  --code-bg: #0C1712;
-  --code-text: #D5E2D8;
+  --code-bg: #0A0B0C;
+  --code-text: #D6D8DB;
   --diff-add-bg: rgba(127, 224, 161, .12); --diff-add-text: #CFF3DB; --diff-add-no: #7FE0A1;
   --diff-del-bg: rgba(255, 143, 130, .12); --diff-del-text: #FFD6D0; --diff-del-no: #FF8F82;
   --diff-hunk-bg: rgba(157, 187, 255, .08); --diff-hunk-text: #9DBBFF;
-  --diff-gap: rgba(242, 248, 235, .035);
+  --diff-gap: rgba(255, 255, 255, .035);
 
   --shadow-1: 0 0 0 1px var(--gl-border-soft);
-  --shadow-pop: 0 0 0 1px var(--gl-border), 0 18px 44px rgba(0, 0, 0, .5);
-  --backdrop: rgba(4, 10, 8, .6);
-  --selection: #4D6B2A;
+  --shadow-pop: 0 0 0 1px var(--gl-border), 0 18px 44px rgba(0, 0, 0, .6);
+  --backdrop: rgba(0, 0, 0, .62);
+  --selection: rgba(176, 167, 255, .35);
 }
-
 /* ── shared tokens ── */
 :root {
   /* older names, kept so every component reads the theme through one set of tokens */
