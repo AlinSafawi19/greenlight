@@ -54,6 +54,79 @@ const GROUP = { todo: "Needs you", wait: "Waiting", check: "Ready to hand over",
 let viewsScroll = 0, evTicket = null, evRepos = [], evMine = true, fileQuery = "", groupOpen = {};
 let status = null, tickets = null, selected = null, report = null, view = "all", openStep = null, tab = "repos", commitFilter = "", includeKids = true, checking = false, seq = 0;
 
+/* ── motion for things that appear and disappear: menus, popovers, dialogs, dropdowns ──
+   Everything eases in from where it comes from and eases out instead of blinking; nothing moves for people who ask for less motion. */
+const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EASE_IN = "cubic-bezier(.2, .8, .2, 1)", EASE_OUT = "cubic-bezier(.4, 0, 1, 1)";
+
+function showPop(pop, open) {
+  if (!pop) return;
+  pop.getAnimations().forEach(a => a.cancel());
+  if (open) {
+    pop._closing = false; pop.hidden = false;
+    if (!calm()) pop.animate([{ opacity: 0, transform: "translateY(-6px) scale(.96)" }, { opacity: 1, transform: "none" }], { duration: 180, easing: EASE_IN });
+  } else if (!pop.hidden) {
+    if (calm()) { pop.hidden = true; return; }
+    pop._closing = true;
+    const a = pop.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px) scale(.97)" }], { duration: 130, easing: EASE_OUT });
+    a.onfinish = () => { if (pop._closing) { pop.hidden = true; pop._closing = false; } };
+  }
+}
+// a button that opens a popover; any click elsewhere (or on one of its items) and Escape close it
+function wirePop(btn, pop, onOpen) {
+  if (!btn || !pop) return;
+  btn.onclick = e => {
+    e.stopPropagation();
+    const open = pop.hidden || pop._closing;
+    if (open) onOpen?.();
+    showPop(pop, open); btn.setAttribute("aria-expanded", open);
+    if (!open) return;
+    const close = ev => {
+      if (ev.type === "keydown" && ev.key !== "Escape") return;
+      if (ev.type === "click" && pop.contains(ev.target) && !ev.target.closest("a, button")) return;
+      showPop(pop, false); btn.setAttribute("aria-expanded", "false");
+      document.removeEventListener("click", close); document.removeEventListener("keydown", close);
+    };
+    setTimeout(() => { document.addEventListener("click", close); document.addEventListener("keydown", close); });
+  };
+}
+
+// dialogs close with the same care they open with, whether by a button, Escape or a click outside
+function smoothDialog(d) {
+  const close = HTMLDialogElement.prototype.close, show = HTMLDialogElement.prototype.showModal;
+  d.close = function (v) {
+    if (!this.open || this._closing) return;
+    if (calm()) return close.call(this, v);
+    this._closing = true;
+    try { this.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: EASE_OUT, pseudoElement: "::backdrop" }); } catch { }
+    const a = this.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px) scale(.98)" }], { duration: 160, easing: EASE_OUT });
+    a.onfinish = () => { this._closing = false; close.call(this, v); };
+  };
+  d.showModal = function () {
+    if (this._closing) { this.getAnimations().forEach(a => a.cancel()); this._closing = false; return; }   // reopened while closing: just stay
+    show.call(this);
+  };
+  d.addEventListener("cancel", e => { e.preventDefault(); d.close(); });
+}
+smoothDialog($("#settings"));
+
+// every searchable dropdown says what you can type (a select can set its own with data-search)
+jq(document).on("select2:open", "select", function () {
+  const f = document.querySelector(".select2-container--open .select2-search--dropdown .select2-search__field");
+  if (f && !f.placeholder) f.placeholder = this.dataset.search || "Type to search";
+});
+
+// Select2 dropdowns fold away instead of vanishing (they already ease in through CSS)
+jq(document).on("select2:closing", "select", function (e) {
+  const inst = jq(this).data("select2");
+  const dd = inst?.$dropdown?.[0]?.querySelector(".select2-dropdown");
+  if (!dd || this._s2closing || calm()) return;
+  e.preventDefault();
+  this._s2closing = true;
+  const a = dd.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px) scale(.98)" }], { duration: 120, easing: EASE_OUT });
+  a.onfinish = () => { jq(this).select2("close"); this._s2closing = false; };
+});
+
 // messages always have a close button; errors are marked and stay until closed
 function toast(html, ms = 4200, error = false) {
   const t = $("#toast");
@@ -110,6 +183,7 @@ function openSettings() {
         <label class="fld"><span>Jira site</span><input id="fSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"><span class="err" id="eSite"></span></label>
         <label class="fld"><span>Atlassian sign-in email</span><input id="fEmail" type="email" autocomplete="username" spellcheck="false"><small>Can differ from the email on your Jira profile.</small><span class="err" id="eEmail"></span></label>
         <label class="fld"><span>API token</span><input id="fToken" type="password" autocomplete="off"><small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create a token</a> while signed in as yourself.</small><span class="err" id="eToken"></span></label>`}
+      ${diskNote()}
       <div class="rule"></div>
       ${gitlabSection()}
       <div class="rule"></div>
@@ -145,6 +219,13 @@ function openSettings() {
   wireFaces(d);
   if (!d.open) d.showModal();
   setTimeout(() => ($("#fEmail") || $("#cancel")).focus(), 30);
+}
+
+// low disk space: checks start failing to save, so the account dialog says so while it lasts
+function diskNote() {
+  const free = status?.diskFree ?? -1;
+  if (!(free >= 0 && free < 1024 ** 3)) return "";
+  return `<div class="note-warn">${icon("alert")}<span><b>Drive C: is almost full (${(free / 1024 ** 3).toFixed(2)} GB free).</b> Checks can fail to save. Free some space with Disk Cleanup or Settings › Storage.</span></div>`;
 }
 
 // GitLab, for code review: a personal access token with the api scope (approving needs it)
@@ -475,7 +556,7 @@ function renderTicket() {
 
     <section class="ev">
       <div class="evbar">
-        ${r.scope.length > 1 ? `<select id="evTicket" aria-label="Ticket">
+        ${r.scope.length > 1 ? `<select id="evTicket" aria-label="Ticket" data-search="Search your tickets in this check">
           <option value="*" ${evTicket === "*" ? "selected" : ""}>All ${r.scope.length} of your tickets here</option>
           ${r.scope.map(t => `<option value="${esc(t.key)}" ${t.key === evTicket ? "selected" : ""}>${esc(t.key)}${t.key === r.key ? " (this ticket)" : ""} · ${esc(t.summary)}</option>`).join("")}</select>` : ""}
         <select id="evRepos" multiple aria-label="Repositories"></select>
@@ -916,8 +997,7 @@ function wireTicket() {
   $("#copyCmd")?.addEventListener("click", async e => { try { await navigator.clipboard.writeText(e.currentTarget.dataset.cmd); toast("Command copied."); } catch { fail("Couldn't copy."); } });
   $$("[data-go]").forEach(b => b.onclick = () => select(b.dataset.go));
   $("#post").onclick = post; $$("[data-post]").forEach(b => b.onclick = post);
-  const more = $("#more"), pop = $("#pop");
-  more.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; more.setAttribute("aria-expanded", !pop.hidden); if (!pop.hidden) document.addEventListener("click", () => { pop.hidden = true; more.setAttribute("aria-expanded", "false"); }, { once: true }); };
+  wirePop($("#more"), $("#pop"));
   $("#moveJira")?.addEventListener("click", () => moveDialog(r.key));
   $$("[data-mkmr]").forEach(b => b.onclick = () => createMr(b.dataset.repo, b.dataset.mkmr));
   $$("[data-mktag]").forEach(b => b.onclick = () => createTag(b.dataset.repo, b.dataset.mktag));
@@ -985,12 +1065,7 @@ function renderDayMeter() {
   $("#dayBtn").innerHTML = `<svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="${r}" class="trk"/><circle cx="9" cy="9" r="${r}" class="val" style="stroke-dasharray:${c};stroke-dashoffset:${c * (1 - pct)}"/></svg>
     <span><b>${hm(done)}</b><span class="ink-3"> / ${hm(target)}</span></span>`;
   $("#dayBtn").setAttribute("aria-label", `Logged today: ${hm(done)} of ${hm(target)}${left ? `, ${hm(left)} to go` : ""}`);
-  $("#dayBtn").onclick = e => {
-    e.stopPropagation();
-    const pop = $("#weekPop"), open = pop.hidden;
-    pop.hidden = !open; $("#dayBtn").setAttribute("aria-expanded", open);
-    if (open) { renderWeek(); soften(pop); document.addEventListener("click", function close(ev) { if (!pop.contains(ev.target)) { pop.hidden = true; $("#dayBtn").setAttribute("aria-expanded", "false"); document.removeEventListener("click", close); } }); }
-  };
+  wirePop($("#dayBtn"), $("#weekPop"), renderWeek);
 }
 
 function renderWeek() {
@@ -1004,7 +1079,7 @@ function renderWeek() {
       <div class="wk-col"><i class="tgt" style="bottom:${(d.target / max) * 100}%"></i><i class="bar ${d.seconds >= d.target && d.workday ? "met" : d.seconds ? "" : "none"}" style="height:${Math.max(2, (d.seconds / max) * 100)}%"></i></div>
       <span>${d.weekday}</span><span class="ink-3">${d.seconds ? hm(d.seconds) : "–"}</span></div>`).join("")}</div>
     <div class="wk-list">${week.days.filter(d => d.tickets.length).slice().reverse().map(d => `<div class="wk-day"><span class="ink-3">${d.weekday} ${day(d.date)}</span>${d.tickets.map(t => `<button class="wk-t" data-k="${esc(t.key)}"><span class="mono">${esc(t.key)}</span><span class="s">${esc(t.summary)}</span><b>${hm(t.seconds)}</b></button>`).join("")}</div>`).join("") || `<p class="ink-3" style="margin:6px 0 0">Nothing logged yet this week.</p>`}</div>`;
-  $$("#weekPop [data-k]").forEach(b => b.onclick = () => { $("#weekPop").hidden = true; select(b.dataset.k); });
+  $$("#weekPop [data-k]").forEach(b => b.onclick = () => { showPop($("#weekPop"), false); select(b.dataset.k); });
 }
 
 async function loadTicketTime(key) {
@@ -1037,7 +1112,7 @@ function logDialog(key, pre = {}) {
   const gap = left ? Math.max(0, left.target - left.seconds) : 0;
   d.innerHTML = `<div class="dlg-in">
     <h2>${key ? `Log time on ${esc(key)}` : "Log time"}</h2>
-    ${key ? "" : `<label class="fld"><span>Ticket</span><select id="lgK" aria-label="Ticket">${(tickets || []).map(t => `<option value="${esc(t.key)}">${esc(t.key)} · ${esc(t.summary)}</option>`).join("")}</select></label>`}
+    ${key ? "" : `<label class="fld"><span>Ticket</span><select id="lgK" aria-label="Ticket" data-search="Search by key or title">${(tickets || []).map(t => `<option value="${esc(t.key)}">${esc(t.key)} · ${esc(t.summary)}</option>`).join("")}</select></label>`}
     <p class="intro">Added to Jira as a worklog under your name.${gap ? ` You have ${hm(gap)} left to reach today's target.` : ""}</p>
     <div class="fld"><span>How long</span>
       <div class="quick">${[15, 30, 60, 120, 240].map(m => `<button class="chip" data-m="${m}">${hm(m * 60)}</button>`).join("")}${gap ? `<button class="chip" data-m="${Math.round(gap / 60)}">Rest of today (${hm(gap)})</button>` : ""}</div>
@@ -1236,8 +1311,7 @@ function renderReview() {
   $("#rvUnapprove")?.addEventListener("click", async () => { if (await confirmDialog(`Revoke your approval of !${r.iid}?`, "Removes your approval in GitLab.", "Revoke approval", "danger")) reviewAct("unapprove"); });
   $("#rvChanges").onclick = () => reviewDialog(true);
   $("#rvComment").onclick = () => reviewDialog(false);
-  const more = $("#more"), pop = $("#pop");
-  more.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; more.setAttribute("aria-expanded", !pop.hidden); if (!pop.hidden) document.addEventListener("click", () => { pop.hidden = true; more.setAttribute("aria-expanded", "false"); }, { once: true }); };
+  wirePop($("#more"), $("#pop"));
   $$("#pop button[data-open][data-repo]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open));
   $$("#rvTabs [data-rt]").forEach(b => b.onclick = () => { r.tab = b.dataset.rt; $$("#rvTabs [data-rt]").forEach(x => x.setAttribute("aria-selected", x === b)); glide($("#rvTabs"), b); renderReviewPane(); soften($("#rvPane")); });
   renderReviewPane();
@@ -1452,13 +1526,9 @@ $("#menuBtn").onclick = e => { e.stopPropagation(); $("#app").classList.toggle("
 document.addEventListener("click", e => { if ($("#app").classList.contains("sb-open") && !e.target.closest(".sb") && !e.target.closest("#menuBtn")) $("#app").classList.remove("sb-open"); });
 $$(".nav-i").forEach(a => a.addEventListener("click", () => $("#app").classList.remove("sb-open")));
 $("#brandHome").onclick = e => { e.preventDefault(); history.pushState(null, "", "#tickets"); route(); };
-$("#cmdBtn").onclick = () => openFind();
+
 
 function renderShell() {
-  // low disk space: say so, everywhere, because checks start failing
-  const free = status?.diskFree ?? -1;
-  $("#diskBar").hidden = !(free >= 0 && free < 1024 ** 3);
-  if (!$("#diskBar").hidden) $("#diskBar").innerHTML = `${icon("alert", "ico")}<span><b>Drive C: is almost full (${(free / 1024 ** 3).toFixed(2)} GB free).</b> Checks can fail to save. Free some space with Disk Cleanup or Settings › Storage.</span>`;
   navCounts();
 }
 
