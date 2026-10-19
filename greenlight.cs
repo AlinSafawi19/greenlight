@@ -1445,6 +1445,11 @@ static class LocalApps
     {
         var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in args) psi.ArgumentList.Add(a);
+        // When Greenlight itself was started from inside VS Code (its terminal, a task, an extension), it inherits
+        // ELECTRON_RUN_AS_NODE=1 and VS Code's internal variables. Passed on, they make Code.exe run as plain Node
+        // and quit instead of opening a window. Editors get a clean environment.
+        foreach (var name in psi.Environment.Keys.Where(k => k.StartsWith("ELECTRON_", StringComparison.OrdinalIgnoreCase) || k.StartsWith("VSCODE_", StringComparison.OrdinalIgnoreCase)).ToList())
+            psi.Environment.Remove(name);
         Process.Start(psi);
     }
 
