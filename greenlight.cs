@@ -2827,15 +2827,7 @@ static class UiServer
             switch (req.HttpMethod, path)
             {
                 case ("GET", ""):
-                {
-                    // every /assets/ link carries the file's version, so a changed script or style is never served from an old cache
-                    var html = Regex.Replace(File.ReadAllText(Path.Combine(ledger.AppDir, "ui.html")), @"/assets/([A-Za-z0-9_.\-]+)(?=[""'])", m =>
-                    {
-                        var f = Path.Combine(ledger.AppDir, "assets", m.Groups[1].Value);
-                        return File.Exists(f) ? $"{m.Value}?v={File.GetLastWriteTimeUtc(f).Ticks:x}" : m.Value;
-                    });
-                    await SendText(res, 200, html, "text/html; charset=utf-8");
-                }
+                    await SendText(res, 200, File.ReadAllText(Path.Combine(ledger.AppDir, "ui.html")), "text/html; charset=utf-8");
                     return;
 
                 case ("GET", var p) when p.StartsWith("/assets/"):
