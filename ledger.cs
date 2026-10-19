@@ -166,7 +166,7 @@ class Ledger
 
     public bool IsValidKey(string key) => Regex.IsMatch(key, $"^(?:{KeyPattern})$");
 
-    public async Task<Report> Build(string key, bool fetch, Action<string> progress, bool includeChildren = true)
+    public async Task<Report> Build(string key, bool fetch, Action<string> progress, bool includeChildren = true, bool onlyMine = false)
     {
         IssueInfo? issue = null;
         var scope = new List<IssueInfo>();
@@ -178,6 +178,9 @@ class Ledger
             {
                 progress($"Reading child tickets of {key} from Jira...");
                 scope = await Jira.Descendants(key);
+                // other people's sub-tickets are left out: their keys aren't scanned, so their commits don't count either
+                if (onlyMine && await CurrentUser() is { } me)
+                    scope = scope.Where(s => s.AssigneeId == me.AccountId).ToList();
             }
             for (var (pk, depth) = (issue?.ParentKey, 0); pk is not null && depth < 3; depth++)
             {
@@ -892,6 +895,14 @@ class Jira
         return found;
     }
 
+    // Tickets assigned to me (any status) whose key matches exactly or whose summary contains the words.
+    public Task<List<IssueInfo>> SearchMine(string text, bool exactKey)
+    {
+        var q = text.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var match = exactKey ? $"key = \"{q}\"" : $"summary ~ \"{q}*\"";
+        return Search($"assignee = currentUser() AND {match} ORDER BY updated DESC", 25);
+    }
+
     public Task<List<IssueInfo>> MyOpenIssues() =>
         Search("assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC", 200);
 
@@ -1147,15 +1158,27 @@ static class UiServer
                     return;
                 }
 
+                case ("GET", "/api/search"):
+                {
+                    if (await ledger.CurrentUser() is null) { await Send(res, 401, Err("Connect your Jira account first")); return; }
+                    var q = (req.QueryString["q"] ?? "").Trim();
+                    if (q.Length < 2) { await Send(res, 200, new JsonArray()); return; }
+                    var exact = ledger.IsValidKey(q.ToUpperInvariant());
+                    var hits = await ledger.Jira.SearchMine(exact ? q.ToUpperInvariant() : q, exact);
+                    await Send(res, 200, new JsonArray(hits.Select(i => (JsonNode)ReportJson.Issue(i)).ToArray()));
+                    return;
+                }
+
                 case ("GET", "/api/manifest"):
                 {
                     if (key is null || !ledger.IsValidKey(key)) { await Send(res, 400, Err($"Enter a key matching {ledger.KeyPattern}")); return; }
                     var fetch = req.QueryString["fetch"] == "1";
                     var children = req.QueryString["children"] != "0";
+                    var onlyMine = req.QueryString["mine"] != "0";
                     await buildLock.WaitAsync();
                     try
                     {
-                        var rep = await ledger.Build(key, fetch, msg => Console.WriteLine($"[{key}] {msg}"), children);
+                        var rep = await ledger.Build(key, fetch, msg => Console.WriteLine($"[{key}] {msg}"), children, onlyMine);
                         cache[key] = rep;
                         await Send(res, 200, ReportJson.Full(rep, ledger.JiraBaseUrl));
                     }

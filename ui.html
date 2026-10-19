@@ -69,6 +69,12 @@
   .search input { width: 100%; border: 1px solid var(--line); background: var(--sunk); border-radius: 10px; padding: 9px 44px 9px 38px; font-size: 14.5px; }
   .search input:focus { outline: none; border-color: var(--primary); background: var(--card); box-shadow: 0 0 0 3px var(--primary-soft); }
   .search .s-ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); }
+  .sugg { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.14); padding: 6px; max-height: 60vh; overflow: auto; z-index: 20; }
+  .sugg button { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; border-radius: 8px; padding: 8px 10px; }
+  .sugg button:hover, .sugg button.on { background: var(--sunk); }
+  .sugg .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sugg .s { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .sugg .msg { padding: 10px; font-size: 13.5px; color: var(--muted); }
   .search kbd { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font: 600 11px var(--mono); color: var(--faint); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; background: var(--card); }
   .me { display: flex; align-items: center; gap: 10px; background: none; border: 1px solid transparent; border-radius: 999px; padding: 3px 12px 3px 3px; white-space: nowrap; }
   .me:hover { border-color: var(--line); background: var(--sunk); }
@@ -264,8 +270,9 @@
     </button>
     <form class="search" id="search" autocomplete="off" role="search">
       <svg class="ico s-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" placeholder="Find a ticket, e.g. MM-1234" aria-label="Find a ticket by key" spellcheck="false">
+      <input id="q" placeholder="Search your tickets by key or title" aria-label="Search your tickets" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="sugg">
       <kbd>/</kbd>
+      <div class="sugg" id="sugg" role="listbox" hidden></div>
     </form>
     <div id="meSlot"></div>
   </div>
@@ -496,7 +503,7 @@ async function openTicket(key, fetchFirst) {
     <p>${includeKids && status?.account ? "Finding its sub-tasks in Jira, then " : ""}${fetchFirst ? `fetching the latest from ${n(status?.repoCount ?? 0, "repository", "repositories")} and reading their history. This can take up to a minute.` : "reading your local git history. Just a few seconds."}</p></div>`;
   $("#back").onclick = () => goHome();
   try {
-    current = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}`);
+    current = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=1`);
     current.fetched = fetchFirst;
     const m = mine?.find(x => x.key === key); if (m) m.lastBuild = { warnings: todoList(current).length, generated: current.generated };
     renderTicket();
@@ -538,8 +545,9 @@ function todoList(r) {
 }
 
 function tree(scope) {
-  const kids = new Map();
-  for (const t of scope.slice(1)) { const p = t.parentKey || ""; if (!kids.has(p)) kids.set(p, []); kids.get(p).push(t); }
+  const kids = new Map(), keys = new Set(scope.map(t => t.key));
+  // a sub-task whose story was filtered out (someone else's) hangs directly under the ticket
+  for (const t of scope.slice(1)) { const p = keys.has(t.parentKey) ? t.parentKey : scope[0].key; if (!kids.has(p)) kids.set(p, []); kids.get(p).push(t); }
   const out = [];
   const walk = (t, d) => { out.push({ ...t, depth: d }); (kids.get(t.key) || []).forEach(c => walk(c, d + 1)); };
   if (scope.length) walk(scope[0], 0);
@@ -632,7 +640,7 @@ function renderTicket() {
         ${i ? `<span class="m"><span class="avatar sm">${esc(initials(i.assignee))}</span>${esc(i.assignee)}</span>` : ""}
         ${i && i.fixVersions !== "none" ? `<span class="m"><span class="lbl">Fix version</span>${esc(i.fixVersions)}</span>` : ""}
         ${!i && !status?.account ? `<span class="m muted"><button class="link" id="hdConnect">Connect Jira</button>&nbsp;to see the title, status and sub-tasks</span>` : ""}
-        ${status?.account ? `<label class="switch" style="margin-left:auto" title="Include sub-tasks, or for an epic everything under it"><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}> Include sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
+        ${status?.account ? `<label class="switch" style="margin-left:auto" title="Include the sub-tickets under this one that are assigned to you"><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}> Include my sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
       </div>
     </section>
     <div class="t-grid">
@@ -707,7 +715,40 @@ function route() {
 }
 window.addEventListener("popstate", route);
 $("#home").onclick = () => goHome();
-$("#search").onsubmit = e => { e.preventDefault(); const v = $("#q").value; $("#q").value = ""; $("#q").blur(); go(v); };
+/* search: only tickets assigned to you, by key or words in the title */
+let hits = [], hitIdx = -1, searchSeq = 0, searchTimer;
+function closeSugg() { $("#sugg").hidden = true; $("#q").setAttribute("aria-expanded", "false"); hitIdx = -1; }
+function showSugg(html) { $("#sugg").innerHTML = html; $("#sugg").hidden = false; $("#q").setAttribute("aria-expanded", "true"); }
+function pick(key) { $("#q").value = ""; $("#q").blur(); closeSugg(); go(key); }
+function drawHits(q) {
+  if (!hits.length) { showSugg(`<div class="msg">None of your tickets match “${esc(q)}”.</div>`); return; }
+  showSugg(hits.map((h, k) => `<button type="button" role="option" class="${k === hitIdx ? "on" : ""}" data-key="${esc(h.key)}">
+    <span class="key">${esc(h.key)}</span><span class="t">${esc(h.summary)}</span><span class="s">${esc(h.status)}</span></button>`).join(""));
+  $("#sugg").querySelectorAll("[data-key]").forEach(b => b.onmousedown = e => { e.preventDefault(); pick(b.dataset.key); });
+}
+$("#q").addEventListener("input", () => {
+  const q = $("#q").value.trim();
+  clearTimeout(searchTimer);
+  if (!status?.account) { showSugg(`<div class="msg">Connect your Jira account to search your tickets.</div>`); return; }
+  if (q.length < 2) { closeSugg(); return; }
+  searchTimer = setTimeout(async () => {
+    const seq = ++searchSeq;
+    showSugg(`<div class="msg"><span class="spinner sm"></span> Searching your tickets…</div>`);
+    try { const r = await api(`/api/search?q=${encodeURIComponent(q)}`); if (seq !== searchSeq) return; hits = r; hitIdx = r.length ? 0 : -1; drawHits(q); }
+    catch (e) { if (seq === searchSeq) showSugg(`<div class="msg">${esc(e.message)}</div>`); }
+  }, 250);
+});
+$("#q").addEventListener("keydown", e => {
+  if ($("#sugg").hidden || !hits.length) { if (e.key === "Escape") closeSugg(); return; }
+  if (e.key === "ArrowDown") { e.preventDefault(); hitIdx = (hitIdx + 1) % hits.length; drawHits($("#q").value); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); hitIdx = (hitIdx - 1 + hits.length) % hits.length; drawHits($("#q").value); }
+  else if (e.key === "Escape") closeSugg();
+});
+$("#q").addEventListener("blur", () => setTimeout(closeSugg, 120));
+$("#search").onsubmit = e => {
+  e.preventDefault();
+  if (hits.length && hitIdx >= 0 && !$("#sugg").hidden) pick(hits[hitIdx].key);
+};
 document.addEventListener("keydown", e => { if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); } });
 
 (async () => { await loadStatus(); route(); })();
