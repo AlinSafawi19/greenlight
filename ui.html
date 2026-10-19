@@ -35,7 +35,7 @@
   input, select { font: inherit; color: var(--text); }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
   .key { font: 600 13px var(--mono); letter-spacing: -.01em; }
-  code { font: 13px var(--mono); background: var(--sunk); border: 1px solid var(--line-2); padding: 0 5px; border-radius: 5px; color: var(--text-2); word-break: break-all; }
+  code { font: 13px var(--mono); background: var(--sunk); border: 1px solid var(--line-2); padding: 0 5px; border-radius: 5px; color: var(--text-2); overflow-wrap: anywhere; }
   .muted { color: var(--muted); }
   [hidden] { display: none !important; }
 
@@ -177,7 +177,9 @@
   .r .st.ready { color: var(--ready); } .r .st.todo { color: var(--todo); } .r .st.idle { color: var(--idle); }
   .r .name { font-weight: 600; }
   .r .detail { font-size: 13.5px; color: var(--text-2); margin-top: 2px; }
-  .r .aside { font-size: 13px; color: var(--muted); text-align: right; white-space: nowrap; }
+  .r .aside { font-size: 13px; color: var(--muted); text-align: right; max-width: 280px; overflow-wrap: anywhere; }
+  .r .aside .repos { display: block; font-size: 12.5px; color: var(--faint); margin-top: 2px; }
+  .r > div { min-width: 0; overflow-wrap: anywhere; }
   .r .aside a { font-weight: 600; }
   .r.sub1 { padding-left: 22px; } .r.sub2 { padding-left: 44px; }
   .r.you { background: linear-gradient(90deg, var(--primary-soft), transparent 60%); border-radius: 8px; }
@@ -601,7 +603,7 @@ function renderTicket() {
           <span class="st ${t.statusCategory === "done" ? "ready" : "idle"}">${t.statusCategory === "done" ? I.check : I.dash}</span>
           <div><div class="name"><button class="link key" data-go="${esc(t.key)}">${esc(t.key)}</button> ${esc(t.summary)}</div>
             <div class="detail"><span class="avatar sm" style="display:inline-grid;vertical-align:middle;margin-right:4px">${esc(initials(t.assignee))}</span>${esc(t.assignee)}${you ? " (you)" : ""} · ${esc(t.type)} · ${esc(t.status)}</div></div>
-          <div class="aside">${t.commits ? `<span style="color:var(--${codeOk ? "ready" : "todo"})">${codeOk ? "all code merged" : `${t.merged} of ${t.commits} merged`}</span><br>${t.repos.map(esc).join(", ")}` : "no code of its own"}</div></div>`;
+          <div class="aside">${t.commits ? `<span style="color:var(--${codeOk ? "ready" : "todo"})">${codeOk ? "all code merged" : `${t.merged} of ${t.commits} merged`}</span><span class="repos">${t.repos.map(esc).join(", ")}</span>` : "no code of its own"}</div></div>`;
       }).join("")}</div></section>`]);
 
     if (r.highlights.length) sections.push(["check", "Double-check these", `<section class="card sec" id="check"><header><h3>Double-check these</h3></header>
