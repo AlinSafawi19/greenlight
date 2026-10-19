@@ -206,6 +206,8 @@ class Ledger
     public void SetReposRoot(string path)
     {
         path = Path.GetFullPath(path.Trim());
+        // a network share could hand git a hostile .git/config: local folders only
+        if (path.StartsWith(@"\\")) throw new Exception("Use a folder on this computer, not a network share.");
         if (!Directory.Exists(path)) throw new Exception($"Folder not found: {path}");
         LoadRepos(path);
         if (Repos.Count == 0) throw new Exception($"No git repositories found in {path}");
@@ -440,11 +442,17 @@ static class CredStore
 
 static class Git
 {
+    // git by full path, found once on PATH: never a git.exe that happens to sit in the current folder
+    public static readonly Lazy<string> GitExe = new(() =>
+        (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Select(d => { try { return Path.Combine(d.Trim('"'), "git.exe"); } catch { return ""; } })
+            .FirstOrDefault(f => f != "" && Path.IsPathRooted(f) && File.Exists(f)) ?? "git");
+
     public static string Run(string repo, params string[] args) => RunWithInput(repo, null, args);
 
     public static string RunWithInput(string repo, string? input, params string[] args)
     {
-        var psi = new ProcessStartInfo("git")
+        var psi = new ProcessStartInfo(GitExe.Value)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -1449,8 +1457,10 @@ static class LocalApps
                 else Launch(vs, repo);
                 break;
             case "folder":
-                if (file is not null && File.Exists(file)) Launch("explorer.exe", $"/select,{file}");
-                else Launch("explorer.exe", file is not null ? Path.GetDirectoryName(file)! : repo);
+                var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                // Explorer splits its arguments on commas: a path with one would turn into extra arguments
+                if (file is not null && File.Exists(file) && !file.Contains(',')) Launch(explorer, $"/select,{file}");
+                else Launch(explorer, file is not null ? Path.GetDirectoryName(file)! : repo);
                 break;
             default: throw new Exception("Unknown app.");
         }
@@ -1489,7 +1499,7 @@ static class LocalApps
         var code = VsCode() ?? throw new Exception("VS Code isn't installed on this computer.");
         var ordered = Chronological(repo, shas);
         var first = ordered[0]; var last = ordered[^1];
-        var dir = Path.Combine(Path.GetTempPath(), "greenlight", "diff", Path.GetFileName(repo), first[..8] + "-" + last[..8]);
+        var dir = Path.Combine(Path.GetTempPath(), "greenlight", "diff", Path.GetFileName(repo), first[..7] + "-" + last[..7]);
         Directory.CreateDirectory(dir);
         var name = Path.GetFileName(rel);
         var before = Path.Combine(dir, "before " + name);
@@ -2747,8 +2757,21 @@ static class UiServer
         {
             // only this machine, and only pages served by this server (blocks DNS rebinding and cross-site posts)
             if (req.Url!.Host is not ("localhost" or "127.0.0.1")) { await Send(res, 403, Err("Forbidden host")); return; }
+            // the Host header is the client's word: also require the connection itself to come from this computer
+            if (!IPAddress.IsLoopback(req.RemoteEndPoint.Address)) { await Send(res, 403, Err("Forbidden")); return; }
+
+            // no framing (clickjacking), no type sniffing, scripts and data only from this server
+            res.Headers["X-Frame-Options"] = "DENY";
+            res.Headers["X-Content-Type-Options"] = "nosniff";
+            res.Headers["Referrer-Policy"] = "no-referrer";
+            res.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'";
 
             var path = req.Url.AbsolutePath.TrimEnd('/');
+
+            // every API call, reads included, must come from our own page: other sites can't add this header
+            // without CORS, which we never allow (stops drive-by fetches, cache swaps and worklog pulls)
+            if (path.StartsWith("/api/") && !Trusted(req)) { await Send(res, 403, Err("Missing X-Ledger header")); return; }
+            if (req.ContentLength64 > 1_000_000) { await Send(res, 413, Err("Request too large")); return; }
             var key = req.QueryString["key"]?.Trim().ToUpperInvariant();
 
             switch (req.HttpMethod, path)
@@ -3096,7 +3119,7 @@ static class UiServer
                         await Send(res, 200, new JsonObject { ["ok"] = true });
                         return;
                     }
-                    var shas = body["shas"]?.AsArray().Select(n => (string?)n).Where(s => LocalApps.IsCommit(repo, s)).Select(s => s!).Distinct().ToList() ?? [];
+                    var shas = body["shas"]?.AsArray().Select(n => (string?)n).Distinct().Take(200).Where(s => LocalApps.IsCommit(repo, s)).Select(s => s!).Distinct().ToList() ?? [];
                     if (rel is null || shas.Count == 0) { await Send(res, 400, Err("Nothing to compare.")); return; }
                     if (path == "/api/diff") { await Send(res, 200, LocalApps.Diff(repo, rel, shas)); return; }
                     LocalApps.OpenDiff(repo, rel, shas);
@@ -3130,14 +3153,15 @@ static class UiServer
     static JsonArray Recent(Ledger ledger, int take = 30)
     {
         if (!Directory.Exists(ledger.OutDir)) return [];
-        return new JsonArray(Directory.GetFiles(ledger.OutDir, "*.json")
-            .Select(f => { try { return JsonNode.Parse(File.ReadAllText(f)); } catch { return null; } })
-            .Where(n => n?["key"] is not null)
-            .OrderByDescending(n => (string?)n!["generated"])
-            .Take(take)
-            .Select(n => n!)
-            .ToArray());
+        // re-read only when a result file was added or changed
+        var files = Directory.GetFiles(ledger.OutDir, "*.json");
+        var sig = $"{files.Length}|{(files.Length == 0 ? 0 : files.Max(f => File.GetLastWriteTimeUtc(f).Ticks))}";
+        if (recent.Sig != sig)
+            recent = (sig, files.Select(f => { try { return JsonNode.Parse(File.ReadAllText(f)); } catch { return null; } })
+                .Where(n => n?["key"] is not null).OrderByDescending(n => (string?)n!["generated"]).Select(n => n!).ToList());
+        return new JsonArray(recent.Items.Take(take).Select(n => n.DeepClone()).ToArray());
     }
+    static (string Sig, List<JsonNode> Items) recent = ("", []);
 
     // State-changing calls must come from our own page: a custom header can't be sent cross-site without CORS, which we never allow.
     static bool Trusted(HttpListenerRequest req) => req.Headers["X-Ledger"] == "1";
