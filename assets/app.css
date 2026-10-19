@@ -985,3 +985,7 @@ a, button, .row, .mini, .it, .nav-i, .chip, .qa, .wl-day, .files li, .gtoggle, .
 @keyframes gl-flood { from { --gl-r: 0px; } to { --gl-r: var(--gl-end, 3000px); } }
 @keyframes gl-settle { to { filter: saturate(.85) brightness(.97); } }
 @media (prefers-reduced-motion: reduce) { ::view-transition-new(root), ::view-transition-old(root) { animation: none; -webkit-mask-image: none; mask-image: none; } }
+/* date picker inside a dialog: opens in place, above the fields below it, and the dialog lets it show */
+dialog.dlg { overflow: visible; }
+dialog .flatpickr-wrapper { display: block; position: relative; }
+dialog .flatpickr-calendar.static { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; }

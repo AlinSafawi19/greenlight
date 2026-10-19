@@ -1764,7 +1764,9 @@ function errBox(title, msg, retry) {
 // date picker (flatpickr), themed; the field keeps yyyy-mm-dd while showing a friendly date
 function datePicker(el, opts = {}) {
   if (!el || !window.flatpickr) return null;
-  return flatpickr(el, { dateFormat: "Y-m-d", altInput: !el.classList.contains("sr"), altFormat: "D j M Y", disableMobile: true, monthSelectorType: "static", locale: { firstDayOfWeek: 1 }, ...opts });
+  // inside a dialog the calendar must live in the dialog: dialogs sit on the top layer, above anything attached to the page
+  const inDialog = !!el.closest("dialog");
+  return flatpickr(el, { dateFormat: "Y-m-d", altInput: !el.classList.contains("sr"), altFormat: "D j M Y", disableMobile: true, monthSelectorType: "static", locale: { firstDayOfWeek: 1 }, ...(inDialog ? { static: true } : {}), ...opts });
 }
 
 /* ─────────────────────────── notifications and the end-of-day reminder ─────────────────────────── */
