@@ -203,7 +203,9 @@ function openSettings() {
     try { const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ reposRoot: $("#fRoot").value.trim() }) }); msg(`Saved. ${pl(r.repoCount, "repository", "repositories")} found.`); loadStatus(); }
     catch (e) { $("#eRoot").textContent = e.message; }
   };
-  if (me) $("#disc").onclick = async () => { await api("/api/account/disconnect", { method: "POST" }); tickets = null; selected = null; report = null; d.close(); toast("Disconnected. The token was removed from this computer."); boot(); };
+  if (me) $("#disc").onclick = async () => {
+    if (!await confirmDialog("Disconnect Jira?", "Removes your Jira token from this computer. Tickets, worklogs and handovers stop until you connect again.", "Disconnect", "danger")) return openSettings();
+    await api("/api/account/disconnect", { method: "POST" }); tickets = null; selected = null; report = null; d.close(); toast("Disconnected. The token was removed from this computer."); boot(); };
   else $("#connect").onclick = async () => {
     const site = $("#fSite").value.trim(), email = $("#fEmail").value.trim(), token = $("#fToken").value.trim();
     const errs = { Site: /^https:\/\/[^/]+/.test(site) ? "" : "Use the full address, starting with https://",
@@ -234,7 +236,7 @@ function gitlabSection() {
   const g = status?.gitlab, base = status?.gitlabBaseUrl || "https://gitlab.com";
   const create = `${base}/-/user_settings/personal_access_tokens?name=Greenlight&scopes=api`;
   return g ? `<div class="fld"><span>GitLab · code review</span>
-      <div class="acct"><span class="face">${esc(initials(g.name))}</span><div style="flex:1;min-width:0">${esc(g.name)}<small>@${esc(g.username)} · ${esc(base.replace("https://", ""))}</small></div><button class="btn danger small" id="glDisc">Disconnect</button></div></div>`
+      <div class="acct">${g.avatar ? `<img class="face" src="/me/avatar?of=gitlab&u=${encodeURIComponent(g.username)}" alt="" data-initials="${esc(initials(g.name))}">` : `<span class="face">${esc(initials(g.name))}</span>`}<div style="flex:1;min-width:0">${esc(g.name)}<small>@${esc(g.username)} · ${esc(base.replace("https://", ""))}</small></div><button class="btn danger small" id="glDisc">Disconnect</button></div></div>`
     : `<div class="fld"><span>GitLab · code review <span class="ink-3">(optional)</span></span>
       <small style="margin-top:-2px">Connect to see the merge requests you're asked to review, and the reviews on yours.</small>
       ${status?.gitlabRejected ? `<small style="color:var(--red)">The saved GitLab token stopped working. Enter a new one.</small>` : ""}
@@ -243,7 +245,9 @@ function gitlabSection() {
 }
 
 function wireGitlab(msg) {
-  $("#glDisc")?.addEventListener("click", async () => { await api("/api/gitlab/disconnect", { method: "POST" }); reviews = null; railMode = "mine"; await loadStatus(); openSettings(); renderList(); toast("GitLab disconnected. The token was removed from this computer."); });
+  $("#glDisc")?.addEventListener("click", async () => {
+    if (!await confirmDialog("Disconnect GitLab?", "Removes your GitLab token from this computer. Reviews, deployments and creating merge requests or tags stop until you connect again.", "Disconnect", "danger")) return openSettings();
+    await api("/api/gitlab/disconnect", { method: "POST" }); reviews = null; railMode = "mine"; await loadStatus(); openSettings(); renderList(); toast("GitLab disconnected. The token was removed from this computer."); });
   $("#glConn")?.addEventListener("click", async () => {
     const base = $("#glBase").value.trim(), token = $("#glToken").value.trim();
     $("#glErr").textContent = !/^https:\/\/[^/]+/.test(base) ? "Use the full address, starting with https://" : token.length < 20 ? "Paste your personal access token." : "";
@@ -552,6 +556,7 @@ function renderTicket() {
       </aside>
     </div>
 
+    ${setupHtml(r)}
     <section class="ev">
       <div class="evbar">
         ${r.scope.length > 1 ? `<select id="evTicket" aria-label="Ticket" data-search="Search your tickets in this check">
@@ -765,7 +770,7 @@ function renderPane() {
       const merges = x.merges.filter(m => keyHit(m.branch)), branches = x.branches.filter(b => keyHit(b.name));
       return `<tr><td>${x.webUrl ? `<a class="ln" href="${url(x.webUrl)}" target="_blank" rel="noopener">${repoTag(x.name)}</a>` : repoTag(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
         <td>${merges.map(m => m.url ? `<a class="ln" href="${url(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="ink-3">${day(m.date)}</span>` : `<span class="ink-3">Direct merge, ${day(m.date)}</span>`).join("<br>") || `<span class="ink-3">None</span>`}</td>
-        <td>${branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--amber)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="ink-3">None</span>`}</td>
+        <td>${branches.map(branchHtml).join("") || `<span class="ink-3">None</span>`}</td>
         <td class="nw">${tagCell(x.tags)}</td>
         <td class="r num"><span class="cnt"><b>${x.commits.filter(c => c.inDefault).length}</b><span class="ink-3"> of ${x.commits.length}</span></span></td><td class="r act">${openBtns(x.name, null, x.sln)}</td></tr>`;
     }), 25);
@@ -899,7 +904,7 @@ async function renderDiffPage() {
   $("#main").innerHTML = `<div class="dpage">
     <div class="dp-h">
       <button class="btn" id="dpBack">${icon("back")}${esc(report.key)}</button>
-      <div class="dp-t"><div class="dp-file">${repoTag(d.repo)}<span class="mono"><span class="ink-3">${esc(dir)}</span>${esc(name)}</span></div>
+      <div class="dp-t"><div class="dp-file">${repoTag(d.repo)}<span class="mono"><span class="ink-3">${esc(dir)}</span>${esc(name)}</span><button class="btn only small cp" data-copy="${esc(d.path)}" title="Copy the path" aria-label="Copy the path">${icon("copy")}</button></div>
         <div class="dp-sub ink-3">${pl(d.shas.length, "commit")} of yours changed this file</div></div>
       <div class="seg" role="radiogroup" aria-label="View">
         <button role="radio" aria-checked="${d.mode === "net"}" data-mode="net">Combined</button>
@@ -1007,6 +1012,7 @@ function wireTicket() {
 }
 
 async function post() {
+  if (!await confirmDialog(`Post the handover to ${esc(report.key)}?`, "Writes the QA checklist as a comment on the Jira ticket, under your name. Your previous Greenlight comment there is replaced, not duplicated.", `${icon("send")}Post handover`, "primary")) return;
   const bs = $$("#post, [data-post]");
   bs.forEach(b => { b.disabled = true; b.dataset.l = b.innerHTML; b.innerHTML = `<span class="spinner"></span>Posting`; });
   try { const res = await api(`/api/post?key=${encodeURIComponent(report.key)}`, { method: "POST" }); toast(`Handover posted to ${esc(report.key)}.<a href="${url(res.url)}" target="_blank" rel="noopener">View in Jira</a>`, 6500); }
@@ -1667,6 +1673,65 @@ async function renderWorklogs(from, pickDay) {
     $$("#sgList [data-log]").forEach(b => b.onclick = () => logDialog(b.dataset.log, { minutes: +b.dataset.min, date: wlDay, comment: b.dataset.c }));
   } catch (e) { if ($("#sgList")) $("#sgList").innerHTML = `<p class="ink-3" style="margin:0">${esc(e.message)}</p>`; }
 }
+
+/* ─────────────────────────── System Manager setup on QA ───────────────────────────
+   Every scope the ticket adds (one per row, ready to copy, with the service's AppName in front once you type it),
+   and every new menu with its actions and the scopes to link to each. */
+const appName = repo => { try { return localStorage.getItem("gl-app:" + repo) || ""; } catch { return ""; } };
+const fullScope = (scope, repo) => (appName(repo) ? appName(repo).toLowerCase() + ":" : "") + scope;
+const copyBtn = (text, label = "Copy") => `<button class="btn only small cp" data-copy="${esc(text)}" title="${label}" aria-label="${label}">${icon("copy")}</button>`;
+const scopeCode = (e, cls = "") => `<code class="sc ${cls}" data-scope="${esc(e.scope)}" data-repo="${esc(e.repo)}">${esc(fullScope(e.scope, e.repo))}</code>`;
+const verbTag = v => `<span class="vb vb-${esc((v || "any").toLowerCase())}">${esc(v || "ANY")}</span>`;
+
+function setupHtml(r) {
+  const s = r.setup || { services: [], menus: [] };
+  if (!s.services.length && !s.menus.length) return "";
+  const nScopes = s.services.reduce((n, x) => n + x.added.length, 0);
+  const row = (e, removed) => `<tr class="${removed ? "gone" : ""}"><td><div class="sc-cell">${scopeCode(e)}${removed ? `<span class="sc-tag">removed</span>` : copyBtn(fullScope(e.scope, e.repo), "Copy scope")}</div></td>
+    <td class="nw">${verbTag(e.verb)} <code class="rt-path">${esc(e.route)}</code></td><td class="ink-3 nw">${esc(e.action)}</td></tr>`;
+  return `<section class="smx" id="smx">
+    <h3 class="h3">System Manager setup on QA<span>${[nScopes ? pl(nScopes, "scope") : "", s.menus.length ? pl(s.menus.length, "menu") : ""].filter(Boolean).join(" · ")}</span></h3>
+    <p class="smx-note">Scopes register themselves when each service starts on QA. In the System Manager there: grant the scopes to the QA roles, create each menu with its actions, and link every action to the scopes listed with it. Each copy button gives the exact text.</p>
+    ${s.services.map(sv => `<div class="smx-card">
+      <div class="smx-h">${repoTag(sv.repo)}<span class="ink-3">${pl(sv.added.length, "new scope")}${sv.removed.length ? ` · ${sv.removed.length} removed` : ""}</span>
+        <label class="smx-pre" title="Scopes start with the service's Common:AppName, which isn't stored in git. Type it once; every copy includes it."><span>AppName</span><input data-pre="${esc(sv.repo)}" value="${esc(appName(sv.repo))}" placeholder="${esc((sv.tag || "e.g. omnicore").toLowerCase())}" spellcheck="false" autocomplete="off"></label>
+        ${sv.added.length ? `<button class="btn line small" data-copy-all="${esc(sv.repo)}">${icon("copy")}Copy all ${sv.added.length}</button>` : ""}</div>
+      <div class="wide"><table class="tb smx-t"><thead><tr><th>Scope</th><th>Endpoint</th><th>Controller action</th></tr></thead>
+        <tbody>${sv.added.map(e => row(e, false)).join("")}${sv.removed.map(e => row(e, true)).join("")}</tbody></table></div></div>`).join("")}
+    ${s.menus.map(m => `<div class="smx-card">
+      <div class="smx-h"><span class="smx-k">Menu</span><code class="smx-uri">${esc(m.uri)}</code>${copyBtn(m.uri, "Copy the menu URI")}<span class="ink-3">${m.page ? `page ${esc(m.page)} · ` : ""}${repoTag(m.repo)}</span></div>
+      <div class="wide"><table class="tb smx-t"><thead><tr><th>Action</th><th>Scopes to link</th></tr></thead><tbody>
+        ${m.actions.map(a => `<tr><td class="nw"><div class="sc-cell"><code class="act">${esc(a.name)}</code>${copyBtn(a.name, "Copy the action name")}</div>${a.name.toUpperCase() === "VIEW" ? `<div class="ink-3 smx-hint">Needed to open the page</div>` : ""}</td>
+          <td>${a.scopes.length ? `<div class="sc-list">${a.scopes.map(e => `<div class="sc-cell">${verbTag(e.verb)}${scopeCode(e)}${copyBtn(fullScope(e.scope, e.repo), "Copy scope")}</div>`).join("")}</div>` : `<span class="ink-3">None found: the page checks this action but calls no endpoint for it</span>`}</td></tr>`).join("")}
+        ${m.unlinked.length ? `<tr class="warn"><td><span class="ink-2">Not matched to an action</span></td><td><div class="sc-list">${m.unlinked.map(e => `<div class="sc-cell">${verbTag(e.verb)}${scopeCode(e)}${copyBtn(fullScope(e.scope, e.repo), "Copy scope")}</div>`).join("")}</div></td></tr>` : ""}
+      </tbody></table></div>
+      ${m.unmatched.length ? `<p class="smx-note warn">${icon("alert")}The page also calls ${m.unmatched.map(x => `<code>${esc(x)}</code>`).join(", ")}, which matches no protected endpoint in your repositories. Check whether it needs a scope.</p>` : ""}
+    </div>`).join("")}
+  </section>`;
+}
+
+// the branch against main and dev: still to merge, and how far behind
+function branchHtml(b) {
+  return `<div class="br"><code>${esc(b.name)}</code><div class="br-vs">${(b.vs || []).map(v => `<span class="bvs ${v.ahead ? "need" : "ok"}" title="Against ${esc(v.target)}: ${pl(v.ahead, "commit")} not merged into it yet; it has ${pl(v.behind, "commit")} this branch doesn't.">
+    ${mark(v.ahead ? "todo" : "done", false)}<b>${esc(v.target)}</b> ${v.ahead ? `${v.ahead} to merge` : "merged"}${v.behind ? `<span class="bh"> · ${v.behind} behind</span>` : `<span class="bh"> · up to date</span>`}</span>`).join("") || (b.unmerged ? `<span class="bvs need">${b.unmerged} unmerged</span>` : "")}</div></div>`;
+}
+
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast(`Copied <code>${esc(t.length > 60 ? t.slice(0, 57) + "…" : t)}</code>`, 2200); } catch { fail("Couldn't copy."); } }
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-copy]"); if (b) { copyText(b.dataset.copy); return; }
+  const all = e.target.closest("[data-copy-all]");
+  if (all) { const sv = report?.setup?.services.find(x => x.repo === all.dataset.copyAll); if (sv) copyText(sv.added.map(x => fullScope(x.scope, x.repo)).join("\n")); }
+});
+// typing the AppName updates every scope of that service, and what its copy buttons copy
+document.addEventListener("input", e => {
+  const inp = e.target.closest("[data-pre]"); if (!inp) return;
+  try { localStorage.setItem("gl-app:" + inp.dataset.pre, inp.value.trim()); } catch { }
+  $$(`code.sc[data-repo="${CSS.escape(inp.dataset.pre)}"]`).forEach(c => {
+    const full = fullScope(c.dataset.scope, c.dataset.repo);
+    c.textContent = full;
+    const btn = c.parentElement.querySelector("[data-copy]"); if (btn) btn.dataset.copy = full;
+  });
+});
 
 /* ─────────────────────────── ticket extras: deployments and actions ─────────────────────────── */
 async function loadDeployments(key) {

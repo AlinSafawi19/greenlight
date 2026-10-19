@@ -65,7 +65,10 @@ record Report(string Key, DateTime Generated, IssueInfo? Issue, List<IssueInfo> 
               List<RepoResult> Repos, Doc Doc,
               List<List<Span>> Warnings, List<(string Name, List<(string Repo, string Path)> Hits)> Highlights,
               string Markdown, string MarkdownPath, List<Station> Stations, SubTickets Subs,
-              IReadOnlyDictionary<string, TagDetail> TagDetails);
+              IReadOnlyDictionary<string, TagDetail> TagDetails)
+{
+    public JsonObject Setup { get; init; } = new() { ["services"] = new JsonArray(), ["menus"] = new JsonArray() };   // System Manager setup on QA
+}
 
 // Sub-tickets in Jira under this ticket, whatever the toggle says. Possible=false: sub-tasks can't have any, or Jira isn't connected.
 record SubTickets(bool Possible, int Total, int Mine);
@@ -353,6 +356,8 @@ class Ledger
         Lap("steps");
         var doc = Manifest.Build(key, issue, scope, results, highlights, dbCfg, (int)cfg["jiraMaxFilesPerRepo"]!);
         QaPrep.AddToDoc(doc, stations);
+        var setup = AccessScan.Setup(results, name => paths.GetValueOrDefault(name), Repos);
+        AccessScan.AddToDoc(doc, setup);
 
         Directory.CreateDirectory(OutDir);
         var mdPath = Path.Combine(OutDir, $"{key}.md");
@@ -360,7 +365,7 @@ class Ledger
         File.WriteAllText(mdPath, markdown);
 
         var report = new Report(key, DateTime.Now, issue, scope, ancestors, results, doc, Manifest.Warnings(key, results),
-                                Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath, stations, subs, tagDetails);
+                                Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath, stations, subs, tagDetails) { Setup = setup };
         File.WriteAllText(Path.Combine(OutDir, $"{key}.json"), ReportJson.Summary(report).ToJsonString());
         Lap("manifest + save");
         return report;
@@ -681,7 +686,12 @@ record Commit(string Sha, string Short, string Author, string Date, string Subje
     public bool IsForeign => OtherKey is not null && Note is null;
 }
 record MergeInfo(string Sha, string Date, string SourceBranch, string? Target, string? MrUrl, bool InDefault);
-record BranchInfo(string Name, int Unmerged);
+record BranchInfo(string Name, int Unmerged)
+{
+    // where the branch stands against main and dev: commits still to merge in, and commits it is missing from them
+    public List<BranchVs> Vs { get; init; } = [];
+}
+record BranchVs(string Target, int Ahead, int Behind);
 record DbItem(string Service, string Location, string Kind, string File, string Status, bool Warning);
 record RepoResult(string Name, string WebUrl, string DefaultRef, List<Commit> Commits, List<MergeInfo> Merges,
                   List<BranchInfo> Branches, SortedDictionary<string, string> Files, List<DbItem> Db);
@@ -746,7 +756,7 @@ static class Scanner
         var refs = ix.Refs.Select(r => r.Name).Where(n => n.StartsWith("refs/heads/") || n.StartsWith("refs/remotes/"))
                       .Select(n => n.StartsWith("refs/heads/") ? n["refs/heads/".Length..] : n["refs/remotes/".Length..])
                       .Where(b => !b.EndsWith("/HEAD") && keyRx.IsMatch(b)).ToList();
-        var branchShas = new List<(string Name, HashSet<string> Unmerged)>();
+        var branchShas = new List<(string Name, HashSet<string> Unmerged, string? Tip)>();
         foreach (var group in refs.GroupBy(b => b.StartsWith("origin/") ? b["origin/".Length..] : b))
         {
             var unmerged = new HashSet<string>();
@@ -758,7 +768,9 @@ static class Scanner
                     if (sources.TryAdd(sha, "branch")) via[sha] = branchKey;
                 }
             var pushed = group.Any(b => b.StartsWith("origin/"));
-            branchShas.Add((group.Key + (pushed ? "" : " (local only, never pushed)"), unmerged));
+            var tipRef = group.OrderBy(b => b.StartsWith("origin/") ? 0 : 1).First();
+            var tip = ix.Refs.FirstOrDefault(x => x.Name == (tipRef.StartsWith("origin/") ? $"refs/remotes/{tipRef}" : $"refs/heads/{tipRef}")).Sha;
+            branchShas.Add((group.Key + (pushed ? "" : " (local only, never pushed)"), unmerged, tip));
         }
 
         if (sources.Count == 0 && merges.Count == 0 && branchShas.Count == 0) return null;
@@ -838,7 +850,7 @@ static class Scanner
         // nor its merge state count toward this ticket.
         var foreign = commits.Where(c => c.IsForeign).Select(c => c.Sha).ToHashSet();
         var branches = branchShas
-            .Select(b => new BranchInfo(b.Name, b.Unmerged.Count(s => !foreign.Contains(s))))
+            .Select(b => new BranchInfo(b.Name, b.Unmerged.Count(s => !foreign.Contains(s))) { Vs = Compare(ix, b.Tip, defaultRef) })
             .ToList();
 
         // aggregate file status across the feature: A wins over M, a later D marks it deleted
@@ -856,6 +868,24 @@ static class Scanner
                               branches.OrderBy(b => b.Name).ToList(), agg, dbItems);
     }
 
+
+    // A branch against main (or master) and dev (or develop), whichever exist, walked in the in-memory history:
+    // Ahead = its commits not in the target (still to merge), Behind = the target's commits it doesn't have (to bring in).
+    static List<BranchVs> Compare(RepoIndex ix, string? tip, string defaultRef)
+    {
+        var list = new List<BranchVs>();
+        if (tip is null || !ix.BySha.ContainsKey(tip)) return list;
+        var mine = ix.Reachable(tip);
+        foreach (var name in new[] { "main", "master", "dev", "develop" })
+        {
+            var target = ix.Refs.FirstOrDefault(r => r.Name == $"refs/remotes/origin/{name}");
+            if (target.Sha is null || list.Any(x => x.Target is "main" or "master" && name is "main" or "master" || x.Target is "dev" or "develop" && name is "dev" or "develop")) continue;
+            var theirs = ix.Reachable(target.Sha);
+            int Count(IEnumerable<string> shas) => shas.Count(s => ix.BySha.TryGetValue(s, out var c) && c.Parents.Length < 2);
+            list.Add(new BranchVs(name, Count(mine.Where(s => !theirs.Contains(s))), Count(theirs.Where(s => !mine.Contains(s)))));
+        }
+        return list;
+    }
 
     // Locates every DB script the feature touched: still staged in dev/, already in a release tag, or lost.
     static List<DbItem> AnalyzeDb(string repo, string defaultRef, SortedDictionary<string, string> files, DbConfig cfg)
@@ -1135,20 +1165,29 @@ static class AccessScan
     public static readonly Regex RouteRx = new(@"\bpath\s*:\s*[""'`](/[^""'`]*)[""'`]");
     public static readonly Regex StartupRx = new(@"GenerateScopesAsync\(\s*""([^""]+)""");
 
-    // The scopes a controller protects, named the way the access check builds them at runtime
-    // ([area:]controller[:vN]:action:method, lower case), without the service's Common:AppName prefix.
-    public static HashSet<string> Scopes(string code)
+    // one protected endpoint: its scope, and how it is called
+    public record Endpoint(string Scope, string Verb, string Route, string Action, string Controller);
+    static readonly Regex HttpRouteRx = new(@"\[Http(Get|Post|Put|Delete|Patch)(?:\(\s*""([^""]*)"")?");
+    static readonly Regex RouteAttrRx = new(@"\[Route\(\s*""([^""]*)""");
+
+    public static HashSet<string> Scopes(string code) => Endpoints(code).Select(e => e.Scope).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    // The endpoints a controller protects, with each scope named the way the access check builds it at runtime
+    // ([area:]controller[:vN]:action:method, lower case, without the service's Common:AppName prefix) and its full route.
+    public static List<Endpoint> Endpoints(string code)
     {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrEmpty(code) || ClassRx.Match(code) is not { Success: true } cls) return set;
+        var list = new List<Endpoint>();
+        if (string.IsNullOrEmpty(code) || ClassRx.Match(code) is not { Success: true } cls) return list;
+        var controller = cls.Groups[1].Value;
         var ver = cls.Groups[2].Success ? $":v{cls.Groups[2].Value}" : "";
-        var area = AreaRx.Match(code) is { Success: true } a && a.Index < cls.Index ? $"{a.Groups[1].Value}:" : "";
-        var prefix = $"{area}{cls.Groups[1].Value}{ver}";
+        var areaName = AreaRx.Match(code) is { Success: true } a && a.Index < cls.Index ? a.Groups[1].Value : "";
+        var prefix = $"{(areaName == "" ? "" : areaName + ":")}{controller}{ver}";
+        var classRoute = RouteAttrRx.Matches(code[..cls.Index]).LastOrDefault()?.Groups[1].Value ?? "";
+        string Url(string method, string action) => "/" + string.Join("/", new[] { classRoute, method }.Where(x => x != "").Select(x => x.Trim('/')))
+            .Replace("[area]", areaName.ToLowerInvariant()).Replace("[controller]", controller).Replace("[action]", action);
         for (var at = code.IndexOf("[AuthorizeScope", StringComparison.Ordinal); at >= 0; at = code.IndexOf("[AuthorizeScope", at + 1, StringComparison.Ordinal))
         {
             if (MethodRx.Match(code, at) is not { Success: true } m) break;
-            // this method's attribute block: walk up from [AuthorizeScope over attribute, comment and blank lines
-            // (not by braces: routes like "{id}/pause" contain them)
             var start = code.LastIndexOf('\n', at) + 1;
             while (start > 0)
             {
@@ -1158,32 +1197,270 @@ static class AccessScan
                 start = prevStart;
             }
             var attrs = code[start..m.Index];
-            if (ExplicitRx.Match(attrs) is { Success: true } ex && ex.Groups[2].Value != "") { set.Add(ex.Groups[2].Value.ToLowerInvariant()); continue; }
             var action = ActionNameRx.Match(attrs) is { Success: true } an ? an.Groups[1].Value : m.Groups[1].Value;
-            var verbs = HttpRx.Matches(attrs).Select(x => x.Groups[1].Value).DefaultIfEmpty("any");
-            foreach (var v in verbs) set.Add($"{prefix}:{action}:{v}".ToLowerInvariant());
+            var explicitScope = ExplicitRx.Match(attrs) is { Success: true } ex && ex.Groups[2].Value != "" ? ex.Groups[2].Value.ToLowerInvariant() : null;
+            var methodRoute = RouteAttrRx.Match(attrs) is { Success: true } mr ? mr.Groups[1].Value : null;
+            var https = HttpRouteRx.Matches(attrs).ToList();
+            if (https.Count == 0) list.Add(new(explicitScope ?? $"{prefix}:{action}:any".ToLowerInvariant(), "ANY", Url(methodRoute ?? "", action), action, controller));
+            foreach (var h in https)
+            {
+                var verb = h.Groups[1].Value;
+                list.Add(new(explicitScope ?? $"{prefix}:{action}:{verb}".ToLowerInvariant(), verb.ToUpperInvariant(),
+                             Url(h.Groups[2].Success ? h.Groups[2].Value : methodRoute ?? "", action), action, controller));
+            }
         }
-        return set;
+        return list;
     }
 
     // per controller file the ticket touched: the scopes it protected before the ticket's first change and after its last
     public static (SortedSet<string> Added, SortedSet<string> Removed) Changes(string repo, IReadOnlyList<Commit> own)
     {
-        var added = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        var removed = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        var files = own.SelectMany(c => c.Files.Select(f => (c, f.Status, f.Path)))
-                       .Where(x => x.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && x.Path.Contains("Controller", StringComparison.OrdinalIgnoreCase))
-                       .GroupBy(x => x.Path);
-        foreach (var g in files)
+        var (a, r) = EndpointChanges(repo, own);
+        return (new(a.Select(e => e.Scope), StringComparer.OrdinalIgnoreCase), new(r.Select(e => e.Scope), StringComparer.OrdinalIgnoreCase));
+    }
+    // the same comparison, keeping every endpoint's details (for the System Manager setup table)
+    public static (List<Endpoint> Added, List<Endpoint> Removed) EndpointChanges(string repo, IReadOnlyList<Commit> own)
+    {
+        var added = new List<Endpoint>(); var removed = new List<Endpoint>();
+        foreach (var g in ControllerFiles(own))
         {
-            var first = g.First(); var last = g.Last();   // commits are oldest first
-            var before = first.Status == "A" ? "" : Git.Cached(repo, null, "show", $"{first.c.Sha}^:{g.Key}");
-            var after = last.Status == "D" ? "" : Git.Cached(repo, null, "show", $"{last.c.Sha}:{g.Key}");
-            var b = Scopes(before); var a = Scopes(after);
-            foreach (var x in a.Except(b, StringComparer.OrdinalIgnoreCase)) added.Add(x);
-            foreach (var x in b.Except(a, StringComparer.OrdinalIgnoreCase)) removed.Add(x);
+            var (before, after) = Versions(repo, g);
+            var b = Endpoints(before); var a = Endpoints(after);
+            var bs = b.Select(e => e.Scope).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var as_ = a.Select(e => e.Scope).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            added.AddRange(a.Where(e => !bs.Contains(e.Scope)));
+            removed.AddRange(b.Where(e => !as_.Contains(e.Scope)));
         }
-        return (added, removed);
+        return (added.DistinctBy(e => e.Scope).OrderBy(e => e.Scope).ToList(), removed.DistinctBy(e => e.Scope).OrderBy(e => e.Scope).ToList());
+    }
+
+    static IEnumerable<IGrouping<string, (Commit c, string Status, string Path)>> ControllerFiles(IReadOnlyList<Commit> own) =>
+        own.SelectMany(c => c.Files.Select(f => (c, f.Status, f.Path)))
+           .Where(x => x.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && x.Path.Contains("Controller", StringComparison.OrdinalIgnoreCase))
+           .GroupBy(x => x.Path);
+
+    static (string Before, string After) Versions(string repo, IGrouping<string, (Commit c, string Status, string Path)> g)
+    {
+        var first = g.First(); var last = g.Last();   // commits are oldest first
+        return (first.Status == "A" ? "" : Git.Cached(repo, null, "show", $"{first.c.Sha}^:{g.Key}"),
+                last.Status == "D" ? "" : Git.Cached(repo, null, "show", $"{last.c.Sha}:{g.Key}"));
+    }
+
+    // every protected endpoint of a repository at a revision (to match what a page calls, new or not)
+    static readonly ConcurrentDictionary<string, List<Endpoint>> catalogs = new();
+    public static List<Endpoint> Catalog(string repo, string rev)
+    {
+        var id = $"{repo}|{Git.Fingerprint(repo)}|{rev}";
+        if (catalogs.TryGetValue(id, out var hit)) return hit;
+        var files = Git.Lines(Git.Cached(repo, null, "grep", "-l", "-F", "[AuthorizeScope", rev, "--", "*.cs"))
+                       .Select(l => l.StartsWith(rev + ":") ? l[(rev.Length + 1)..] : l).ToList();
+        var list = files.AsParallel().WithDegreeOfParallelism(6).SelectMany(f => Endpoints(Git.Cached(repo, null, "show", $"{rev}:{f}"))).ToList();
+        if (catalogs.Count > 200) catalogs.Clear();
+        return catalogs[id] = list;
+    }
+
+    // ── front-end pages: the menu each new page needs, its actions, and the scopes those actions call ──
+    public record PageCall(string Path, string? Verb);
+    static readonly Regex ElementRx = new(@"element\s*:\s*<\s*(\w+)");
+    static readonly Regex ActionUseRx = new(@"(?:hasAction\(\s*\w+\s*,\s*|actions\??\.includes\(\s*)[""'`]([^""'`]+)[""'`]");
+    static readonly Regex ConstPathRx = new(@"const\s+(\w+)\s*=\s*[""'`](/[^""'`$]*)[""'`]");
+    static readonly Regex TemplateCallRx = new(@"`\$\{(\w+)\}(/[^`]*)`");
+    static readonly Regex LiteralCallRx = new(@"[""'`](/(?:[\w.-]+/)*api/[^""'`\s]*)[""'`]");
+    static readonly Regex VerbRx = new(@"\.(get|post|put|delete|patch)\s*[<(]", RegexOptions.IgnoreCase);
+
+    // what a front-end ticket's changed files declare: actions checked, and API paths called
+    public static (List<string> Actions, List<PageCall> Calls) PageUse(IEnumerable<string> sources)
+    {
+        var actions = new List<string>(); var calls = new List<PageCall>();
+        foreach (var src in sources)
+        {
+            foreach (Match m in ActionUseRx.Matches(src)) if (!actions.Contains(m.Groups[1].Value)) actions.Add(m.Groups[1].Value);
+            var consts = ConstPathRx.Matches(src).ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value);
+            foreach (var line in src.Split('\n'))
+            {
+                var verb = VerbRx.Match(line) is { Success: true } v ? v.Groups[1].Value.ToUpperInvariant() : null;
+                foreach (Match m in TemplateCallRx.Matches(line))
+                    if (consts.TryGetValue(m.Groups[1].Value, out var basePath)) calls.Add(new(basePath + Regex.Replace(m.Groups[2].Value, @"\$\{[^}]*\}", "{}"), verb));
+                foreach (Match m in LiteralCallRx.Matches(line)) if (!consts.ContainsValue(m.Groups[1].Value)) calls.Add(new(Regex.Replace(m.Groups[1].Value, @"\$\{[^}]*\}", "{}"), verb));
+            }
+        }
+        return (actions, calls.DistinctBy(c => (c.Path.ToLowerInvariant(), c.Verb)).ToList());
+    }
+
+    // does a backend route serve a front-end call? The call may carry a gateway prefix (e.g. /core), parameters are wildcards
+    static string[] Segs(string path) => path.Split('?')[0].Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries)
+        .Select(s => s.StartsWith('{') || s.Contains("${") ? "*" : s.Replace("-", "").ToLowerInvariant()).ToArray();
+    public static bool Serves(Endpoint e, PageCall c)
+    {
+        if (c.Verb is not null && e.Verb != "ANY" && !e.Verb.Equals(c.Verb, StringComparison.OrdinalIgnoreCase)) return false;
+        var b = Segs(e.Route); var f = Segs(c.Path);
+        if (b.Length == 0 || f.Length < b.Length) return false;
+        // a route that is mostly placeholders would match anything: it must agree on at least two real words
+        if (b.Count(x => x != "*" && x != "api" && !x.StartsWith("v")) < 2) return false;
+        var off = f.Length - b.Length;
+        for (var i = 0; i < b.Length; i++)
+        {
+            string bs = b[i], fs = f[off + i];
+            if (bs == "*" || fs == "*" || bs == fs) continue;
+            if (bs.StartsWith("v*") || (bs.StartsWith("v") && bs.Contains("apiversion"))) { if (Regex.IsMatch(fs, @"^v\d+$")) continue; }
+            return false;
+        }
+        return true;
+    }
+
+    // which action a scope belongs to: reads go with VIEW; the rest go to the action whose name they share a word with,
+    // then by kind (PUT/PATCH to Edit, DELETE to Delete, POST to Add/Create), and anything left to Manage
+    public static Dictionary<string, List<Endpoint>> Link(List<string> actions, List<Endpoint> used, out List<Endpoint> unlinked)
+    {
+        var map = actions.ToDictionary(a => a, _ => new List<Endpoint>(), StringComparer.OrdinalIgnoreCase);
+        unlinked = [];
+        static IEnumerable<string> Words(string s) => Regex.Split(Regex.Replace(s, "([a-z])([A-Z])", "$1 $2"), @"[^A-Za-z]+").Where(w => w.Length > 2).Select(w => w.ToLowerInvariant());
+        // the first of the names (in priority order) that the page has as an action
+        string? Find(params string[] names) => names.Select(n => actions.FirstOrDefault(a => a.Equals(n, StringComparison.OrdinalIgnoreCase))).FirstOrDefault(a => a is not null);
+        foreach (var e in used)
+        {
+            string? target = null;
+            if (e.Verb == "GET") target = Find("VIEW", "View");
+            target ??= actions.Where(a => !a.Equals("VIEW", StringComparison.OrdinalIgnoreCase))
+                              .FirstOrDefault(a => Words(a).Intersect(Words(e.Action + " " + e.Route)).Any());
+            target ??= e.Verb switch
+            {
+                "PUT" or "PATCH" => Find("Edit", "Update", "Manage"),
+                "DELETE" => Find("Delete", "Remove", "Manage"),
+                "POST" => Find("Add", "Create", "Manage"),
+                _ => null,
+            };
+            target ??= Find("Manage");
+            if (target is null) unlinked.Add(e); else map[target].Add(e);
+        }
+        return map;
+    }
+
+    static JsonObject Ep(Endpoint e, string repo) => new() { ["scope"] = e.Scope, ["verb"] = e.Verb, ["route"] = e.Route, ["action"] = $"{e.Controller}.{e.Action}", ["repo"] = repo };
+    static readonly Regex RouteFileRx = new(@"(?i)rout[^/]*\.(jsx?|tsx?)$");
+    static readonly Regex PageFileRx = new(@"(?i)\.(jsx?|tsx?)$");
+
+    // Everything to set up in the System Manager on QA for a ticket: per service the scopes it adds and removes;
+    // per new page the menu, its actions, and the scopes to link to each action.
+    public static JsonObject Setup(List<RepoResult> results, Func<string, string?> pathOf, IReadOnlyList<string> allRepos)
+    {
+        var services = new JsonArray();
+        var pool = new List<(Endpoint E, string Repo, bool New)>();
+        foreach (var r in results)
+        {
+            if (pathOf(r.Name) is not { } path) continue;
+            var own = r.Commits.Where(c => !c.IsForeign).ToList();
+            if (own.Count == 0) continue;
+            var (added, removed) = EndpointChanges(path, own);
+            pool.AddRange(added.Select(e => (e, r.Name, true)));
+            if (added.Count + removed.Count == 0) continue;
+            var tag = StartupRx.Match(Git.Cached(path, null, "grep", "-h", "-F", "GenerateScopesAsync(", own[^1].Sha, "--", "*.cs")) is { Success: true } t ? t.Groups[1].Value : null;
+            services.Add(new JsonObject
+            {
+                ["repo"] = r.Name, ["tag"] = tag,
+                ["added"] = new JsonArray(added.Select(e => (JsonNode)Ep(e, r.Name)).ToArray()),
+                ["removed"] = new JsonArray(removed.Select(e => (JsonNode)Ep(e, r.Name)).ToArray()),
+            });
+        }
+
+        var menus = new JsonArray();
+        foreach (var r in results)
+        {
+            if (pathOf(r.Name) is not { } path) continue;
+            var own = r.Commits.Where(c => !c.IsForeign).ToList();
+            var touched = own.SelectMany(c => c.Files.Select(f => (c, f.Status, f.Path))).Where(x => PageFileRx.IsMatch(x.Path)).GroupBy(x => x.Path).ToList();
+            if (touched.Count == 0) continue;
+            // new routes: path entries added in routing files
+            var patches = Git.Many(path, own.Select(c => c.Sha), "-p", "--unified=0", "--no-color", "--format=%x1e%H");
+            var routes = new List<(string Uri, string File)>();
+            foreach (var c in own)
+            {
+                string? file = null;
+                foreach (var raw in patches.GetValueOrDefault(c.Sha, "").Split('\n'))
+                {
+                    var line = raw.TrimEnd('\r');
+                    if (line.StartsWith("+++ ")) { file = line.StartsWith("+++ b/") ? line[6..] : null; continue; }
+                    if (file is not null && line.StartsWith('+') && RouteFileRx.IsMatch(file) && RouteRx.Match(line) is { Success: true } m && !routes.Any(x => x.Uri == m.Groups[1].Value))
+                        routes.Add((m.Groups[1].Value, file));
+                }
+            }
+            if (routes.Count == 0) continue;
+            // the ticket's page sources as they stand after its last change (tests and mocks left out)
+            string Latest(IGrouping<string, (Commit c, string Status, string Path)> g) => g.Last().Status == "D" ? "" : Git.Cached(path, null, "show", $"{g.Last().c.Sha}:{g.Key}");
+            // shared plumbing (API clients, configuration, helpers) is not the page: leave it out
+            var sources = touched.Where(g => !Regex.IsMatch(g.Key, @"(?i)(test|mock|spec|/config/|/helpers?/|/utils?/|reusable)")).Select(Latest).ToList();
+            var (pageActions, calls) = PageUse(sources);
+            // match calls: this ticket's new endpoints first, then every protected endpoint in the repositories
+            var matched = new List<(PageCall Call, Endpoint? E, string? Repo)>();
+            List<(Endpoint E, string Repo, bool New)>? everything = null;
+            foreach (var call in calls)
+            {
+                var hit = pool.FirstOrDefault(p => Serves(p.E, call));
+                if (hit.E is null)
+                {
+                    everything ??= allRepos.AsParallel().WithDegreeOfParallelism(6)
+                        .SelectMany(repo => { try { var ix = RepoIndex.For(repo); return Catalog(repo, ix.DefaultRef).Select(e => (e, Path.GetFileName(repo), false)); } catch { return []; } })
+                        .ToList();
+                    hit = everything.FirstOrDefault(p => Serves(p.E, call));
+                }
+                matched.Add((call, hit.E, hit.E is null ? null : hit.Repo));
+            }
+            var used = matched.Where(m => m.E is not null).Select(m => (m.E!, m.Repo!)).DistinctBy(x => x.Item1.Scope).ToList();
+            var actions = new List<string> { "VIEW" };
+            actions.AddRange(pageActions.Where(a => !a.Equals("VIEW", StringComparison.OrdinalIgnoreCase)));
+            var link = Link(actions, used.Select(u => u.Item1).ToList(), out var unlinked);
+            string RepoOf(Endpoint e) => used.First(u => u.Item1.Scope == e.Scope).Item2;
+            foreach (var (uri, file) in routes)
+            {
+                var routeFile = Git.Cached(path, null, "show", $"{own[^1].Sha}:{file}");
+                var at = routeFile.IndexOf($"\"{uri}\"", StringComparison.Ordinal);
+                var page = at >= 0 && ElementRx.Match(routeFile, at) is { Success: true } em && em.Index - at < 400 ? em.Groups[1].Value : null;
+                menus.Add(new JsonObject
+                {
+                    ["repo"] = r.Name, ["uri"] = uri.TrimStart('/'), ["page"] = page, ["routeFile"] = file,
+                    ["actions"] = new JsonArray(actions.Select(a => (JsonNode)new JsonObject
+                    {
+                        ["name"] = a,
+                        ["scopes"] = new JsonArray(link[a].Select(e => (JsonNode)Ep(e, RepoOf(e))).ToArray()),
+                    }).ToArray()),
+                    ["unlinked"] = new JsonArray(unlinked.Select(e => (JsonNode)Ep(e, RepoOf(e))).ToArray()),
+                    ["unmatched"] = new JsonArray(matched.Where(m => m.E is null).Select(m => (JsonNode)$"{m.Call.Verb ?? "?"} {m.Call.Path}").ToArray()),
+                    ["calls"] = new JsonArray(matched.Select(m => (JsonNode)new JsonObject { ["verb"] = m.Call.Verb, ["path"] = m.Call.Path, ["scope"] = m.E?.Scope, ["repo"] = m.Repo }).ToArray()),
+                });
+            }
+        }
+        return new JsonObject { ["services"] = services, ["menus"] = menus };
+    }
+
+    // the same, as tables in the handover (Jira comment and .md)
+    public static void AddToDoc(Doc doc, JsonObject setup)
+    {
+        var services = setup["services"]!.AsArray(); var menus = setup["menus"]!.AsArray();
+        if (services.Count == 0 && menus.Count == 0) return;
+        var blocks = new List<Block> { new Heading(3, "System Manager setup on QA") };
+        var scopeRows = services.SelectMany(s => s!["added"]!.AsArray().Select(e => new List<Span>[]
+            { [new((string)s["repo"]!)], [new((string)e!["scope"]!, Code: true)], [new($"{(string)e["verb"]!} {(string)e["route"]!}", Code: true)], [new("grant to QA roles")] })
+            .Concat(s["removed"]!.AsArray().Select(e => new List<Span>[]
+            { [new((string)s["repo"]!)], [new((string)e!["scope"]!, Code: true)], [new($"{(string)e["verb"]!} {(string)e["route"]!}", Code: true)], [new("removed")] }))).ToList();
+        if (scopeRows.Count > 0)
+        {
+            blocks.Add(new Para([new("Scopes (prefix each with the service's AppName):")]));
+            blocks.Add(new Table(["Service", "Scope", "Endpoint", "To do"], scopeRows));
+        }
+        foreach (var m in menus)
+        {
+            blocks.Add(new Para([new("Menu "), new((string)m!["uri"]!, Code: true), new($" ({(string?)m["page"] ?? "new page"}, {(string)m["repo"]!})")]));
+            var rows = m["actions"]!.AsArray().Select(a => new List<Span>[]
+            {
+                [new((string)a!["name"]!, Code: true)],
+                a["scopes"]!.AsArray().Count == 0 ? [new("-")] : a["scopes"]!.AsArray().Select(x => new Span((string)x!["scope"]! + " ", Code: true)).ToList(),
+            }).ToList();
+            if (m["unlinked"]!.AsArray().Count > 0)
+                rows.Add([[new("(choose an action)")], m["unlinked"]!.AsArray().Select(x => new Span((string)x!["scope"]! + " ", Code: true)).ToList()]);
+            blocks.Add(new Table(["Action", "Scopes to link"], rows));
+        }
+        var at = doc.Blocks.FindIndex(b => b is Heading { Text: "QA preparation" });
+        doc.Blocks.InsertRange(at < 0 ? Math.Min(2, doc.Blocks.Count) : Math.Min(doc.Blocks.Count, at + 1 + doc.Blocks.Skip(at + 1).TakeWhile(b => b is not Heading).Count()), blocks);
     }
 }
 
@@ -1399,14 +1676,13 @@ static class QaPrep
             var (newScopes, goneScopes) = AccessScan.Changes(path, Own(r).ToList());
             if (newScopes.Count > 0)
                 access.Add(new("check", $"Grant {newScopes.Count} new scope{(newScopes.Count == 1 ? "" : "s")} on QA",
-                    "They register themselves when the service starts on QA. In the System Manager there, give them to the roles that test this and link them to the menu actions. "
-                    + $"Scopes (after the service's AppName): {string.Join(", ", newScopes.Take(25))}{(newScopes.Count > 25 ? $" and {newScopes.Count - 25} more" : "")}.", r.Name));
+                    "They register when the service starts on QA. Grant them to the QA roles: each one is listed, ready to copy, under System Manager setup below.", r.Name));
             if (goneScopes.Count > 0)
                 access.Add(new("done", $"{goneScopes.Count} scope{(goneScopes.Count == 1 ? "" : "s")} removed",
-                    $"They disappear when the service starts on QA; nothing to grant. {string.Join(", ", goneScopes.Take(15))}{(goneScopes.Count > 15 ? " …" : "")}", r.Name));
+                    "They disappear when the service starts on QA; nothing to grant. Listed under System Manager setup below.", r.Name));
             if (routes.Count > 0)
-                access.Add(new("check", $"Create {routes.Count} menu{(routes.Count == 1 ? "" : "s")} on QA for the new page{(routes.Count == 1 ? "" : "s")}",
-                    $"In the System Manager on QA: add the menu with its VIEW action, link the actions to their scopes, and assign it to the QA roles. Page{(routes.Count == 1 ? "" : "s")}: {string.Join(", ", routes)}.", r.Name));
+                access.Add(new("check", routes.Count == 1 ? $"Create the menu {routes.First()} on QA" : $"Create {routes.Count} menus on QA",
+                    "Add it with its actions, link each action to its scopes, and give it to the QA roles. Everything is under System Manager setup below.", r.Name));
             foreach (var f in sqlAccess)
                 access.Add(new("check", "Grants roles or menus in SQL", f, r.Name));
         }
@@ -2745,6 +3021,7 @@ static class ReportJson
             ["key"] = rep.Key,
             ["generated"] = rep.Generated.ToString("yyyy-MM-dd HH:mm"),
             ["jiraUrl"] = $"{ledger.JiraBaseUrl}/browse/{rep.Key}",
+            ["setup"] = rep.Setup.DeepClone(),
             ["myEmails"] = new JsonArray(ledger.MyEmails().Select(e => (JsonNode)e).ToArray()),
             ["issue"] = rep.Issue is null ? null : Issue(rep.Issue),
             ["ancestors"] = new JsonArray(rep.Ancestors.Select(a => (JsonNode)Issue(a)).ToArray()),
@@ -2781,7 +3058,11 @@ static class ReportJson
                     ["label"] = m.MrUrl is null ? $"merge {m.Sha[..8]}" : $"!{m.MrUrl.Split('/')[^1]}",
                     ["url"] = m.MrUrl, ["date"] = m.Date, ["inDefault"] = m.InDefault, ["branch"] = m.SourceBranch,
                 }).ToArray()),
-                ["branches"] = new JsonArray(r.Branches.Select(b => (JsonNode)new JsonObject { ["name"] = b.Name, ["unmerged"] = b.Unmerged }).ToArray()),
+                ["branches"] = new JsonArray(r.Branches.Select(b => (JsonNode)new JsonObject
+                {
+                    ["name"] = b.Name, ["unmerged"] = b.Unmerged,
+                    ["vs"] = new JsonArray(b.Vs.Select(v => (JsonNode)new JsonObject { ["target"] = v.Target, ["ahead"] = v.Ahead, ["behind"] = v.Behind }).ToArray()),
+                }).ToArray()),
                 ["commits"] = new JsonArray(r.Commits.Where(c => !c.IsForeign).Select(c => (JsonNode)CommitJson(r, c)).ToArray()),
                 ["files"] = new JsonArray(r.Files.Select(f => (JsonNode)new JsonObject { ["status"] = f.Value, ["path"] = f.Key }).ToArray()),
             }).ToArray()),
@@ -2871,10 +3152,11 @@ static class UiServer
                 case ("GET", "/me/avatar"):
                 {
                     // an image tag can't send X-Ledger, so this lives outside /api/; it only ever returns your own picture
-                    if (await MyAvatar(ledger) is not { } av) { await Send(res, 404, Err("No avatar")); return; }
-                    res.StatusCode = 200; res.ContentType = av.Type; res.ContentLength64 = av.Bytes.Length;
+                    var av = req.QueryString["of"] == "gitlab" ? await GitLabAvatar(ledger) : await MyAvatar(ledger);
+                    if (av is null) { await Send(res, 404, Err("No avatar")); return; }
+                    res.StatusCode = 200; res.ContentType = av.Value.Type; res.ContentLength64 = av.Value.Bytes.Length;
                     res.Headers["Cache-Control"] = "private, max-age=3600";
-                    await res.OutputStream.WriteAsync(av.Bytes);
+                    await res.OutputStream.WriteAsync(av.Value.Bytes);
                     res.Close();
                     return;
                 }
@@ -2912,7 +3194,7 @@ static class UiServer
                         ["reposRoot"] = ledger.ReposRoot,
                         ["repoCount"] = ledger.Repos.Count,
                         ["gitlabBaseUrl"] = ledger.GitLabBaseUrl,
-                        ["gitlab"] = await ledger.GitLabUser() is { } gu ? new JsonObject { ["name"] = gu.Name, ["username"] = gu.Username } : null,
+                        ["gitlab"] = await ledger.GitLabUser() is { } gu ? new JsonObject { ["name"] = gu.Name, ["username"] = gu.Username, ["avatar"] = await GitLabAvatar(ledger) is not null } : null,
                         ["gitlabRejected"] = ledger.GitLab.Configured && ledger.GitLab.Me is null,
                         ["dailyTargetHours"] = ledger.DailyTargetHours,
                         ["avatar"] = await MyAvatar(ledger) is not null,
@@ -3233,6 +3515,16 @@ static class UiServer
         if (avatar.Who == who && DateTime.UtcNow - avatar.At < TimeSpan.FromHours(1)) return avatar.Image;
         var img = (jira is not null ? await ledger.Jira.Avatar() : null) ?? (gl is not null ? await ledger.GitLab.Avatar() : null);
         avatar = (who, DateTime.UtcNow, img);
+        return img;
+    }
+
+    static (string Who, DateTime At, (byte[] Bytes, string Type)? Image) glAvatar = ("", DateTime.MinValue, null);
+    static async Task<(byte[] Bytes, string Type)?> GitLabAvatar(Ledger ledger)
+    {
+        if (await ledger.GitLabUser() is not { } gl) return null;
+        if (glAvatar.Who == gl.Username && DateTime.UtcNow - glAvatar.At < TimeSpan.FromHours(1)) return glAvatar.Image;
+        var img = await ledger.GitLab.Avatar();
+        glAvatar = (gl.Username, DateTime.UtcNow, img);
         return img;
     }
 
