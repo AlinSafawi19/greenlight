@@ -320,6 +320,13 @@ table.tb a:hover { text-decoration: underline; text-decoration-color: var(--ink-
 .gbox-b, .stp-b { overflow: hidden; }
 .gbox-b { padding: 0 0 12px 24px; }
 .acts-i { display: inline-flex; gap: 2px; }
+.acts-i .slot { width: 26px; height: 26px; flex: none; }
+/* counts and actions share one line height, so numbers sit level with the icons on every row */
+table.tb td.num, table.tb th.num { width: 96px; white-space: nowrap; }
+table.tb td.act, table.tb th.act { width: 92px; white-space: nowrap; padding-left: 12px; }
+table.tb td.num, table.tb td.act { padding-top: 7px; padding-bottom: 7px; }
+table.tb .cnt { display: inline-block; min-width: 64px; line-height: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+table.tb .cnt b { font-weight: 600; color: var(--ink); }
 .acts-i .btn.only.small { width: 26px; color: var(--ink-3); }
 .acts-i .btn.only.small:hover { color: var(--ink); }
 
@@ -982,7 +989,7 @@ function renderEvidence() {
 
 const openBtns = (repo, path, sln) => `<span class="acts-i">
   <button class="btn only small" data-open="code" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Open in VS Code" aria-label="Open in VS Code">${icon("vscode")}</button>
-  ${path || sln ? `<button class="btn only small" data-open="vs" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Open in Visual Studio${sln && !path ? ` (${esc(sln)})` : ""}" aria-label="Open in Visual Studio">${icon("vs")}</button>` : ""}
+  ${path || sln ? `<button class="btn only small" data-open="vs" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Open in Visual Studio${sln && !path ? ` (${esc(sln)})` : ""}" aria-label="Open in Visual Studio">${icon("vs")}</button>` : `<span class="slot" aria-hidden="true"></span>`}
   <button class="btn only small" data-open="folder" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Show in folder" aria-label="Show in folder">${icon("folder")}</button></span>`;
 
 function groupHtml(x, count, body, id) {
@@ -1010,13 +1017,13 @@ function renderPane() {
   };
   if (tab === "repos") {
     if (!shown.length) { p.innerHTML = empty("repositories"); return wireEmpty(); }
-    p.innerHTML = `<div class="wide"><table class="tb"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th class="r">Merged</th><th class="r"><span class="sr">Open</span></th></tr></thead><tbody>
+    p.innerHTML = `<div class="wide"><table class="tb"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th class="r num">Merged</th><th class="r act"><span class="sr">Open</span></th></tr></thead><tbody>
       ${shown.map(x => {
         const merges = x.merges.filter(m => keyHit(m.branch)), branches = x.branches.filter(b => keyHit(b.name));
         return `<tr><td>${x.webUrl ? `<a class="ln" href="${esc(x.webUrl)}" target="_blank" rel="noopener">${repoTag(x.name)}</a>` : repoTag(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
         <td>${merges.map(m => m.url ? `<a class="ln" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="ink-3">${day(m.date)}</span>` : `<span class="ink-3">Direct merge, ${day(m.date)}</span>`).join("<br>") || `<span class="ink-3">None</span>`}</td>
         <td>${branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--amber)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="ink-3">None</span>`}</td>
-        <td class="r">${x.commits.filter(c => c.inDefault).length} <span class="ink-3">of ${x.commits.length}</span></td><td class="r">${openBtns(x.name, null, x.sln)}</td></tr>`;
+        <td class="r num"><span class="cnt"><b>${x.commits.filter(c => c.inDefault).length}</b><span class="ink-3"> of ${x.commits.length}</span></span></td><td class="r act">${openBtns(x.name, null, x.sln)}</td></tr>`;
       }).join("")}</tbody></table></div>`;
   } else if (tab === "files") {
     if (!shown.length) { p.innerHTML = empty("files"); return wireEmpty(); }
