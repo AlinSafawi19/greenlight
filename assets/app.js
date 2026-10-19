@@ -1490,10 +1490,16 @@ function applyTheme(pref) {
   b.innerHTML = icon(to === "light" ? "sun" : "moon", "ico");
   b.title = b.ariaLabel = `Switch to ${to} mode`;
 }
+// switching theme floods the page from the toggle like liquid, with a soft moving edge (where the browser can)
 $("#themeBtn").onclick = () => {
   const to = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   try { localStorage.setItem("gl-theme", to); } catch { }
-  applyTheme(to);
+  if (!document.startViewTransition || calm()) return applyTheme(to);
+  const b = $("#themeBtn").getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
+  const root = document.documentElement.style;
+  root.setProperty("--gl-x", `${x}px`); root.setProperty("--gl-y", `${y}px`);
+  root.setProperty("--gl-end", `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)) + 160}px`);
+  document.startViewTransition(() => applyTheme(to));
 };
 applyTheme(document.documentElement.dataset.themePref || "dark");
 
@@ -1592,7 +1598,12 @@ const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.get
 
 async function renderWorklogs(from, pickDay) {
   document.title = "Worklogs · greenlight";
-  if (!status?.account) { $("#main").innerHTML = `<div class="page">${emptyNote("Connect Jira", "Worklogs come from Jira.", `<button class="btn success small" id="wlc">Connect Jira</button>`, "welcome")}</div>`; $("#wlc").onclick = openSettings; return; }
+  if (!status?.account) {
+    $("#main").innerHTML = `<div class="blank"><div class="blank-in">${glim("thinking")}<h2>Connect Jira for worklogs</h2>
+      <p>Your logged time, the daily target and suggestions from your commits come from Jira, so they appear once it's connected.</p>
+      <div class="void-acts"><button class="btn success" id="wlc">Connect Jira</button></div></div></div>`;
+    $("#wlc").onclick = openSettings; return;
+  }
   const today = localDay(new Date());
   wlWeek = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? mondayOf(from + "T12:00:00") : mondayOf(new Date());
   wlDay = pickDay || (wlWeek === mondayOf(new Date()) ? today : wlWeek);

@@ -1120,6 +1120,73 @@ static class Manifest
 
 // ───────────────────────────── Jira ─────────────────────────────
 
+// ───────────────────────────── access: what QA needs set up in the System Manager ─────────────────────────────
+// Scopes register themselves when a service starts (from [AuthorizeScope] endpoints), but granting them to roles,
+// creating menus and their actions, and linking actions to scopes are done by hand in the System Manager on each
+// environment. This works out, from the code, exactly what that is for a ticket.
+static class AccessScan
+{
+    static readonly Regex ClassRx = new(@"class\s+(\w+?)Controller(?:V(\d+))?\b");
+    static readonly Regex AreaRx = new(@"\[Area\(\s*""([^""]+)""\s*\)\]");
+    static readonly Regex MethodRx = new(@"public\s+(?:async\s+)?[\w<>\[\],\s\.?]+?\s(\w+)\s*\(");
+    static readonly Regex HttpRx = new(@"\[Http(Get|Post|Put|Delete|Patch)\b");
+    static readonly Regex ActionNameRx = new(@"\[ActionName\(\s*""([^""]+)""");
+    static readonly Regex ExplicitRx = new(@"\[AuthorizeScope\(\s*""([^""]*)""\s*,\s*""([^""]*)""");
+    public static readonly Regex RouteRx = new(@"\bpath\s*:\s*[""'`](/[^""'`]*)[""'`]");
+    public static readonly Regex StartupRx = new(@"GenerateScopesAsync\(\s*""([^""]+)""");
+
+    // The scopes a controller protects, named the way the access check builds them at runtime
+    // ([area:]controller[:vN]:action:method, lower case), without the service's Common:AppName prefix.
+    public static HashSet<string> Scopes(string code)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrEmpty(code) || ClassRx.Match(code) is not { Success: true } cls) return set;
+        var ver = cls.Groups[2].Success ? $":v{cls.Groups[2].Value}" : "";
+        var area = AreaRx.Match(code) is { Success: true } a && a.Index < cls.Index ? $"{a.Groups[1].Value}:" : "";
+        var prefix = $"{area}{cls.Groups[1].Value}{ver}";
+        for (var at = code.IndexOf("[AuthorizeScope", StringComparison.Ordinal); at >= 0; at = code.IndexOf("[AuthorizeScope", at + 1, StringComparison.Ordinal))
+        {
+            if (MethodRx.Match(code, at) is not { Success: true } m) break;
+            // this method's attribute block: walk up from [AuthorizeScope over attribute, comment and blank lines
+            // (not by braces: routes like "{id}/pause" contain them)
+            var start = code.LastIndexOf('\n', at) + 1;
+            while (start > 0)
+            {
+                var prevStart = code.LastIndexOf('\n', start - 2) + 1;
+                var prev = code[prevStart..(start - 1)].Trim();
+                if (prev.Length > 0 && !prev.StartsWith('[') && !prev.StartsWith("//")) break;
+                start = prevStart;
+            }
+            var attrs = code[start..m.Index];
+            if (ExplicitRx.Match(attrs) is { Success: true } ex && ex.Groups[2].Value != "") { set.Add(ex.Groups[2].Value.ToLowerInvariant()); continue; }
+            var action = ActionNameRx.Match(attrs) is { Success: true } an ? an.Groups[1].Value : m.Groups[1].Value;
+            var verbs = HttpRx.Matches(attrs).Select(x => x.Groups[1].Value).DefaultIfEmpty("any");
+            foreach (var v in verbs) set.Add($"{prefix}:{action}:{v}".ToLowerInvariant());
+        }
+        return set;
+    }
+
+    // per controller file the ticket touched: the scopes it protected before the ticket's first change and after its last
+    public static (SortedSet<string> Added, SortedSet<string> Removed) Changes(string repo, IReadOnlyList<Commit> own)
+    {
+        var added = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var removed = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var files = own.SelectMany(c => c.Files.Select(f => (c, f.Status, f.Path)))
+                       .Where(x => x.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && x.Path.Contains("Controller", StringComparison.OrdinalIgnoreCase))
+                       .GroupBy(x => x.Path);
+        foreach (var g in files)
+        {
+            var first = g.First(); var last = g.Last();   // commits are oldest first
+            var before = first.Status == "A" ? "" : Git.Cached(repo, null, "show", $"{first.c.Sha}^:{g.Key}");
+            var after = last.Status == "D" ? "" : Git.Cached(repo, null, "show", $"{last.c.Sha}:{g.Key}");
+            var b = Scopes(before); var a = Scopes(after);
+            foreach (var x in a.Except(b, StringComparer.OrdinalIgnoreCase)) added.Add(x);
+            foreach (var x in b.Except(a, StringComparer.OrdinalIgnoreCase)) removed.Add(x);
+        }
+        return (added, removed);
+    }
+}
+
 // ───────────────────────────── QA preparation: the stations a ticket passes on its way to QA ─────────────────────────────
 
 // State: done (nothing left), todo (someone must act), check (a person should confirm), wait (blocked by an earlier
@@ -1297,8 +1364,9 @@ static class QaPrep
             var path = pathOf(r.Name);
             if (path is null) continue;
             var keys = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
-            var scopes = 0;
             var sqlAccess = new SortedSet<string>(StringComparer.Ordinal);
+            var routes = new SortedSet<string>(StringComparer.Ordinal);
+            var services = new SortedSet<string>(StringComparer.Ordinal);
             var patches = Git.Many(path, Own(r).Select(c => c.Sha), "-p", "--unified=0", "--no-color", "--format=%x1e%H");
             foreach (var c in Own(r))
             {
@@ -1315,8 +1383,9 @@ static class QaPrep
                               : file.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ? JsKey.Match(added) : EnvKey.Match(added);
                         if (m.Success) (keys.TryGetValue(file, out var set) ? set : keys[file] = new(StringComparer.Ordinal)).Add(m.Groups[1].Value);
                     }
-                    else if (file.EndsWith(".cs") && added.Contains("[AuthorizeScope")) scopes++;
+                    else if (file.EndsWith(".cs") && AccessScan.StartupRx.Match(added) is { Success: true } sv) services.Add(sv.Groups[1].Value);
                     else if (file.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) && AccessSql.IsMatch(added)) sqlAccess.Add(file);
+                    else if (Regex.IsMatch(file, @"(?i)rout[^/]*\.(jsx?|tsx?)$") && AccessScan.RouteRx.Match(added) is { Success: true } rt) routes.Add(rt.Groups[1].Value);
                 }
             }
             foreach (var (file, set) in keys)
@@ -1324,9 +1393,20 @@ static class QaPrep
                     string.Join(", ", set.Take(12)) + (set.Count > 12 ? $" and {set.Count - 12} more" : ""), r.Name));
             foreach (var f in r.Files.Where(f => f.Value != "D" && PipelineFile.IsMatch(f.Key)))
                 config.Add(new("check", $"Pipeline changed: {Path.GetFileName(f.Key)}", f.Key.Contains('/') ? f.Key : null, r.Name));
-            if (scopes > 0)
-                access.Add(new("check", $"{scopes} new protected endpoint{(scopes == 1 ? "" : "s")}",
-                    "The scopes register themselves when the service starts on QA. Make sure the QA roles are granted them.", r.Name));
+            foreach (var tag in services)
+                access.Add(new("check", $"New service {tag} registers its scopes",
+                    "Its infrastructure.service row must exist on QA (a seed script) before it starts, or every route returns 403.", r.Name));
+            var (newScopes, goneScopes) = AccessScan.Changes(path, Own(r).ToList());
+            if (newScopes.Count > 0)
+                access.Add(new("check", $"Grant {newScopes.Count} new scope{(newScopes.Count == 1 ? "" : "s")} on QA",
+                    "They register themselves when the service starts on QA. In the System Manager there, give them to the roles that test this and link them to the menu actions. "
+                    + $"Scopes (after the service's AppName): {string.Join(", ", newScopes.Take(25))}{(newScopes.Count > 25 ? $" and {newScopes.Count - 25} more" : "")}.", r.Name));
+            if (goneScopes.Count > 0)
+                access.Add(new("done", $"{goneScopes.Count} scope{(goneScopes.Count == 1 ? "" : "s")} removed",
+                    $"They disappear when the service starts on QA; nothing to grant. {string.Join(", ", goneScopes.Take(15))}{(goneScopes.Count > 15 ? " …" : "")}", r.Name));
+            if (routes.Count > 0)
+                access.Add(new("check", $"Create {routes.Count} menu{(routes.Count == 1 ? "" : "s")} on QA for the new page{(routes.Count == 1 ? "" : "s")}",
+                    $"In the System Manager on QA: add the menu with its VIEW action, link the actions to their scopes, and assign it to the QA roles. Page{(routes.Count == 1 ? "" : "s")}: {string.Join(", ", routes)}.", r.Name));
             foreach (var f in sqlAccess)
                 access.Add(new("check", "Grants roles or menus in SQL", f, r.Name));
         }
@@ -1340,7 +1420,9 @@ static class QaPrep
             foreach (var f in r.Files.Where(f => f.Value != "D" && AccessFile.IsMatch(f.Key) && !ConfigFile.IsMatch(f.Key)))
                 items.Add(new("check", $"Changed: {Path.GetFileName(f.Key)}", f.Key, r.Name));
         return new("access", "Access", items.Count == 0 ? "skip" : "check",
-            items.Count == 0 ? "No permission or menu changes found" : "Make sure QA users can reach the feature", items);
+            items.Count == 0 ? "No new scopes, menus or permission changes"
+            : items.Any(i => i.State == "check" && Regex.IsMatch(i.Title, "^(Grant|Create|New service)")) ? "Set up access in the System Manager on QA"
+            : "Make sure QA users can reach the feature", items);
     }
 
     static Station Handover(IssueInfo? issue, List<Station> before)
@@ -2292,6 +2374,38 @@ static class SelfTest
         Is("json key", QaPrep.JsonKey.Match("  \"Scheduler:Enabled\": true,").Groups[1].Value, "Scheduler:Enabled");
         Is("config file", QaPrep.ConfigFile.IsMatch("API/appsettings.Development.json"), true);
         Is("not config", QaPrep.ConfigFile.IsMatch("src/settings.ts"), false);
+
+        // scope names, built the way the access check builds them at runtime
+        const string controller = """
+            [Area("Admin")]
+            [Route("api/v1/[area]/[controller]")]
+            public class ScheduledTasksController : MainController
+            {
+                [HttpGet("get-all")]
+                [AuthorizeScope]
+                public async Task<IActionResult> GetAll([FromQuery] GetAllRequest request) => await Run();
+
+                [HttpPost("{id}/run")]
+                [AuthorizeScope]
+                public async Task<IActionResult> RunNow(long id) { return Ok(); }
+
+                [HttpGet("public")]
+                public IActionResult Open() => Ok();
+
+                [AuthorizeScope("member:menu", "member:menu:get-all:get")]
+                [HttpGet("menus")]
+                public IActionResult Menus() => Ok();
+            }
+            """;
+        var sc = AccessScan.Scopes(controller);
+        Is("scope get", sc.Contains("admin:scheduledtasks:getall:get"), true);
+        Is("scope post", sc.Contains("admin:scheduledtasks:runnow:post"), true);
+        Is("unprotected endpoint has no scope", sc.Any(x => x.Contains(":open:")), false);
+        Is("explicit scope name kept", sc.Contains("member:menu:get-all:get"), true);
+        Is("scope count", sc.Count, 3);
+        Is("versioned controller", AccessScan.Scopes("public class OrdersControllerV2 : C { [HttpGet] [AuthorizeScope] public IActionResult List() => Ok(); }").Single(), "orders:v2:list:get");
+        Is("react route", AccessScan.RouteRx.Match("    path: \"/scheduled-tasks\",").Groups[1].Value, "/scheduled-tasks");
+        Is("new service", AccessScan.StartupRx.Match("app.GenerateScopesAsync(\"APPOINTMENT\");").Groups[1].Value, "APPOINTMENT");
 
         Console.WriteLine(fails == 0 ? $"All {n} checks passed." : $"{fails} of {n} checks failed.");
         return fails == 0 ? 0 : 1;
