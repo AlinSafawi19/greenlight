@@ -62,7 +62,7 @@ return 0;
 record Report(string Key, DateTime Generated, IssueInfo? Issue, List<IssueInfo> Scope, List<IssueInfo> Ancestors,
               List<RepoResult> Repos, Doc Doc,
               List<List<Span>> Warnings, List<(string Name, List<(string Repo, string Path)> Hits)> Highlights,
-              string Markdown, string MarkdownPath);
+              string Markdown, string MarkdownPath, List<Station> Stations);
 
 class Ledger
 {
@@ -205,7 +205,12 @@ class Ledger
         Parallel.ForEach(Repos, r => { var res = Scanner.Scan(r, keys, keyRx, anyKeyRx, dbCfg); if (res is not null) found.Add(res); });
         var results = found.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
+        progress("Working out what QA needs...");
+        var paths = Repos.ToDictionary(Path.GetFileName, StringComparer.OrdinalIgnoreCase);
+        var stations = QaPrep.Compute(issue, results, dbCfg, name => paths.GetValueOrDefault(name));
+
         var doc = Manifest.Build(key, issue, scope, results, highlights, dbCfg, (int)cfg["jiraMaxFilesPerRepo"]!);
+        QaPrep.AddToDoc(doc, stations);
 
         Directory.CreateDirectory(OutDir);
         var mdPath = Path.Combine(OutDir, $"{key}.md");
@@ -213,7 +218,7 @@ class Ledger
         File.WriteAllText(mdPath, markdown);
 
         var report = new Report(key, DateTime.Now, issue, scope, ancestors, results, doc, Manifest.Warnings(key, results),
-                                Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath);
+                                Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath, stations);
         File.WriteAllText(Path.Combine(OutDir, $"{key}.json"), ReportJson.Summary(report).ToJsonString());
         return report;
     }
@@ -767,6 +772,258 @@ static class Manifest
 
 // ───────────────────────────── Jira ─────────────────────────────
 
+// ───────────────────────────── QA preparation: the stations a ticket passes on its way to QA ─────────────────────────────
+
+// State: done (nothing left), todo (someone must act), check (a person should confirm), wait (blocked by an earlier
+// station), skip (doesn't apply to this ticket).
+record StationItem(string State, string Title, string? Detail = null, string? Repo = null,
+                   string? ActionLabel = null, string? ActionUrl = null);
+record Station(string Id, string Name, string State, string Headline, List<StationItem> Items);
+
+static class QaPrep
+{
+    static readonly Regex ConfigFile = new(@"(?i)(appsettings[^/]*\.json$|(^|/)config\.[^/]*\.js$|(^|/)\.env(\.[^/]*)?$)");
+    static readonly Regex PipelineFile = new(@"(?i)(\.gitlab-ci\.yml$|(^|/)dockerfile$|(^|/)downstream-env\.yml$)");
+    static readonly Regex AccessFile = new(@"(?i)(permission|scope|role|polic|claim|menu|sidebar|navigation)");
+    static readonly Regex JsonKey = new(@"^\s*""([A-Za-z0-9_.:\-]+)""\s*:");
+    static readonly Regex JsKey = new(@"^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*:");
+    static readonly Regex EnvKey = new(@"^\s*([A-Z][A-Z0-9_]*)\s*=");
+    static readonly Regex AccessSql = new(@"(?i)\bmember\.(menu\w*|scope_role|menu_action_scope|role\w*|service_scope)\b");
+
+    public static List<Station> Compute(IssueInfo? issue, List<RepoResult> repos, DbConfig db, Func<string, string?> pathOf)
+    {
+        var code = Code(repos);
+        var tag = Tag(repos, db, pathOf);
+        var (cfgItems, accessFromCode) = ScanPatches(repos, db, pathOf);
+        var database = Database(repos, db, pathOf);
+        var access = Access(repos, db, accessFromCode);
+        var config = new Station("config", "Config", cfgItems.Count == 0 ? "skip" : "check",
+            cfgItems.Count == 0 ? "No settings changed" : "QA settings live outside git: add the new keys there", cfgItems);
+        var handover = Handover(issue, [code, tag, database, access, config]);
+        return [code, tag, database, access, config, handover];
+    }
+
+    static string Worst(IEnumerable<StationItem> items, string empty)
+    {
+        var s = items.Select(i => i.State).ToList();
+        return s.Count == 0 ? empty : s.Contains("todo") ? "todo" : s.Contains("wait") ? "wait" : s.Contains("check") ? "check" : "done";
+    }
+
+    static string Target(RepoResult r) => r.DefaultRef.StartsWith("origin/") ? r.DefaultRef["origin/".Length..] : r.DefaultRef;
+    static IEnumerable<Commit> Own(RepoResult r) => r.Commits.Where(c => !c.IsForeign);
+
+    static Station Code(List<RepoResult> repos)
+    {
+        var items = new List<StationItem>();
+        foreach (var r in repos.Where(r => Own(r).Any() || r.Branches.Any(b => b.Unmerged > 0)))
+        {
+            var target = Target(r);
+            var waiting = r.Branches.Where(b => b.Unmerged > 0).ToList();
+            foreach (var b in waiting)
+            {
+                var local = b.Name.EndsWith(" (local only, never pushed)");
+                var name = local ? b.Name[..b.Name.IndexOf(" (local only")] : b.Name;
+                var mr = r.WebUrl != "" && !local
+                    ? $"{r.WebUrl}/-/merge_requests/new?merge_request%5Bsource_branch%5D={Uri.EscapeDataString(name)}&merge_request%5Btarget_branch%5D={Uri.EscapeDataString(target)}"
+                    : null;
+                items.Add(new("todo", local ? $"Push and merge {name}" : $"Merge {name} into {target}",
+                    $"{b.Unmerged} commit{(b.Unmerged == 1 ? "" : "s")} waiting{(local ? ". The branch only exists on this computer" : "")}.",
+                    r.Name, mr is null ? null : "Open merge request", mr));
+            }
+            var stray = Own(r).Count(c => !c.InDefault) - waiting.Sum(b => b.Unmerged);
+            if (stray > 0 && waiting.Count == 0)
+                items.Add(new("todo", $"{stray} commit{(stray == 1 ? "" : "s")} not in {target}", "They mention the ticket but no ticket branch holds them.", r.Name));
+            if (waiting.Count == 0 && stray <= 0)
+            {
+                var mrs = r.Merges.Count(m => m.MrUrl is not null);
+                items.Add(new("done", $"Merged into {target}", mrs > 0 ? $"{mrs} merge request{(mrs == 1 ? "" : "s")}" : null, r.Name));
+            }
+        }
+        var state = Worst(items, "todo");
+        var open = items.Count(i => i.State == "todo");
+        return new("code", "Code", state, items.Count == 0 ? "No code found for this ticket yet"
+            : open > 0 ? $"{open} thing{(open == 1 ? "" : "s")} to merge" : $"Merged in {items.Count} repositor{(items.Count == 1 ? "y" : "ies")}", items);
+    }
+
+    // QA deploys version tags, so merged code only reaches QA once a tag contains every one of the ticket's commits.
+    static Station Tag(List<RepoResult> repos, DbConfig db, Func<string, string?> pathOf)
+    {
+        var items = new List<StationItem>();
+        foreach (var r in repos.Where(r => !r.Name.Equals(db.Repo, StringComparison.OrdinalIgnoreCase) && Own(r).Any()))
+        {
+            var path = pathOf(r.Name);
+            var own = Own(r).ToList();
+            if (own.Any(c => !c.InDefault) || path is null) { items.Add(new("wait", "Waiting for the code to merge", null, r.Name)); continue; }
+
+            List<string>? common = null;
+            foreach (var c in own)
+            {
+                var tags = Git.Lines(Git.Run(path, "tag", "--contains", c.Sha, "--sort=v:refname")).ToList();
+                common = common is null ? tags : common.Where(tags.Contains).ToList();
+                if (common.Count == 0) break;
+            }
+            if (common is { Count: > 0 })
+            {
+                var latest = Git.Lines(Git.Run(path, "tag", "--sort=-v:refname")).FirstOrDefault();
+                items.Add(new("done", $"In tag {common[0]}",
+                    latest is not null && latest != common[0] ? $"Also in every later tag, up to {latest}." : "This is the latest tag.", r.Name));
+            }
+            else
+            {
+                var newTag = r.WebUrl == "" ? null : $"{r.WebUrl}/-/tags/new?ref={Uri.EscapeDataString(Target(r))}";
+                var last = Git.Lines(Git.Run(path, "tag", "--sort=-v:refname")).FirstOrDefault();
+                items.Add(new("todo", $"Cut a new version tag from {Target(r)}",
+                    last is null ? "The merged code isn't in any tag yet." : $"The merged code isn't in any tag yet. Latest tag is {last}.",
+                    r.Name, newTag is null ? null : "Create tag", newTag));
+            }
+        }
+        var todo = items.Count(i => i.State == "todo");
+        var state = Worst(items, "skip");
+        return new("tag", "Tagged", state, items.Count == 0 ? "No service code to tag"
+            : todo > 0 ? $"{todo} repositor{(todo == 1 ? "y needs" : "ies need")} a new tag"
+            : state == "wait" ? "Waiting for code to merge" : "Every repository is in a version tag", items);
+    }
+
+    static Station Database(List<RepoResult> repos, DbConfig db, Func<string, string?> pathOf)
+    {
+        var items = new List<StationItem>();
+        var dbRepo = repos.FirstOrDefault(r => r.Name.Equals(db.Repo, StringComparison.OrdinalIgnoreCase));
+        if (dbRepo is null || dbRepo.Db.Count == 0) return new("db", "Database", "skip", "No database scripts", items);
+        var path = pathOf(dbRepo.Name);
+
+        foreach (var g in dbRepo.Db.Where(d => d.Warning).GroupBy(d => (d.Service, d.Status)))
+        {
+            var files = string.Join(", ", g.Select(d => d.File));
+            var staged = g.Key.Status.Contains("STAGED", StringComparison.OrdinalIgnoreCase);
+            items.Add(new("todo",
+                staged ? $"Move {g.Count()} script{(g.Count() == 1 ? "" : "s")} from dev into a release ({g.Key.Service})"
+                       : $"Find {g.Count()} script{(g.Count() == 1 ? "" : "s")} missing from every release ({g.Key.Service})",
+                staged ? $"{files}. QA only gets scripts that are inside a release folder." : files, dbRepo.Name));
+        }
+
+        foreach (var g in dbRepo.Db.Where(d => !d.Warning).GroupBy(d => (d.Service, Release: ReleaseOf(d))).Where(g => g.Key.Release is not null))
+        {
+            var (svc, release) = (g.Key.Service, g.Key.Release!);
+            items.Add(new("check", $"Run {svc} {release} on QA",
+                "Build the QA migration for this release and run it on the QA database, if it isn't there yet.", dbRepo.Name));
+
+            // a release whose dev seed has data but whose QA seed files are empty placeholders
+            if (path is null) continue;
+            var folder = $"{db.Root}/{svc}/{release}/DataSeeding/";
+            var seedFiles = Git.Lines(Git.Run(path, "ls-tree", "--name-only", dbRepo.DefaultRef, folder)).ToList();
+            int Content(string f) => Git.Run(path, "show", $"{dbRepo.DefaultRef}:{f}").Split('\n')
+                .Count(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith("--"));
+            var dev = seedFiles.Where(f => Path.GetFileName(f).StartsWith("data-seeding-dev")).Sum(Content);
+            var qaFiles = seedFiles.Where(f => Path.GetFileName(f).StartsWith("data-seeding-qa")).ToList();
+            if (dev > 0 && qaFiles.Count > 0 && qaFiles.All(f => Content(f) == 0))
+                items.Add(new("check", $"QA seed data is empty in {svc} {release}",
+                    $"The dev seed has {dev} lines of data, but every QA seed file is only a header. Confirm QA doesn't need that data.", dbRepo.Name));
+        }
+        var todo = items.Count(i => i.State == "todo");
+        var runs = items.Count(i => i.Title.StartsWith("Run "));
+        return new("db", "Database", Worst(items, "skip"),
+            todo > 0 ? $"{todo} script group{(todo == 1 ? "" : "s")} not in a release" : $"{runs} release{(runs == 1 ? "" : "s")} to run on QA", items);
+    }
+
+    static string? ReleaseOf(DbItem d)
+    {
+        if (!d.Location.Equals("dev", StringComparison.OrdinalIgnoreCase)) return d.Location;
+        var m = Regex.Match(d.Status, @"release tag (\S+)");
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
+    // Reads the added lines of the ticket's own commits once: new config keys, new protected endpoints, permission/menu SQL.
+    static (List<StationItem> Config, List<StationItem> Access) ScanPatches(List<RepoResult> repos, DbConfig db, Func<string, string?> pathOf)
+    {
+        var config = new List<StationItem>();
+        var access = new List<StationItem>();
+        foreach (var r in repos)
+        {
+            var path = pathOf(r.Name);
+            if (path is null) continue;
+            var keys = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+            var scopes = 0;
+            var sqlAccess = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var c in Own(r))
+            {
+                string? file = null;
+                foreach (var raw in Git.Run(path, "show", "--format=", "--unified=0", "--no-color", c.Sha).Split('\n'))
+                {
+                    var line = raw.TrimEnd('\r');
+                    if (line.StartsWith("+++ ")) { file = line.StartsWith("+++ b/") ? line[6..] : null; continue; }
+                    if (file is null || !line.StartsWith('+')) continue;
+                    var added = line[1..];
+                    if (ConfigFile.IsMatch(file))
+                    {
+                        var m = file.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? JsonKey.Match(added)
+                              : file.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ? JsKey.Match(added) : EnvKey.Match(added);
+                        if (m.Success) (keys.TryGetValue(file, out var set) ? set : keys[file] = new(StringComparer.Ordinal)).Add(m.Groups[1].Value);
+                    }
+                    else if (file.EndsWith(".cs") && added.Contains("[AuthorizeScope")) scopes++;
+                    else if (file.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) && AccessSql.IsMatch(added)) sqlAccess.Add(file);
+                }
+            }
+            foreach (var (file, set) in keys)
+                config.Add(new("check", $"{set.Count} new setting{(set.Count == 1 ? "" : "s")} in {Path.GetFileName(file)}",
+                    string.Join(", ", set.Take(12)) + (set.Count > 12 ? $" and {set.Count - 12} more" : ""), r.Name));
+            foreach (var f in r.Files.Where(f => f.Value != "D" && PipelineFile.IsMatch(f.Key)))
+                config.Add(new("check", $"Pipeline changed: {Path.GetFileName(f.Key)}", f.Key.Contains('/') ? f.Key : null, r.Name));
+            if (scopes > 0)
+                access.Add(new("check", $"{scopes} new protected endpoint{(scopes == 1 ? "" : "s")}",
+                    "The scopes register themselves when the service starts on QA. Make sure the QA roles are granted them.", r.Name));
+            foreach (var f in sqlAccess)
+                access.Add(new("check", "Grants roles or menus in SQL", f, r.Name));
+        }
+        return (config, access);
+    }
+
+    static Station Access(List<RepoResult> repos, DbConfig db, List<StationItem> fromCode)
+    {
+        var items = new List<StationItem>(fromCode);
+        foreach (var r in repos.Where(r => !r.Name.Equals(db.Repo, StringComparison.OrdinalIgnoreCase)))
+            foreach (var f in r.Files.Where(f => f.Value != "D" && AccessFile.IsMatch(f.Key) && !ConfigFile.IsMatch(f.Key)))
+                items.Add(new("check", $"Changed: {Path.GetFileName(f.Key)}", f.Key, r.Name));
+        return new("access", "Access", items.Count == 0 ? "skip" : "check",
+            items.Count == 0 ? "No permission or menu changes found" : "Make sure QA users can reach the feature", items);
+    }
+
+    static Station Handover(IssueInfo? issue, List<Station> before)
+    {
+        if (issue is null)
+            return new("qa", "QA", "wait", "Connect Jira to track the handover", [new("wait", "Jira isn't connected")]);
+        var inQa = issue.StatusCategory == "done" || Regex.IsMatch(issue.Status, @"(?i)\b(qa|test)");
+        var blocked = before.Count(s => s.State is "todo" or "wait");
+        // Jira already says QA while the code can't be there yet: the mistake this tool exists to catch
+        if (inQa && blocked > 0)
+            return new("qa", "QA", "todo", $"Jira says {issue.Status}, but QA can't have it yet",
+                [new("todo", $"{blocked} station{(blocked == 1 ? " is" : "s are")} still open",
+                     "Finish them before QA starts testing, or move the ticket back in Jira.")]);
+        if (inQa) return new("qa", "QA", "done", $"Handed over: {issue.Status}", [new("done", $"Jira status is {issue.Status}")]);
+        return blocked > 0
+            ? new("qa", "QA", "wait", "Clear the stations before handing over",
+                  [new("wait", $"{blocked} station{(blocked == 1 ? "" : "s")} still open", $"Jira status is {issue.Status}.")])
+            : new("qa", "QA", "todo", "Ready to hand over",
+                  [new("todo", "Move the ticket to Ready for QA and post the handover", $"Jira status is {issue.Status}.", null, "Post handover to Jira", "post:")]);
+    }
+
+    // The handover comment and the .md start with the station checklist.
+    public static void AddToDoc(Doc doc, List<Station> stations)
+    {
+        var mark = new Dictionary<string, string> { ["done"] = "[x]", ["todo"] = "[ ]", ["check"] = "[?]", ["wait"] = "[ ]", ["skip"] = "[-]" };
+        var blocks = new List<Block> { new Heading(3, "QA preparation") };
+        foreach (var s in stations)
+        {
+            blocks.Add(new Para([new($"{mark[s.State]} {s.Name}: {s.Headline}")]));
+            var items = s.Items.Where(i => i.State != "done" || s.State == "done").Select(i => new List<Span>
+            {
+                new($"{mark[i.State]} {(i.Repo is null ? "" : i.Repo + ": ")}{i.Title}{(i.Detail is null ? "" : " - " + i.Detail)}"),
+            }).ToList();
+            if (items.Count > 0 && s.State != "skip") blocks.Add(new Bullets(items));
+        }
+        doc.Blocks.InsertRange(Math.Min(2, doc.Blocks.Count), blocks);
+    }
+}
+
 record JiraUser(string AccountId, string DisplayName, string Email);
 
 class Jira
@@ -984,9 +1241,20 @@ static class ReportJson
         ["status"] = rep.Issue?.Status,
         ["type"] = rep.Issue?.Type,
         ["children"] = rep.Scope.Count,
-        ["warnings"] = rep.Warnings.Count,
+        ["warnings"] = rep.Stations.Sum(s => s.Items.Count(i => i.State == "todo")),
         ["repos"] = rep.Repos.Count,
+        ["stations"] = new JsonArray(rep.Stations.Select(s => (JsonNode)new JsonObject { ["id"] = s.Id, ["state"] = s.State }).ToArray()),
     };
+
+    static JsonArray StationsJson(List<Station> stations) => new(stations.Select(s => (JsonNode)new JsonObject
+    {
+        ["id"] = s.Id, ["name"] = s.Name, ["state"] = s.State, ["headline"] = s.Headline,
+        ["items"] = new JsonArray(s.Items.Select(i => (JsonNode)new JsonObject
+        {
+            ["state"] = i.State, ["title"] = i.Title, ["detail"] = i.Detail, ["repo"] = i.Repo,
+            ["actionLabel"] = i.ActionLabel, ["actionUrl"] = i.ActionUrl,
+        }).ToArray()),
+    }).ToArray());
 
     public static JsonObject Full(Report rep, string jiraBase)
     {
@@ -998,6 +1266,7 @@ static class ReportJson
             ["jiraUrl"] = $"{jiraBase}/browse/{rep.Key}",
             ["issue"] = rep.Issue is null ? null : Issue(rep.Issue),
             ["ancestors"] = new JsonArray(rep.Ancestors.Select(a => (JsonNode)Issue(a)).ToArray()),
+            ["stations"] = StationsJson(rep.Stations),
             ["scope"] = new JsonArray((rep.Issue is null ? rep.Scope : rep.Scope.Prepend(rep.Issue)).Select(t =>
             {
                 var j = Issue(t);
@@ -1098,6 +1367,22 @@ static class UiServer
                 case ("GET", ""):
                     await SendText(res, 200, File.ReadAllText(Path.Combine(ledger.AppDir, "ui.html")), "text/html; charset=utf-8");
                     return;
+
+                case ("GET", var p) when p.StartsWith("/assets/"):
+                {
+                    // only plain file names from the assets folder: no sub-paths, no "..", only known types
+                    var name = p["/assets/".Length..];
+                    var types = new Dictionary<string, string> { [".ttf"] = "font/ttf", [".woff2"] = "font/woff2", [".svg"] = "image/svg+xml" };
+                    var file = Path.Combine(ledger.AppDir, "assets", name);
+                    if (!Regex.IsMatch(name, @"^[A-Za-z0-9_\-]+\.[a-z0-9]+$") || !types.TryGetValue(Path.GetExtension(name), out var type) || !File.Exists(file))
+                    { await Send(res, 404, Err("Not found")); return; }
+                    var bytes = await File.ReadAllBytesAsync(file);
+                    res.StatusCode = 200; res.ContentType = type; res.ContentLength64 = bytes.Length;
+                    res.Headers["Cache-Control"] = "max-age=604800";
+                    await res.OutputStream.WriteAsync(bytes);
+                    res.Close();
+                    return;
+                }
 
                 case ("GET", "/api/status"):
                 {

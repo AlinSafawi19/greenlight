@@ -3,325 +3,398 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Feature Ledger</title>
+<title>The Line · Feature Ledger</title>
 <style>
+/* ═══════════════ type ═══════════════ */
+@font-face { font-family: "Archivo"; src: url(/assets/Archivo.ttf) format("truetype"); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: "JBMono"; src: url(/assets/JetBrainsMono.ttf) format("truetype"); font-weight: 100 800; font-display: swap; }
+
+/* ═══════════════ tokens ═══════════════ */
+:root {
+  --paper: #efece5; --sheet: #f7f5f0; --ink: #191917; --ink-2: #44423d; --steel: #7d7a72; --faint: #b3afa5;
+  --rule: #d9d5cb; --rule-2: #e5e2da; --signal: #f2471c; --signal-ink: #ffffff; --signal-wash: #fbe2d8;
+  --focus: #f2471c;
+  --display: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --text: "Archivo", "Segoe UI", system-ui, sans-serif;
+  --mono: "JBMono", "Cascadia Mono", Consolas, monospace;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 72px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --node: 14px;
+}
+@media (prefers-color-scheme: dark) {
   :root {
-    --bg: #f3f5f7; --card: #ffffff; --sunk: #f7f9fa; --line: #e3e8ec; --line-2: #eef1f4;
-    --text: #17212b; --text-2: #3b4855; --muted: #687582; --faint: #9aa5b0;
-    --primary: #0e7c6b; --primary-hover: #0a6a5b; --primary-ink: #ffffff; --primary-soft: #e2f3ef;
-    --ready: #177a3c; --ready-soft: #e6f5eb; --todo: #b25a06; --todo-soft: #fdf0de; --danger: #bf3328; --danger-soft: #fdeceb;
-    --idle: #6b7885; --idle-soft: #eef1f4; --info: #2459c9; --info-soft: #e7eefc;
-    --radius: 12px; --shadow: 0 1px 2px rgba(23,33,43,.05), 0 2px 8px rgba(23,33,43,.04);
-    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
-    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --paper: #141412; --sheet: #1c1b19; --ink: #ece8df; --ink-2: #c4bfb4; --steel: #8d897f; --faint: #5c5951;
+    --rule: #2f2d29; --rule-2: #262522; --signal: #ff6a3d; --signal-ink: #160803; --signal-wash: #3a1a10;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f1418; --card: #172027; --sunk: #131a20; --line: #26313a; --line-2: #1f2930;
-      --text: #e8eef2; --text-2: #c3cdd5; --muted: #8d9aa6; --faint: #66727d;
-      --primary: #3fc1a8; --primary-hover: #5fd0ba; --primary-ink: #08231e; --primary-soft: #143430;
-      --ready: #5fcf86; --ready-soft: #15301f; --todo: #f0a54c; --todo-soft: #33240f; --danger: #f2877d; --danger-soft: #361a17;
-      --idle: #95a2ad; --idle-soft: #1e2830; --info: #8db0ff; --info-soft: #1a2541;
-      --shadow: 0 1px 2px rgba(0,0,0,.35);
-    }
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body { background: var(--bg); color: var(--text); font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
-  a { color: var(--primary); text-decoration: none; }
-  a:hover { text-decoration: underline; text-underline-offset: 2px; }
-  button { font: inherit; color: inherit; cursor: pointer; }
-  input, select { font: inherit; color: var(--text); }
-  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
-  .key { font: 600 13px var(--mono); letter-spacing: -.01em; }
-  code { font: 13px var(--mono); background: var(--sunk); border: 1px solid var(--line-2); padding: 0 5px; border-radius: 5px; color: var(--text-2); overflow-wrap: anywhere; }
-  .muted { color: var(--muted); }
-  [hidden] { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
-  /* ── buttons ── */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 9px; padding: 9px 16px; font-weight: 600; font-size: 14px; border: 1px solid var(--line); background: var(--card); color: var(--text); white-space: nowrap; text-decoration: none !important; }
-  .btn:hover:not(:disabled) { background: var(--sunk); }
-  .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
-  .btn.primary:hover:not(:disabled) { background: var(--primary-hover); }
-  .btn.small { padding: 6px 12px; font-size: 13.5px; border-radius: 8px; }
-  .btn.full { width: 100%; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .link { background: none; border: 0; padding: 0; color: var(--primary); font-weight: 600; }
-  .link:hover { text-decoration: underline; text-underline-offset: 2px; }
-  .ico { width: 16px; height: 16px; flex: none; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font: 400 15px/1.55 var(--text); font-stretch: 100%; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--signal); }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+input, select { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+[hidden] { display: none !important; }
+::selection { background: var(--signal); color: var(--signal-ink); }
 
-  /* ── status: always an icon and a word ── */
-  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
-  .pill .ico { width: 14px; height: 14px; }
-  .pill.ready { background: var(--ready-soft); color: var(--ready); }
-  .pill.todo { background: var(--todo-soft); color: var(--todo); }
-  .pill.idle { background: var(--idle-soft); color: var(--idle); }
-  .pill.info { background: var(--info-soft); color: var(--info); }
-  .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--idle-soft); padding: 1px 8px; border-radius: 6px; white-space: nowrap; }
+.mono { font-family: var(--mono); }
+.label { font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--steel); }
+.key { font: 600 13px var(--mono); letter-spacing: -.01em; }
+.dim { color: var(--steel); }
+code { font: 12.5px var(--mono); color: var(--ink-2); overflow-wrap: anywhere; }
 
-  /* ── top bar ── */
-  .topbar { position: sticky; top: 0; z-index: 10; background: var(--card); border-bottom: 1px solid var(--line); }
-  .topbar-in { max-width: 1240px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 20px; }
-  .brand { display: flex; align-items: center; gap: 10px; font: 700 16px var(--display); color: var(--text); white-space: nowrap; background: none; border: 0; padding: 0; }
-  .brand .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--primary); color: var(--primary-ink); display: grid; place-items: center; }
-  .search { flex: 1; max-width: 520px; margin: 0 auto; position: relative; }
-  .search input { width: 100%; border: 1px solid var(--line); background: var(--sunk); border-radius: 10px; padding: 9px 44px 9px 38px; font-size: 14.5px; }
-  .search input:focus { outline: none; border-color: var(--primary); background: var(--card); box-shadow: 0 0 0 3px var(--primary-soft); }
-  .search .s-ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); }
-  .sugg { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.14); padding: 6px; max-height: 60vh; overflow: auto; z-index: 20; }
-  .sugg button { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; border-radius: 8px; padding: 8px 10px; }
-  .sugg button:hover, .sugg button.on { background: var(--sunk); }
-  .sugg .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sugg .s { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
-  .sugg .msg { padding: 10px; font-size: 13.5px; color: var(--muted); }
-  .search kbd { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font: 600 11px var(--mono); color: var(--faint); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; background: var(--card); }
-  .me { display: flex; align-items: center; gap: 10px; background: none; border: 1px solid transparent; border-radius: 999px; padding: 3px 12px 3px 3px; white-space: nowrap; }
-  .me:hover { border-color: var(--line); background: var(--sunk); }
-  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; font: 700 13px var(--sans); flex: none; }
-  .avatar.sm { width: 24px; height: 24px; font-size: 10.5px; }
+/* ═══════════════ controls ═══════════════ */
+.btn { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px; font: 600 14px var(--text); font-stretch: 105%;
+  border: 1.5px solid var(--ink); color: var(--ink); background: transparent; white-space: nowrap; text-decoration: none;
+  transition: background .15s, color .15s, transform .1s; }
+.btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn.go { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
+.btn.go:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.btn.solid { background: var(--ink); color: var(--paper); }
+.btn.solid:hover:not(:disabled) { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; gap: 8px; }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn .arr { font-family: var(--mono); transition: transform .15s var(--ease); }
+.btn:hover .arr { transform: translateX(3px); }
+.txt { font-weight: 600; text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px; }
+.txt:hover { text-decoration-color: var(--signal); }
 
-  .page { max-width: 1240px; margin: 0 auto; padding: 28px 24px 80px; }
-  @media (max-width: 720px) { .page { padding: 20px 16px 60px; } .topbar-in { padding: 10px 16px; gap: 12px; flex-wrap: wrap; } .search { order: 3; max-width: none; flex-basis: 100%; } .brand .label { display: none; } }
+/* state glyphs: shape carries meaning, color only reinforces it */
+.n { width: var(--node); height: var(--node); border-radius: 50%; display: inline-block; flex: none; position: relative; }
+.n.done { background: var(--ink); }
+.n.todo { background: var(--signal); box-shadow: 0 0 0 4px var(--signal-wash); }
+.n.check { border: 2px solid var(--ink); background: repeating-linear-gradient(45deg, var(--ink) 0 1.5px, transparent 1.5px 4px); }
+.n.wait { border: 2px dashed var(--steel); background: var(--paper); }
+.n.skip { background: transparent; }
+.n.skip::after { content: ""; position: absolute; inset: 50% auto auto 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: var(--faint); }
+.n.none { border: 2px solid var(--rule); background: var(--paper); }
 
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+/* ═══════════════ frame ═══════════════ */
+.top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1.5px solid var(--ink); }
+.top-in { max-width: 1320px; margin: 0 auto; height: 64px; padding: 0 var(--s5); display: flex; align-items: center; gap: var(--s5); }
+.brand { display: flex; align-items: center; gap: 12px; font: 800 17px var(--display); font-stretch: 125%; letter-spacing: -.01em; white-space: nowrap; }
+.brand svg { display: block; }
+.brand small { font: 600 10.5px var(--mono); letter-spacing: .14em; color: var(--steel); text-transform: uppercase; font-stretch: 100%; }
+.find { flex: 1; max-width: 560px; margin-left: auto; position: relative; }
+.find input { width: 100%; height: 40px; border: 1.5px solid var(--rule); background: var(--sheet); padding: 0 48px 0 40px; font-size: 14.5px; transition: border-color .15s; }
+.find input::placeholder { color: var(--steel); }
+.find input:focus { outline: none; border-color: var(--ink); }
+.find .glass { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--steel); }
+.find kbd { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font: 600 11px var(--mono); color: var(--steel); border: 1px solid var(--rule); padding: 1px 6px; }
+.hits { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--sheet); border: 1.5px solid var(--ink); max-height: 62vh; overflow: auto; z-index: 40; box-shadow: 8px 8px 0 color-mix(in srgb, var(--ink) 12%, transparent); }
+.hits button { display: grid; grid-template-columns: 92px 1fr auto; gap: 12px; align-items: baseline; width: 100%; text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--rule-2); }
+.hits button:last-child { border-bottom: 0; }
+.hits button.on, .hits button:hover { background: var(--ink); color: var(--paper); }
+.hits button.on .dim, .hits button:hover .dim { color: var(--faint); }
+.hits .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hits .msg { padding: 14px; color: var(--steel); font-size: 14px; }
+.who { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 4px 0 0; white-space: nowrap; font-weight: 600; }
+.who .mark { width: 32px; height: 32px; display: grid; place-items: center; background: var(--ink); color: var(--paper); font: 700 12px var(--mono); }
+.who:hover .mark { background: var(--signal); color: var(--signal-ink); }
 
-  /* ── home ── */
-  .hello { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
-  .hello h1 { font: 700 26px/1.2 var(--display); margin: 0 0 4px; letter-spacing: -.01em; }
-  .hello p { margin: 0; color: var(--muted); }
-  .hello .grow { flex: 1; min-width: 240px; }
-  .hello .act { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .progress-note { font-size: 13.5px; color: var(--muted); }
+main { max-width: 1320px; margin: 0 auto; padding: var(--s7) var(--s5) var(--s8); }
+@media (max-width: 760px) {
+  .top-in { height: auto; padding: 10px 16px; flex-wrap: wrap; gap: 10px; }
+  .find { order: 3; flex-basis: 100%; max-width: none; }
+  .brand small { display: none; }
+  main { padding: var(--s5) 16px var(--s7); }
+}
 
-  .setup { padding: 22px 24px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  .setup h2 { grid-column: 1 / -1; margin: 0; font: 700 17px var(--display); }
-  .step { display: flex; gap: 14px; align-items: flex-start; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--sunk); }
-  .step .n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13.5px; flex: none; background: var(--card); border: 2px solid var(--line); color: var(--muted); }
-  .step.done .n { background: var(--ready); border-color: var(--ready); color: #fff; }
-  .step h3 { margin: 2px 0 4px; font-size: 15px; }
-  .step p { margin: 0 0 10px; font-size: 13.5px; color: var(--muted); }
-  @media (max-width: 720px) { .setup { grid-template-columns: 1fr; } }
+/* ═══════════════ display type ═══════════════ */
+.kicker { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+h1.hero { font: 800 clamp(30px, 4.4vw, 54px)/1.02 var(--display); font-stretch: 118%; letter-spacing: -.025em; margin: 0; max-width: 18ch; text-wrap: balance; }
+h1.title { font: 750 clamp(26px, 3.2vw, 40px)/1.08 var(--display); font-stretch: 112%; letter-spacing: -.02em; margin: 0; max-width: 28ch; text-wrap: balance; }
+.lede { font-size: 17px; color: var(--ink-2); max-width: 60ch; margin: 16px 0 0; }
+h2.sec { font: 700 13px var(--mono); letter-spacing: .12em; text-transform: uppercase; margin: 0; }
 
-  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; }
-  @media (max-width: 980px) { .board { grid-template-columns: 1fr; } }
-  .col { background: var(--sunk); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 12px; }
-  .col-h { display: flex; align-items: center; gap: 8px; padding: 4px 4px 12px; }
-  .col-h h2 { margin: 0; font: 700 14.5px var(--display); }
-  .col-h .count { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 600; }
-  .col-h .ico { width: 18px; height: 18px; }
-  .col.todo .col-h .ico { color: var(--todo); } .col.ready .col-h .ico { color: var(--ready); } .col.idle .col-h .ico { color: var(--idle); }
-  .col .empty { padding: 18px 8px; text-align: center; color: var(--faint); font-size: 13.5px; }
-  .tcard { display: block; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; box-shadow: var(--shadow); transition: border-color .12s, transform .12s; }
-  .tcard:last-child { margin-bottom: 0; }
-  .tcard:hover { border-color: var(--primary); transform: translateY(-1px); }
-  .tcard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .tcard .top .jira { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
-  .tcard .title { font-weight: 600; font-size: 14.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .tcard .under { margin-top: 6px; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  .tcard .under .dotsep::before { content: "·"; margin-right: 6px; }
-  .tcard.busy { opacity: .6; }
-  .filterbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
-  .chipbtn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--text-2); }
-  .chipbtn.on { background: var(--primary-soft); border-color: transparent; color: var(--primary); font-weight: 600; }
+/* ═══════════════ the line: shared track geometry ═══════════════ */
+/* six equal columns; the wire runs from the centre of the first to the centre of the last */
+.track { --k: 0; position: relative; display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; height: 28px; }
+.track::before, .track .fill { content: ""; position: absolute; top: 50%; height: 2px; margin-top: -1px; left: calc(100% / 12); }
+.track::before { right: calc(100% / 12); background: repeating-linear-gradient(90deg, var(--faint) 0 4px, transparent 4px 8px); }
+.track .fill { width: calc(var(--k) * (100% / 6)); background: var(--ink); transition: width .7s var(--ease); }
+.track .cell { display: grid; place-items: center; position: relative; z-index: 1; }
+.track .cell .n { background-clip: padding-box; }
+.track .cell .n.wait, .track .cell .n.none, .track .cell .n.skip { background-color: var(--paper); }
+.carriage { position: absolute; top: -9px; left: calc(100% / 12 + var(--k) * (100% / 6)); width: 0; height: 0; z-index: 2;
+  border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid var(--signal); transform: translateX(-50%);
+  transition: left .7s var(--ease); }
+.track.clear .carriage { display: none; }
 
-  /* ── ticket ── */
-  .back { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; margin-bottom: 16px; background: none; border: 0; padding: 0; color: var(--muted); }
-  .back:hover { color: var(--primary); }
-  .crumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
-  .crumbs button { background: none; border: 0; padding: 0; color: var(--muted); }
-  .crumbs button:hover { color: var(--primary); text-decoration: underline; }
-  .t-head { padding: 22px 24px; margin-bottom: 20px; }
-  .t-head .idrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .t-head h1 { font: 700 25px/1.25 var(--display); margin: 8px 0 12px; letter-spacing: -.01em; }
-  .t-head .meta { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 14px; color: var(--text-2); }
-  .t-head .meta .m { display: flex; gap: 8px; align-items: center; }
-  .t-head .meta .lbl { color: var(--muted); }
-  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); cursor: pointer; user-select: none; }
-  .switch input { appearance: none; width: 34px; height: 20px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background .15s; margin: 0; }
-  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
-  .switch input:checked { background: var(--primary); }
-  .switch input:checked::after { transform: translateX(14px); }
+/* ═══════════════ home ═══════════════ */
+.home-head { display: grid; grid-template-columns: 1fr auto; gap: var(--s5); align-items: end; padding-bottom: var(--s6); border-bottom: 1.5px solid var(--ink); }
+.home-head .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.tally { display: flex; gap: var(--s5); margin-top: var(--s5); flex-wrap: wrap; }
+.tally button { text-align: left; padding: 0 0 6px; border-bottom: 2px solid transparent; }
+.tally button.on { border-color: var(--signal); }
+.tally .v { font: 750 34px/1 var(--display); font-stretch: 112%; display: block; font-variant-numeric: tabular-nums; }
+.tally button:hover .v { color: var(--signal); }
+.progress-line { font: 500 12.5px var(--mono); color: var(--steel); min-height: 18px; }
+@media (max-width: 760px) { .home-head { grid-template-columns: 1fr; } .home-head .side { align-items: flex-start; } }
 
-  .t-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
-  @media (max-width: 1000px) { .t-grid { grid-template-columns: 1fr; } .t-side { order: -1; position: static !important; } }
-  .t-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-  .t-side { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 14px; }
+.board-head, .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 480px) 148px; gap: var(--s5); align-items: center; }
+.board-head { padding: var(--s5) 0 10px; position: sticky; top: 64px; background: var(--paper); z-index: 5; border-bottom: 1px solid var(--rule); }
+.board-head .stations { display: grid; grid-template-columns: repeat(6, 1fr); text-align: center; }
+.board-head .stations span { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--steel); text-transform: uppercase; }
+.row { padding: 18px 0; border-bottom: 1px solid var(--rule); cursor: pointer; position: relative; animation: rise .45s var(--ease) both; }
+.row::before { content: ""; position: absolute; left: -16px; top: 0; bottom: 0; width: 3px; background: var(--signal); transform: scaleY(0); transition: transform .2s var(--ease); }
+.row:hover::before, .row:focus-visible::before { transform: scaleY(1); }
+.row:focus-visible { outline: none; background: var(--sheet); }
+.row .who-t { min-width: 0; }
+.row .line1 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.row .typ { font: 500 11px var(--mono); color: var(--steel); text-transform: uppercase; letter-spacing: .08em; }
+.row .tt { font: 600 16px/1.35 var(--display); font-stretch: 104%; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.row .where { font-size: 13px; color: var(--steel); margin-top: 3px; }
+.row .act { text-align: right; font-size: 13px; }
+.row .act b { display: block; font-weight: 650; }
+.row .act .dim { font-size: 12px; }
+.row.busy .track .cell .n { animation: blink 1s ease-in-out infinite; }
+.row.busy .track .cell:nth-child(3) .n { animation-delay: .1s; } .row.busy .track .cell:nth-child(4) .n { animation-delay: .2s; }
+.row.busy .track .cell:nth-child(5) .n { animation-delay: .3s; } .row.busy .track .cell:nth-child(6) .n { animation-delay: .4s; } .row.busy .track .cell:nth-child(7) .n { animation-delay: .5s; }
+@keyframes blink { 50% { background: var(--ink); border-color: var(--ink); } }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.status-word { font-weight: 650; }
+.status-word.todo { color: var(--signal); }
+@media (max-width: 980px) {
+  .board-head { display: none; }
+  .row { grid-template-columns: 1fr; gap: 12px; }
+  .row .act { text-align: left; }
+}
 
-  .hero { border-radius: var(--radius); padding: 22px 24px; border: 1px solid; }
-  .hero.ready { background: var(--ready-soft); border-color: color-mix(in srgb, var(--ready) 25%, transparent); }
-  .hero.todo { background: var(--todo-soft); border-color: color-mix(in srgb, var(--todo) 25%, transparent); }
-  .hero.idle { background: var(--idle-soft); border-color: var(--line); }
-  .hero .hd { display: flex; gap: 14px; align-items: center; }
-  .hero .badge { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex: none; color: #fff; }
-  .hero.ready .badge { background: var(--ready); } .hero.todo .badge { background: var(--todo); } .hero.idle .badge { background: var(--idle); }
-  .hero .badge .ico { width: 22px; height: 22px; }
-  .hero h2 { margin: 0; font: 700 20px var(--display); }
-  .hero.ready h2 { color: var(--ready); } .hero.todo h2 { color: var(--todo); }
-  .hero .hd p { margin: 2px 0 0; color: var(--text-2); font-size: 14px; }
-  .steps { list-style: none; margin: 18px 0 0; padding: 0; counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
-  .steps li { counter-increment: s; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 12px 50px; position: relative; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-  .steps li::before { content: counter(s); position: absolute; left: 14px; top: 13px; width: 24px; height: 24px; border-radius: 50%; background: var(--todo-soft); color: var(--todo); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
-  .steps .what { flex: 1; min-width: 220px; }
-  .steps .what b { display: block; font-size: 14.5px; }
-  .steps .what span { font-size: 13.5px; color: var(--text-2); }
-  .also { margin-top: 14px; font-size: 13.5px; color: var(--text-2); }
-  .stale { margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13.5px; color: var(--text-2); padding-top: 14px; border-top: 1px dashed color-mix(in srgb, var(--text-2) 25%, transparent); }
+.empty { padding: var(--s8) 0; text-align: center; }
+.empty h2 { font: 750 26px var(--display); font-stretch: 112%; margin: 18px 0 8px; }
+.empty p { color: var(--ink-2); margin: 0 auto; max-width: 52ch; }
+.empty .track { max-width: 360px; margin: 0 auto; }
 
-  .sec { padding: 20px 22px; }
-  .sec > header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-  .sec > header h3 { margin: 0; font: 700 16.5px var(--display); }
-  .sec > header .sub { color: var(--muted); font-size: 13.5px; }
-  .sec > header .right { margin-left: auto; }
-  .sec .lead { margin: -6px 0 14px; color: var(--muted); font-size: 13.5px; }
+.setup { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1.5px solid var(--ink); margin-top: var(--s6); }
+.setup > div { padding: var(--s5); }
+.setup > div + div { border-left: 1.5px solid var(--ink); }
+.setup .no { font: 800 44px/1 var(--display); font-stretch: 125%; color: var(--faint); }
+.setup .done .no { color: var(--ink); }
+.setup h3 { font: 700 18px var(--display); font-stretch: 108%; margin: 10px 0 6px; }
+.setup p { color: var(--ink-2); margin: 0 0 16px; font-size: 14.5px; }
+@media (max-width: 760px) { .setup { grid-template-columns: 1fr; } .setup > div + div { border-left: 0; border-top: 1.5px solid var(--ink); } }
 
-  .rows { display: flex; flex-direction: column; }
-  .r { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 4px 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line-2); }
-  .r:first-child { border-top: 0; padding-top: 2px; }
-  .r .st { padding-top: 2px; }
-  .r .st .ico { width: 18px; height: 18px; }
-  .r .st.ready { color: var(--ready); } .r .st.todo { color: var(--todo); } .r .st.idle { color: var(--idle); }
-  .r .name { font-weight: 600; }
-  .r .detail { font-size: 13.5px; color: var(--text-2); margin-top: 2px; }
-  .r .aside { font-size: 13px; color: var(--muted); text-align: right; max-width: 280px; overflow-wrap: anywhere; }
-  .r .aside .repos { display: block; font-size: 12.5px; color: var(--faint); margin-top: 2px; }
-  .r > div { min-width: 0; overflow-wrap: anywhere; }
-  .r .aside a { font-weight: 600; }
-  .r.sub1 { padding-left: 22px; } .r.sub2 { padding-left: 44px; }
-  .r.you { background: linear-gradient(90deg, var(--primary-soft), transparent 60%); border-radius: 8px; }
-  @media (max-width: 620px) { .r { grid-template-columns: 24px 1fr; } .r .aside { grid-column: 2; text-align: left; white-space: normal; } }
+/* ═══════════════ ticket ═══════════════ */
+.crumb { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--steel); margin-bottom: var(--s4); }
+.crumb button { color: var(--steel); }
+.crumb button:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.t-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s5); align-items: end; }
+.t-head .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.facts { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 18px; font-size: 14px; color: var(--ink-2); align-items: center; }
+.facts .f { display: flex; gap: 8px; align-items: baseline; }
+.switch { display: inline-flex; gap: 10px; align-items: center; cursor: pointer; font-size: 14px; user-select: none; }
+.switch input { appearance: none; width: 34px; height: 18px; border: 1.5px solid var(--ink); position: relative; margin: 0; cursor: pointer; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; background: var(--ink); transition: transform .2s var(--ease); }
+.switch input:checked { background: var(--ink); }
+.switch input:checked::after { background: var(--paper); transform: translateX(16px); }
+@media (max-width: 860px) { .t-head { grid-template-columns: 1fr; } .t-head .actions { justify-content: flex-start; } }
 
-  details.fold { border-top: 1px solid var(--line-2); }
-  details.fold:first-of-type { border-top: 0; }
-  details.fold > summary { list-style: none; cursor: pointer; padding: 12px 0; display: flex; align-items: center; gap: 10px; font-weight: 600; }
-  details.fold > summary::-webkit-details-marker { display: none; }
-  details.fold > summary .chev { transition: transform .15s; color: var(--muted); }
-  details.fold[open] > summary .chev { transform: rotate(90deg); }
-  details.fold > summary .count { color: var(--muted); font-weight: 400; font-size: 13.5px; }
-  .fold-in { padding: 0 0 16px 26px; }
-  .fold-in h4 { margin: 12px 0 6px; font-size: 13.5px; color: var(--text-2); }
-  .fold-in h4:first-child { margin-top: 0; }
-  .tool { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-size: 13.5px; color: var(--muted); }
-  .tool input, .tool select { border: 1px solid var(--line); background: var(--sunk); border-radius: 8px; padding: 6px 10px; font-size: 13.5px; }
-  .tool input { min-width: 240px; }
-  .files { list-style: none; margin: 0; padding: 0; }
-  .files li { font: 12.5px/1.7 var(--mono); color: var(--text-2); word-break: break-all; display: flex; gap: 8px; }
-  .files .op { font-weight: 700; width: 12px; flex: none; color: var(--muted); }
-  .files .op.A { color: var(--ready); } .files .op.D { color: var(--danger); }
-  .commit { padding: 8px 0; border-top: 1px solid var(--line-2); font-size: 14px; }
-  .commit:first-of-type { border-top: 0; }
-  .commit .m { font-size: 12.5px; color: var(--muted); margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .commit .note { font-size: 12.5px; color: var(--todo); margin-top: 2px; }
+.verdict { margin-top: var(--s6); padding: 18px 22px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; border: 1.5px solid var(--ink); background: var(--sheet); }
+.verdict .grow { min-width: min(100%, 280px); }
+.verdict.todo { border-color: var(--signal); background: var(--signal-wash); }
+.verdict .big { font: 800 24px/1.1 var(--display); font-stretch: 115%; letter-spacing: -.01em; }
+.verdict p { margin: 4px 0 0; color: var(--ink-2); font-size: 14.5px; }
+.verdict .grow { flex: 1; }
+.stale { font: 500 12.5px var(--mono); color: var(--steel); }
 
-  .glance { padding: 18px; }
-  .glance h3 { margin: 0 0 12px; font: 700 14.5px var(--display); }
-  .glance dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; font-size: 14px; }
-  .glance dt { color: var(--muted); }
-  .glance dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
-  .glance .acts { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-  .glance .when { margin-top: 12px; font-size: 12.5px; color: var(--muted); text-align: center; }
-  .toc { padding: 14px 18px; }
-  .toc h3 { margin: 0 0 6px; font-size: 12.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  .toc a { display: block; padding: 4px 0; font-size: 14px; color: var(--text-2); }
-  .toc a:hover { color: var(--primary); }
+/* the big rail */
+.rail { --k: 0; position: relative; display: grid; grid-template-columns: repeat(6, 1fr); margin-top: var(--s7); }
+.rail::before, .rail .fill { content: ""; position: absolute; top: 30px; height: 3px; left: calc(100% / 12); }
+.rail::before { right: calc(100% / 12); background: repeating-linear-gradient(90deg, var(--faint) 0 6px, transparent 6px 12px); }
+.rail .fill { width: calc(var(--k) * (100% / 6)); background: var(--ink); transition: width .8s var(--ease); }
+.rail .carriage { top: 6px; border-left-width: 8px; border-right-width: 8px; border-top-width: 11px; }
+.rail.clear .carriage { display: none; }
+.stop { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 22px 8px 16px; --node: 22px; }
+.stop .n { background-clip: padding-box; }
+.stop .n.wait, .stop .n.skip, .stop .n.none { background-color: var(--paper); }
+.stop .txtwrap { display: flex; flex-direction: column; align-items: center; }
+.stop .no { font: 600 10.5px var(--mono); letter-spacing: .12em; color: var(--steel); margin-top: 14px; text-transform: uppercase; }
+.stop .nm { font: 750 17px var(--display); font-stretch: 112%; margin-top: 2px; }
+.stop .hl { font-size: 12.5px; color: var(--ink-2); margin-top: 4px; max-width: 20ch; line-height: 1.4; }
+.stop::after { content: ""; position: absolute; left: 12%; right: 12%; bottom: 0; height: 3px; background: var(--ink); transform: scaleX(0); transition: transform .25s var(--ease); }
+.stop[aria-selected="true"]::after { transform: scaleX(1); }
+.stop[aria-selected="true"] .nm { text-decoration: none; }
+.stop:hover .nm { color: var(--signal); }
+.stop.light .n { animation: light .5s var(--ease) both; }
+@keyframes light { from { transform: scale(.4); opacity: 0; } }
+.rail.loading .stop .n { animation: blink 1.2s ease-in-out infinite; }
+.rail.loading .stop:nth-of-type(2) .n { animation-delay: .15s; } .rail.loading .stop:nth-of-type(3) .n { animation-delay: .3s; }
+.rail.loading .stop:nth-of-type(4) .n { animation-delay: .45s; } .rail.loading .stop:nth-of-type(5) .n { animation-delay: .6s; } .rail.loading .stop:nth-of-type(6) .n { animation-delay: .75s; }
 
-  .center { text-align: center; padding: 70px 24px; }
-  .center h2 { font: 700 20px var(--display); margin: 16px 0 6px; }
-  .center p { color: var(--muted); margin: 0 auto; max-width: 460px; }
-  .spinner { width: 34px; height: 34px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto; }
-  .spinner.sm { width: 14px; height: 14px; border-width: 2px; margin: 0; display: inline-block; vertical-align: -2px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .errbox { background: var(--danger-soft); color: var(--danger); border-radius: var(--radius); padding: 16px 20px; }
+/* vertical line on narrow screens */
+@media (max-width: 760px) {
+  .rail { grid-template-columns: 1fr; margin-top: var(--s6); }
+  .rail::before, .rail .fill { top: 22px; bottom: 22px; left: 10px; width: 3px; height: auto; right: auto; }
+  .rail::before { background: repeating-linear-gradient(180deg, var(--faint) 0 6px, transparent 6px 12px); }
+  .rail .fill { height: calc(var(--k) * (100% / 6)); width: 3px; bottom: auto; }
+  .rail .carriage { display: none; }
+  .stop { flex-direction: row; align-items: flex-start; text-align: left; gap: 16px; padding: 10px 0; }
+  .stop .no { margin-top: 0; }
+  .stop .txtwrap { align-items: flex-start; }
+  .stop .hl { max-width: none; }
+  .stop::after { left: auto; right: 0; top: 10px; bottom: 10px; width: 3px; height: auto; transform: scaleY(0); }
+  .stop[aria-selected="true"]::after { transform: scaleY(1); }
+}
 
-  /* ── dialog ── */
-  dialog { border: 0; border-radius: 16px; padding: 0; width: min(500px, calc(100vw - 32px)); background: var(--card); color: var(--text); box-shadow: 0 30px 80px rgba(0,0,0,.25); }
-  dialog::backdrop { background: rgba(15,20,24,.45); }
-  .dlg { padding: 26px 28px 24px; position: relative; }
-  .dlg h2 { margin: 0 0 6px; font: 700 20px var(--display); }
-  .dlg > p { margin: 0 0 6px; color: var(--muted); font-size: 14px; }
-  .dlg .x { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border-radius: 8px; border: 0; background: none; color: var(--muted); font-size: 20px; }
-  .dlg .x:hover { background: var(--sunk); }
-  .dlg hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0 18px; }
-  .dlg h3 { margin: 0 0 4px; font-size: 15px; }
-  .fld { display: block; margin-top: 14px; }
-  .fld > span { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 6px; }
-  .fld input { width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; background: var(--sunk); }
-  .fld input:focus { outline: none; border-color: var(--primary); background: var(--card); box-shadow: 0 0 0 3px var(--primary-soft); }
-  .fld small { display: block; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
-  .dlg .row { display: flex; gap: 12px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
-  .say { font-size: 13.5px; }
-  .say.good { color: var(--ready); } .say.bad { color: var(--danger); }
-  .who-card { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 10px; background: var(--ready-soft); margin-top: 12px; }
-  .who-card .avatar { width: 42px; height: 42px; font-size: 15px; background: var(--card); color: var(--ready); }
-  .who-card b { display: block; }
-  .who-card small { color: var(--text-2); }
+.desk { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--s6); margin-top: var(--s5); align-items: start; }
+@media (max-width: 1040px) { .desk { grid-template-columns: 1fr; } }
+.station { border-top: 1.5px solid var(--ink); padding-top: var(--s5); animation: rise .35s var(--ease) both; }
+.station .sh { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.station .sh h3 { font: 800 26px var(--display); font-stretch: 115%; margin: 0; letter-spacing: -.01em; }
+.station .means { color: var(--ink-2); margin: 6px 0 var(--s4); font-size: 14.5px; max-width: 64ch; }
+.items { list-style: none; margin: 0; padding: 0; }
+.item { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 4px 14px; padding: 16px 0; border-bottom: 1px solid var(--rule); align-items: start; }
+.item .n { margin-top: 4px; }
+.item > div { min-width: 0; }
+.item .it { font-weight: 650; font-size: 15.5px; overflow-wrap: anywhere; }
+.station, .desk > *, .t-head > * { min-width: 0; }
+.item .id { color: var(--ink-2); font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+.item .repo { font: 500 11.5px var(--mono); color: var(--steel); letter-spacing: .04em; }
+.item .go { align-self: center; }
+@media (max-width: 620px) { .item { grid-template-columns: 22px 1fr; } .item .go { grid-column: 2; justify-self: start; } }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: var(--s4); font-size: 12.5px; color: var(--steel); }
+.legend span { display: inline-flex; gap: 7px; align-items: center; }
+.legend .n { --node: 10px; }
 
-  .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; transition: .2s; background: var(--text); color: var(--bg); padding: 11px 18px; border-radius: 10px; font-size: 14px; z-index: 50; max-width: calc(100vw - 32px); box-shadow: 0 10px 30px rgba(0,0,0,.2); }
-  .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  .toast a { color: inherit; text-decoration: underline; }
+.aside { display: flex; flex-direction: column; gap: var(--s5); position: sticky; top: 88px; }
+.panel { border: 1.5px solid var(--ink); padding: 18px; background: var(--sheet); }
+.panel h4 { margin: 0 0 12px; }
+.counts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; }
+.counts .v { font: 750 24px/1 var(--display); font-stretch: 112%; font-variant-numeric: tabular-nums; }
+.counts .l { font-size: 12px; color: var(--steel); margin-top: 3px; }
+.mini-tickets { list-style: none; margin: 0; padding: 0; }
+.mini-tickets li { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; padding: 9px 0; border-top: 1px solid var(--rule); font-size: 13.5px; }
+.mini-tickets li:first-child { border-top: 0; padding-top: 0; }
+.mini-tickets .s { grid-column: 2; color: var(--steel); font-size: 12.5px; }
+.panel .more { display: flex; flex-direction: column; gap: 8px; }
+.panel .more .btn { justify-content: space-between; }
+
+.evidence { margin-top: var(--s8); border-top: 1.5px solid var(--ink); }
+.evidence > summary { list-style: none; cursor: pointer; padding: var(--s5) 0; display: flex; align-items: baseline; gap: 14px; }
+.evidence > summary::-webkit-details-marker { display: none; }
+.evidence > summary .plus { font: 600 18px var(--mono); width: 18px; transition: transform .2s var(--ease); }
+.evidence[open] > summary .plus { transform: rotate(45deg); }
+.evidence > summary h2 { font: 800 24px var(--display); font-stretch: 115%; margin: 0; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); overflow-x: auto; }
+.tabs button { padding: 10px 16px; font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--steel); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--ink); }
+.tabs button:hover { color: var(--ink); }
+.tabpane { padding: var(--s5) 0; }
+.tool { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: var(--s4); }
+.tool input, .tool select { height: 36px; border: 1.5px solid var(--rule); background: var(--sheet); padding: 0 12px; min-width: 260px; }
+.tool input:focus, .tool select:focus { outline: none; border-color: var(--ink); }
+table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.t th { text-align: left; font: 600 10.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); padding: 0 16px 10px 0; border-bottom: 1.5px solid var(--ink); }
+table.t td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.scroll-x { overflow-x: auto; }
+.files { list-style: none; margin: 0 0 var(--s4); padding: 0; columns: 2 420px; column-gap: var(--s6); }
+.files li { font: 12.5px/1.75 var(--mono); color: var(--ink-2); break-inside: avoid; display: flex; gap: 10px; overflow-wrap: anywhere; }
+.files .op { width: 12px; flex: none; color: var(--steel); font-weight: 700; }
+.files .op.A { color: var(--ink); } .files .op.D { color: var(--signal); }
+.repo-h { font: 700 15px var(--display); font-stretch: 108%; margin: var(--s5) 0 var(--s2); }
+.repo-h:first-child { margin-top: 0; }
+.commit { display: grid; grid-template-columns: 84px 1fr; gap: 2px 14px; padding: 10px 0; border-bottom: 1px solid var(--rule-2); font-size: 14px; }
+.commit .m { grid-column: 2; font-size: 12.5px; color: var(--steel); }
+.commit .note { grid-column: 2; font-size: 12.5px; color: var(--signal); }
+
+.boom { border: 1.5px solid var(--signal); padding: var(--s5); margin-top: var(--s6); }
+.boom h2 { font: 800 24px var(--display); font-stretch: 115%; margin: 0 0 6px; }
+.boom p { margin: 0 0 var(--s4); color: var(--ink-2); }
+.spin { width: 14px; height: 14px; border: 2px solid var(--rule); border-top-color: var(--signal); border-radius: 50%; display: inline-block; animation: turn .7s linear infinite; vertical-align: -2px; }
+@keyframes turn { to { transform: rotate(360deg); } }
+
+/* ═══════════════ account sheet ═══════════════ */
+dialog.sheet { position: fixed; inset: 0 0 0 auto; margin: 0; height: 100%; max-height: none; width: min(460px, 100vw); border: 0; border-left: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); padding: 0; }
+dialog.sheet[open] { animation: slide .35s var(--ease); }
+@keyframes slide { from { transform: translateX(40px); opacity: 0; } }
+dialog.sheet::backdrop { background: color-mix(in srgb, var(--ink) 35%, transparent); }
+.sheet-in { padding: var(--s6) var(--s6) var(--s7); display: flex; flex-direction: column; gap: var(--s4); min-height: 100%; }
+.sheet-in .close { align-self: flex-end; font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); }
+.sheet-in .close:hover { color: var(--ink); }
+.sheet-in h2 { font: 800 30px/1.05 var(--display); font-stretch: 118%; letter-spacing: -.02em; margin: 0; }
+.sheet-in p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+.sheet-in hr { border: 0; border-top: 1.5px solid var(--ink); margin: var(--s4) 0; width: 100%; }
+.fld { display: flex; flex-direction: column; gap: 6px; }
+.fld .label { color: var(--ink); }
+.fld input { height: 44px; border: 1.5px solid var(--rule); background: var(--sheet); padding: 0 12px; }
+.fld input:focus { outline: none; border-color: var(--ink); }
+.fld small { font-size: 12.5px; color: var(--steel); }
+.say { font-size: 13.5px; min-height: 20px; }
+.say.bad { color: var(--signal); font-weight: 600; }
+.say.good { font-weight: 600; }
+.ident { display: flex; gap: 14px; align-items: center; padding: 16px; border: 1.5px solid var(--ink); background: var(--sheet); }
+.ident .mark { width: 46px; height: 46px; display: grid; place-items: center; background: var(--ink); color: var(--paper); font: 700 15px var(--mono); flex: none; }
+.ident b { display: block; }
+.ident small { color: var(--steel); }
+
+/* ═══════════════ ticker ═══════════════ */
+.ticker { position: fixed; left: 24px; bottom: 24px; z-index: 60; background: var(--ink); color: var(--paper); padding: 12px 16px 12px 14px; font: 500 13px var(--mono); max-width: min(560px, calc(100vw - 48px));
+  display: flex; gap: 12px; align-items: center; transform: translateY(20px); opacity: 0; pointer-events: none; transition: .25s var(--ease); border-left: 4px solid var(--signal); }
+.ticker.show { transform: none; opacity: 1; pointer-events: auto; }
+.ticker a { color: var(--paper); text-decoration-color: var(--signal); }
 </style>
 </head>
 <body>
-<header class="topbar">
-  <div class="topbar-in">
-    <button class="brand" id="home" title="Home">
-      <span class="mark"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></span>
-      <span class="label">Feature Ledger</span>
-    </button>
-    <form class="search" id="search" autocomplete="off" role="search">
-      <svg class="ico s-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" placeholder="Search your tickets by key or title" aria-label="Search your tickets" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="sugg">
-      <kbd>/</kbd>
-      <div class="sugg" id="sugg" role="listbox" hidden></div>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#" id="brand" aria-label="Your line, home">
+      <svg width="38" height="14" viewBox="0 0 38 14" aria-hidden="true"><path d="M3 7h32" stroke="currentColor" stroke-width="2"/><circle cx="4" cy="7" r="3.5" fill="currentColor"/><circle cx="19" cy="7" r="3.5" fill="currentColor"/><circle cx="34" cy="7" r="4.5" fill="#f2471c"/></svg>
+      <span>THE LINE <small>· feature ledger</small></span>
+    </a>
+    <form class="find" id="find" role="search" autocomplete="off">
+      <svg class="glass" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+      <input id="q" placeholder="Find one of your tickets: key or words" aria-label="Find one of your tickets" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="hits">
+      <kbd aria-hidden="true">/</kbd>
+      <div class="hits" id="hits" role="listbox" hidden></div>
     </form>
-    <div id="meSlot"></div>
+    <div id="whoSlot"></div>
   </div>
 </header>
 
-<div class="page" id="page"></div>
+<main id="main" tabindex="-1"></main>
 
-<dialog id="acct"><div class="dlg" id="acctBody"></div></dialog>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle"><div class="sheet-in" id="sheetIn"></div></dialog>
+<div class="ticker" id="ticker" role="status" aria-live="polite"></div>
 
 <script>
+/* ═══════════════ basics ═══════════════ */
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const A = (text, url) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text);
-const n = (k, one, many) => `${k} ${k === 1 ? one : (many || one + "s")}`;
+const plural = (k, one, many) => `${k} ${k === 1 ? one : (many || one + "s")}`;
 const initials = s => (s || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
-const branchName = r => (r || "").replace(/^origin\//, "");
+const firstName = s => { const f = (s || "").split(/\s+/)[0] || ""; return f.charAt(0).toUpperCase() + f.slice(1); };
+const branch = r => (r || "").replace(/^origin\//, "");
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const day = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ""); return m ? `${+m[3]} ${MON[+m[2] - 1]}` : esc(d); };
 function when(stamp) {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(stamp || "");
   if (!m) return esc(stamp);
   const d = new Date(+m[1], +m[2] - 1, +m[3]), t = new Date(); t.setHours(0, 0, 0, 0);
-  const diff = Math.round((t - d) / 86400000);
-  return diff === 0 ? `today at ${m[4] || ""}` : diff === 1 ? `yesterday at ${m[4] || ""}` : `${+m[3]} ${MON[+m[2] - 1]}`;
+  const diff = Math.round((t - d) / 864e5);
+  return diff === 0 ? `today ${m[4] || ""}` : diff === 1 ? `yesterday ${m[4] || ""}` : `${+m[3]} ${MON[+m[2] - 1]}`;
 }
-const firstName = s => { const f = (s || "").split(" ")[0]; return f.charAt(0).toUpperCase() + f.slice(1); };
-const titleName = s => (s || "").split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-function greeting() { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
 
-const I = {
-  check: `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>`,
-  alert: `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v6"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>`,
-  dash: `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9.5" stroke-dasharray="3 3.2"/></svg>`,
-  back: `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`,
-  chev: `<svg class="ico chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>`,
-  ext: `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>`,
-  refresh: `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.4-5.7L20 8.5"/><path d="M20 3.5v5h-5"/></svg>`,
-  jira: `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12.5h5"/></svg>`,
-};
-const pill = (kind, text) => `<span class="pill ${kind}">${kind === "ready" ? I.check : kind === "todo" ? I.alert : I.dash}${esc(text)}</span>`;
-const jiraPill = (name, cat) => `<span class="pill ${cat === "done" ? "ready" : cat === "indeterminate" ? "info" : "idle"}">${cat === "done" ? I.check : I.dash}${esc(name)}</span>`;
+const STATIONS = [
+  { id: "code",   no: "01", name: "Code",    means: "Every change is merged into the branch the service is built from." },
+  { id: "tag",    no: "02", name: "Tagged",  means: "QA deploys version tags, not branches. The merged code has to be inside a tag." },
+  { id: "db",     no: "03", name: "Database", means: "Scripts are in a release folder of db-migration-scripts, and that release runs on the QA database." },
+  { id: "access", no: "04", name: "Access",  means: "QA users can reach the feature: role grants, scopes and menus exist on QA too." },
+  { id: "config", no: "05", name: "Config",  means: "New settings are added to the QA configuration, which is kept outside git." },
+  { id: "qa",     no: "06", name: "QA",      means: "The ticket is moved in Jira and the handover is posted for the tester." },
+];
+const WORD = { done: "Clear", todo: "Act here", check: "Confirm", wait: "Waiting", skip: "Not needed", none: "Not checked" };
 
-let status = null, mine = null, current = null, filterStatus = "", commitTicket = "", checkingAll = false;
-let includeKids = true;
+let status = null, mine = null, current = null, sel = null, tab = "repos", commitFilter = "", includeKids = true, checking = false, homeFilter = "all";
 
-function toast(html, ms = 3600) {
-  const t = $("#toast"); t.innerHTML = html; t.classList.add("show");
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms);
+function tick(html, ms = 4200) {
+  const t = $("#ticker"); t.innerHTML = html; t.classList.add("show");
+  clearTimeout(tick.t); tick.t = setTimeout(() => t.classList.remove("show"), ms);
 }
 async function api(path, opts = {}) {
   if (opts.method && opts.method !== "GET") opts.headers = { "X-Ledger": "1", "Content-Type": "application/json" };
@@ -331,426 +404,428 @@ async function api(path, opts = {}) {
   return body;
 }
 
-/* ───────────── account ───────────── */
+/* where a ticket stands on the line: the first station that needs a person, or past the end */
+function position(states) {
+  const i = states.findIndex(s => s === "todo" || s === "wait");
+  return i === -1 ? { k: states.length - 1, clear: true } : { k: i, clear: false };
+}
+function trackHtml(states, cls = "") {
+  const known = states && states.length === 6;
+  const st = known ? states : Array(6).fill("none");
+  const { k, clear } = known ? position(st) : { k: 0, clear: true };
+  return `<div class="track ${cls} ${clear ? "clear" : ""}" style="--k:${known ? k : 0}" aria-hidden="true">
+    <span class="fill"></span><span class="carriage"></span>
+    ${st.map(s => `<span class="cell"><span class="n ${s}"></span></span>`).join("")}</div>`;
+}
+const glyph = s => `<span class="n ${s}" role="img" aria-label="${WORD[s] || s}"></span>`;
+const statesOf = r => r?.stations ? STATIONS.map(s => r.stations.find(x => x.id === s.id)?.state || "none") : null;
 
+/* ═══════════════ account ═══════════════ */
 async function loadStatus() {
   try { status = await api("/api/status"); }
-  catch { $("#meSlot").innerHTML = `<span class="pill todo">${I.alert}Server stopped</span>`; return; }
+  catch { $("#whoSlot").innerHTML = `<span class="label" style="color:var(--signal)">Server stopped</span>`; return; }
   const me = status.account;
-  $("#meSlot").innerHTML = me
-    ? `<button class="me" id="meBtn" title="Your account and settings"><span class="avatar">${esc(initials(me.name))}</span><span>${esc(firstName(me.name))}</span></button>`
-    : `<button class="btn primary small" id="meBtn">Connect Jira</button>`;
-  $("#meBtn").onclick = openAccount;
+  $("#whoSlot").innerHTML = me
+    ? `<button class="who" id="whoBtn" aria-label="Account and settings"><span class="mark">${esc(initials(me.name))}</span><span>${esc(firstName(me.name))}</span></button>`
+    : `<button class="btn sm go" id="whoBtn">Connect Jira</button>`;
+  $("#whoBtn").onclick = openSheet;
 }
 
-function openAccount() {
+function openSheet() {
   const me = status?.account;
-  $("#acctBody").innerHTML = `<button class="x" id="x" aria-label="Close">×</button>` + (me ? `
-    <h2>Your account</h2>
-    <div class="who-card"><span class="avatar">${esc(initials(me.name))}</span><div style="flex:1"><b>${esc(titleName(me.name))}</b><small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div></div>
-    <p style="margin-top:10px">Your API token is stored in ${esc(me.source)} on this computer. Everything done in Jira happens as you.</p>
-    <div class="row"><button class="btn small" id="disc">Disconnect</button></div>` : `
-    <h2>Connect your Jira account</h2>
-    <p>So the ledger can list your tickets and post to Jira as you. Your token stays in Windows Credential Manager on this computer.</p>
+  $("#sheetIn").innerHTML = `<button class="close" id="shut">Close ✕</button>` + (me ? `
+    <span class="label">Signed in</span>
+    <h2 id="sheetTitle">You're on the line.</h2>
+    <div class="ident"><span class="mark">${esc(initials(me.name))}</span><div><b>${esc(me.name)}</b><small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div></div>
+    <p>Your token is kept in ${esc(me.source)} on this computer. Everything done in Jira happens under your name.</p>
+    <div><button class="btn sm" id="disc">Disconnect</button></div>` : `
+    <span class="label">Step 1</span>
+    <h2 id="sheetTitle">Connect your Jira account</h2>
+    <p>The line reads your tickets and posts handovers as you. The token stays in Windows Credential Manager on this computer.</p>
     ${status?.credentialsRejected ? `<p class="say bad">Your saved token stopped working. Enter a new one.</p>` : ""}
-    <label class="fld"><span>Jira site</span><input id="jSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"></label>
-    <label class="fld"><span>Email you sign in to Atlassian with</span><input id="jEmail" type="email" autocomplete="username" spellcheck="false">
-      <small>It can differ from the address Jira shows on your profile.</small></label>
-    <label class="fld"><span>API token</span><input id="jToken" type="password" autocomplete="off">
-      <small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create a token</a> while signed in to Atlassian as yourself, then paste it here.</small></label>
-    <div class="row"><button class="btn primary" id="conn">Connect</button><span class="say" id="jSay"></span></div>`) + `
+    <label class="fld"><span class="label">Jira site</span><input id="jSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"></label>
+    <label class="fld"><span class="label">Email you sign in to Atlassian with</span><input id="jEmail" type="email" autocomplete="username" spellcheck="false"><small>This can differ from the email Jira shows on your profile.</small></label>
+    <label class="fld"><span class="label">API token</span><input id="jToken" type="password" autocomplete="off"><small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create a token</a> while signed in as yourself, then paste it.</small></label>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><button class="btn go" id="conn">Connect <span class="arr">→</span></button><span class="say" id="jSay"></span></div>`) + `
     <hr>
-    <h3>Your repositories</h3>
-    <p>The folder with your local clones. ${status ? `Right now: <b>${n(status.repoCount, "repository", "repositories")}</b> found.` : ""}</p>
-    <label class="fld"><input id="root" value="${esc(status?.reposRoot || "")}" spellcheck="false" aria-label="Repositories folder"></label>
-    <div class="row"><button class="btn small" id="saveRoot">Save folder</button><span class="say" id="rSay"></span></div>`;
-  $("#x").onclick = () => $("#acct").close();
+    <span class="label">${me ? "Repositories" : "Step 2"}</span>
+    <p>The folder with your local clones${status ? `. Found: <b>${plural(status.repoCount, "repository", "repositories")}</b>` : ""}.</p>
+    <label class="fld"><span class="label">Folder</span><input id="root" value="${esc(status?.reposRoot || "")}" spellcheck="false"></label>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><button class="btn sm" id="saveRoot">Save folder</button><span class="say" id="rSay"></span></div>`;
+  $("#shut").onclick = () => $("#sheet").close();
   $("#saveRoot").onclick = async () => {
     const say = $("#rSay");
     try { const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ reposRoot: $("#root").value }) });
-          say.className = "say good"; say.textContent = `Found ${n(r.repoCount, "repository", "repositories")}.`; loadStatus(); }
+          say.className = "say good"; say.textContent = `Found ${plural(r.repoCount, "repository", "repositories")}.`; loadStatus(); }
     catch (e) { say.className = "say bad"; say.textContent = e.message; }
   };
   if (me) $("#disc").onclick = async () => {
     await api("/api/account/disconnect", { method: "POST" });
-    await loadStatus(); mine = null; openAccount(); route();
-    toast("Disconnected. Your token was removed from this computer.");
+    mine = null; await loadStatus(); openSheet(); route(); tick("Disconnected. Your token was removed from this computer.");
   };
   else $("#conn").onclick = async () => {
     const say = $("#jSay"), b = $("#conn");
-    b.disabled = true; say.className = "say"; say.innerHTML = `<span class="spinner sm"></span> Checking with Jira…`;
+    b.disabled = true; say.className = "say"; say.innerHTML = `<span class="spin"></span> Asking Jira…`;
     try {
       const who = await api("/api/account", { method: "POST", body: JSON.stringify({ baseUrl: $("#jSite").value, email: $("#jEmail").value, token: $("#jToken").value }) });
-      await loadStatus(); $("#acct").close(); toast(`Connected as ${esc(who.name)}.`); mine = null; route();
+      mine = null; await loadStatus(); $("#sheet").close(); tick(`Connected as ${esc(who.name)}.`); route();
     } catch (e) { say.className = "say bad"; say.textContent = e.message; }
     finally { b.disabled = false; }
   };
-  if (!$("#acct").open) $("#acct").showModal();
+  if (!$("#sheet").open) $("#sheet").showModal();
+  setTimeout(() => ($("#jEmail") || $("#shut")).focus(), 50);
 }
+$("#sheet").addEventListener("click", e => { if (e.target === $("#sheet")) $("#sheet").close(); });
 
-/* ───────────── home ───────────── */
-
-function readiness(item) {
-  const lb = item.lastBuild ?? item;   // my-tickets carry lastBuild; recent items are builds themselves
-  if (!lb || lb.warnings === undefined) return "idle";
-  return lb.warnings ? "todo" : "ready";
-}
-
+/* ═══════════════ home: your line ═══════════════ */
 async function home() {
-  current = null;
-  const me = status?.account;
-  if (me && !mine) {
-    $("#page").innerHTML = `<div class="center"><div class="spinner"></div><h2>Getting your tickets from Jira…</h2></div>`;
-    try { mine = await api("/api/my-tickets"); } catch (e) { mine = []; toast(esc(e.message)); }
+  current = null; document.title = "The Line · Feature Ledger";
+  if (status?.account && !mine) {
+    $("#main").innerHTML = `<div class="empty">${trackHtml(null)}<h2>Loading your tickets from Jira…</h2></div>`;
+    try { mine = await api("/api/my-tickets"); } catch (e) { mine = []; tick(esc(e.message)); }
   }
   renderHome();
 }
 
-function renderHome() {
-  const me = status?.account;
-  const items = me ? mine || [] : (status?.recent || []).map(r => ({ ...r, lastBuild: r }));
-  const statuses = me ? [...new Set(items.map(i => i.status).filter(Boolean))] : [];
-  const shown = items.filter(i => !filterStatus || i.status === filterStatus);
-  const cols = { todo: [], ready: [], idle: [] };
-  shown.forEach(i => cols[readiness(i)].push(i));
-  const unchecked = items.filter(i => readiness(i) === "idle").length;
-
-  const setup = !me ? `
-    <section class="card setup">
-      <h2>Two quick steps to get started</h2>
-      <div class="step"><span class="n">1</span><div><h3>Connect your Jira account</h3><p>See every ticket assigned to you here, check sub-tasks, and post results to Jira as yourself.</p><button class="btn primary small" id="setupJira">Connect Jira</button></div></div>
-      <div class="step ${status?.repoCount ? "done" : ""}"><span class="n">${status?.repoCount ? I.check : "2"}</span><div><h3>Point to your repositories</h3><p>${status?.repoCount ? `${n(status.repoCount, "repository", "repositories")} found in <code>${esc(status.reposRoot)}</code>.` : "Choose the folder with your local clones."}</p><button class="link" id="setupRepos">${status?.repoCount ? "Change folder" : "Choose folder"}</button></div></div>
-    </section>` : "";
-
-  const column = (kind, title, icon, list, emptyText) => `
-    <section class="col ${kind}">
-      <div class="col-h">${icon}<h2>${title}</h2><span class="count">${list.length}</span></div>
-      ${list.length ? list.map(card).join("") : `<div class="empty">${emptyText}</div>`}
-    </section>`;
-
-  $("#page").innerHTML = `
-    <div class="hello">
-      <div class="grow">
-        <h1>${me ? `${greeting()}, ${esc(firstName(me.name))}` : "Is it ready for QA?"}</h1>
-        <p>${me ? (items.length ? `You have ${n(items.length, "open ticket")}. Here's where each one stands.` : "Nothing open is assigned to you right now.")
-               : "Open any ticket to see every repository, merge request and database script it touched, and what's still missing."}</p>
-      </div>
-      ${me && items.length ? `<div class="act">
-        <span class="progress-note" id="allNote">${unchecked ? `${n(unchecked, "ticket")} not checked yet` : ""}</span>
-        <button class="btn" id="reload">${I.refresh} Reload from Jira</button>
-        <button class="btn primary" id="checkAll" ${checkingAll ? "disabled" : ""}>${I.check} Check all my tickets</button>
-      </div>` : ""}
-    </div>
-    ${setup}
-    ${me && statuses.length > 1 ? `<div class="filterbar">Jira status:
-      <button class="chipbtn ${!filterStatus ? "on" : ""}" data-f="">All</button>
-      ${statuses.map(s => `<button class="chipbtn ${filterStatus === s ? "on" : ""}" data-f="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : ""}
-    ${items.length ? `<div class="board">
-      ${column("todo", "Needs work", I.alert, cols.todo, "Nothing blocked.")}
-      ${column("ready", "Ready for QA", I.check, cols.ready, "Nothing here yet.")}
-      ${me ? column("idle", "Not checked yet", I.dash, cols.idle, "Everything has been checked.") : ""}
-    </div>` : me ? "" : `<div class="card center"><h2>No tickets checked yet</h2><p>Type a ticket key in the search box above, like <span class="key">MM-9116</span>, to see what it touched.</p></div>`}`;
-
-  $("#setupJira")?.addEventListener("click", openAccount);
-  $("#setupRepos")?.addEventListener("click", openAccount);
-  $("#reload")?.addEventListener("click", () => { mine = null; home(); });
-  $("#checkAll")?.addEventListener("click", checkAll);
-  document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { filterStatus = b.dataset.f; renderHome(); });
-  document.querySelectorAll(".tcard").forEach(b => b.onclick = () => go(b.dataset.key));
+function bucket(t) {
+  const st = statesOf(t.lastBuild);
+  if (!st) return "unchecked";
+  if (st[5] === "done" && !st.includes("todo")) return "handed";
+  return st.includes("todo") || st.includes("wait") ? "stuck" : "ready";
 }
 
-function card(i) {
-  const lb = i.lastBuild, kind = readiness(i);
-  const what = kind === "todo" ? `${n(lb.warnings, "thing")} to fix` : kind === "ready" ? "Ready" : "Not checked";
-  return `<button class="tcard ${checkingAll && kind === "idle" ? "busy" : ""}" data-key="${esc(i.key)}">
-    <div class="top"><span class="key">${esc(i.key)}</span>${i.type ? `<span class="tag">${esc(i.type)}</span>` : ""}${i.status ? `<span class="jira">${esc(i.status)}</span>` : ""}</div>
-    <div class="title">${esc(i.summary || "Untitled")}</div>
-    <div class="under">${pill(kind, what)}${lb?.generated ? `<span>checked ${when(lb.generated)}</span>` : ""}${i.parentKey ? `<span class="dotsep">in ${esc(i.parentKey)}</span>` : ""}</div>
-  </button>`;
+function renderHome() {
+  const me = status?.account;
+  const list = me ? (mine || []) : (status?.recent || []).map(r => ({ ...r, lastBuild: r }));
+  const groups = { stuck: [], ready: [], handed: [], unchecked: [] };
+  list.forEach(t => groups[bucket(t)].push(t));
+  const order = ["stuck", "ready", "unchecked", "handed"];
+  const sorted = order.flatMap(g => groups[g]);
+  const shown = homeFilter === "all" ? sorted : groups[homeFilter];
+  const tally = [["all", "On your line", list.length], ["stuck", "Stuck", groups.stuck.length], ["ready", "Ready to hand over", groups.ready.length], ["handed", "With QA", groups.handed.length], ["unchecked", "Not checked", groups.unchecked.length]];
+
+  $("#main").innerHTML = `
+    <section class="home-head">
+      <div>
+        <div class="kicker"><span class="label">${me ? `${esc(firstName(me.name))}'s line` : "Feature Ledger"}</span></div>
+        <h1 class="hero">${me ? (groups.stuck.length ? `${plural(groups.stuck.length, "ticket is", "tickets are")} stuck before QA.` : list.length ? "Nothing is stuck. Keep it moving." : "Your line is empty.")
+                              : "Every ticket, on its way to QA."}</h1>
+        ${me ? `<div class="tally" role="tablist" aria-label="Filter tickets">${tally.map(([id, l, v]) => `<button role="tab" aria-selected="${homeFilter === id}" class="${homeFilter === id ? "on" : ""}" data-f="${id}"><span class="v">${v}</span><span class="label">${l}</span></button>`).join("")}</div>`
+             : `<p class="lede">Code, tag, database, access, config, handover: six stations every feature passes before a tester can touch it. Open a ticket to see where it's stuck and what to do.</p>`}
+      </div>
+      ${me && list.length ? `<div class="side">
+        <button class="btn go" id="checkAll" ${checking ? "disabled" : ""}>Check all my tickets <span class="arr">→</span></button>
+        <button class="txt" id="reload">Reload from Jira</button>
+        <span class="progress-line" id="prog">${groups.unchecked.length && !checking ? `${plural(groups.unchecked.length, "ticket")} not checked yet` : ""}</span>
+      </div>` : ""}
+    </section>
+    ${!me ? setupHtml() : ""}
+    ${shown.length ? `
+      <div class="board-head" aria-hidden="true"><span class="label">Ticket</span><div class="stations">${STATIONS.map(s => `<span>${s.no} ${s.name}</span>`).join("")}</div><span class="label" style="text-align:right">Next</span></div>
+      <div id="rows">${shown.map(rowHtml).join("")}</div>`
+      : me ? `<div class="empty"><h2>${list.length ? "Nothing in this view." : "No open tickets are assigned to you."}</h2><p>${list.length ? "Pick another filter above." : "When Jira assigns you something, it shows up here."}</p></div>` : ""}`;
+
+  $$("[data-f]").forEach(b => b.onclick = () => { homeFilter = b.dataset.f; renderHome(); });
+  $("#checkAll")?.addEventListener("click", checkAll);
+  $("#reload")?.addEventListener("click", () => { mine = null; home(); });
+  $("#setupJira")?.addEventListener("click", openSheet);
+  $("#setupRepos")?.addEventListener("click", openSheet);
+  wireRows();
+}
+
+function setupHtml() {
+  const reposOk = status?.repoCount > 0;
+  return `<section class="setup">
+    <div><span class="no">01</span><h3>Connect your Jira account</h3><p>So the line can list the tickets assigned to you and post handovers under your name.</p><button class="btn go" id="setupJira">Connect Jira <span class="arr">→</span></button></div>
+    <div class="${reposOk ? "done" : ""}"><span class="no">02</span><h3>${reposOk ? `${plural(status.repoCount, "repository", "repositories")} found` : "Point to your repositories"}</h3><p>${reposOk ? `Reading git history from <code>${esc(status.reposRoot)}</code>.` : "Choose the folder that holds your local clones."}</p><button class="txt" id="setupRepos">${reposOk ? "Change folder" : "Choose folder"}</button></div>
+  </section>`;
+}
+
+function nextText(t) {
+  const st = statesOf(t.lastBuild);
+  if (!st) return `<b>Not checked</b><span class="dim">open to check</span>`;
+  const { k, clear } = position(st);
+  if (clear) return st[5] === "done" ? `<b>With QA</b><span class="dim">checked ${when(t.lastBuild.generated)}</span>` : `<b>Hand over</b><span class="dim">all stations clear</span>`;
+  return `<b class="status-word ${st[k]}">${STATIONS[k].name}</b><span class="dim">${st[k] === "wait" ? "waiting" : "needs you"} · ${when(t.lastBuild.generated)}</span>`;
+}
+
+function rowHtml(t, i = 0) {
+  return `<div class="row ${checking && !t.lastBuild?.stations ? "" : ""}" role="link" tabindex="0" data-key="${esc(t.key)}" style="animation-delay:${Math.min(i, 12) * 30}ms" aria-label="${esc(t.key)}: ${esc(t.summary || "")}">
+    <div class="who-t">
+      <div class="line1"><span class="key">${esc(t.key)}</span>${t.type ? `<span class="typ">${esc(t.type)}</span>` : ""}${t.status ? `<span class="typ">· ${esc(t.status)}</span>` : ""}</div>
+      <div class="tt">${esc(t.summary || "Untitled")}</div>
+      ${t.parentKey ? `<div class="where">in ${esc(t.parentKey)} · ${esc(t.parentSummary || "")}</div>` : ""}
+    </div>
+    ${trackHtml(statesOf(t.lastBuild))}
+    <div class="act">${nextText(t)}</div>
+  </div>`;
+}
+
+function wireRows() {
+  $$("#rows .row").forEach(r => {
+    r.onclick = () => go(r.dataset.key);
+    r.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(r.dataset.key); } };
+  });
 }
 
 async function checkAll() {
-  if (checkingAll || !mine?.length) return;
-  checkingAll = true; renderHome();
+  if (checking || !mine?.length) return;
+  checking = true;
+  $("#checkAll").disabled = true;
   for (let k = 0; k < mine.length; k++) {
-    const i = mine[k];
-    const note = $("#allNote"); if (note) note.innerHTML = `<span class="spinner sm"></span> Checking ${k + 1} of ${mine.length}: ${esc(i.key)}${k === 0 ? " (fetching repositories first)" : ""}`;
+    const t = mine[k];
+    const row = document.querySelector(`.row[data-key="${CSS.escape(t.key)}"]`);
+    row?.classList.add("busy");
+    const p = $("#prog"); if (p) p.innerHTML = `<span class="spin"></span> ${k + 1} of ${mine.length} · ${esc(t.key)}${k === 0 ? " · fetching repositories first" : ""}`;
     try {
-      const r = await api(`/api/manifest?key=${encodeURIComponent(i.key)}&fetch=${k === 0 ? 1 : 0}&children=1`);
-      i.lastBuild = { warnings: todoList(r).length, generated: r.generated };
-    } catch { /* leave it unchecked */ }
-    if (!current) renderHome();
+      const r = await api(`/api/manifest?key=${encodeURIComponent(t.key)}&fetch=${k === 0 ? 1 : 0}&children=1&mine=1`);
+      t.lastBuild = { generated: r.generated, stations: r.stations.map(s => ({ id: s.id, state: s.state })) };
+    } catch { /* stays unchecked */ }
+    if (current) continue;
+    const fresh = document.querySelector(`.row[data-key="${CSS.escape(t.key)}"]`);
+    if (fresh) { const tmp = document.createElement("div"); tmp.innerHTML = rowHtml(t); tmp.firstElementChild.style.animation = "none"; fresh.replaceWith(tmp.firstElementChild); wireRows(); }
   }
-  checkingAll = false;
+  checking = false;
   if (!current) renderHome();
-  toast("All your tickets are checked.");
+  tick("Your whole line is checked.");
 }
 
-/* ───────────── ticket ───────────── */
-
+/* ═══════════════ ticket ═══════════════ */
 function go(key, fetchFirst = false) {
   key = (key || "").trim().toUpperCase();
   if (!key) return;
-  if (location.hash.slice(1) !== key) { history.pushState(null, "", "#" + key); }
+  if (location.hash.slice(1) !== key) history.pushState(null, "", "#" + key);
   openTicket(key, fetchFirst);
 }
 
 async function openTicket(key, fetchFirst) {
-  commitTicket = "";
+  commitFilter = ""; tab = "repos";
   window.scrollTo(0, 0);
-  $("#page").innerHTML = `<button class="back" id="back">${I.back} Back</button>
-    <div class="card center"><div class="spinner"></div><h2>Checking <span class="key" style="font-size:inherit">${esc(key)}</span></h2>
-    <p>${includeKids && status?.account ? "Finding its sub-tasks in Jira, then " : ""}${fetchFirst ? `fetching the latest from ${n(status?.repoCount ?? 0, "repository", "repositories")} and reading their history. This can take up to a minute.` : "reading your local git history. Just a few seconds."}</p></div>`;
-  $("#back").onclick = () => goHome();
+  document.title = `${key} · The Line`;
+  const steps = [includeKids && status?.account ? "Reading the ticket and your sub-tickets from Jira" : "Reading the ticket", fetchFirst ? `Fetching ${plural(status?.repoCount ?? 0, "repository", "repositories")}` : "Reading local git history", "Looking for tags, scripts, settings and grants", "Working out what QA needs"];
+  $("#main").innerHTML = `
+    <div class="crumb"><button id="back">← Your line</button></div>
+    <span class="key">${esc(key)}</span>
+    <h1 class="title" style="margin-top:8px">Checking the line…</h1>
+    <p class="stale" id="loadStep" style="margin-top:12px"><span class="spin"></span> ${steps[0]}</p>
+    <div class="rail loading" style="--k:0">${STATIONS.map(s => `<div class="stop"><span class="n none"></span><span class="txtwrap"><span class="no">${s.no}</span><span class="nm">${s.name}</span></span></div>`).join("")}</div>`;
+  $("#back").onclick = goHome;
+  let si = 0; const timer = setInterval(() => { si = Math.min(si + 1, steps.length - 1); const el = $("#loadStep"); if (el) el.innerHTML = `<span class="spin"></span> ${steps[si]}`; }, fetchFirst ? 6000 : 1800);
   try {
     current = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=1`);
     current.fetched = fetchFirst;
-    const m = mine?.find(x => x.key === key); if (m) m.lastBuild = { warnings: todoList(current).length, generated: current.generated };
-    renderTicket();
-    loadStatus();
+    const m = mine?.find(x => x.key === key); if (m) m.lastBuild = { generated: current.generated, stations: current.stations };
+    const st = current.stations.map(s => s.state);
+    sel = current.stations[st.indexOf("todo") !== -1 ? st.indexOf("todo") : st.indexOf("check") !== -1 ? st.indexOf("check") : st.indexOf("wait") !== -1 ? st.indexOf("wait") : 5].id;
+    renderTicket(true);
   } catch (e) {
-    $("#page").innerHTML = `<button class="back" id="back">${I.back} Back</button><div class="errbox"><b>Couldn't check ${esc(key)}.</b> ${esc(e.message)}</div>`;
-    $("#back").onclick = () => goHome();
-  }
+    $("#main").innerHTML = `<div class="crumb"><button id="back">← Your line</button></div>
+      <div class="boom"><span class="label" style="color:var(--signal)">Couldn't check ${esc(key)}</span><h2>The line stopped.</h2><p>${esc(e.message)}</p><button class="btn" id="retry">Try again</button></div>`;
+    $("#back").onclick = goHome; $("#retry").onclick = () => openTicket(key, fetchFirst);
+  } finally { clearInterval(timer); }
 }
 
 function goHome() { history.pushState(null, "", location.pathname); route(); }
 
-function todoList(r) {
-  const out = [];
-  for (const repo of r.repos) {
-    const target = branchName(repo.defaultRef);
-    for (const b of repo.branches.filter(b => b.unmerged)) {
-      const local = / \(local only, never pushed\)$/.test(b.name), name = b.name.replace(/ \(local only, never pushed\)$/, "");
-      const mr = repo.webUrl && !local ? `${repo.webUrl}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${encodeURIComponent(name)}&merge_request%5Btarget_branch%5D=${encodeURIComponent(target)}` : null;
-      out.push({
-        title: local ? `Push and merge the branch in ${repo.name}` : `Merge the branch in ${repo.name}`,
-        text: `${n(b.unmerged, "commit")} on <code>${esc(name)}</code> ${b.unmerged === 1 ? "isn't" : "aren't"} in ${esc(target)} yet.${local ? " The branch only exists on this computer." : ""}`,
-        action: mr ? `<a class="btn small" href="${esc(mr)}" target="_blank" rel="noopener">${I.ext} Open merge request</a>` : "",
-      });
-    }
-    const stray = repo.commits.filter(c => !c.inDefault).length - repo.branches.reduce((s, b) => s + b.unmerged, 0);
-    if (stray > 0 && !repo.branches.some(b => b.unmerged))
-      out.push({ title: `Find ${n(stray, "lost commit")} in ${repo.name}`, text: `${n(stray, "commit mentions", "commits mention")} this ticket but ${stray === 1 ? "isn't" : "aren't"} in ${esc(target)}, and no ticket branch holds ${stray === 1 ? "it" : "them"}. See <i>Every commit</i> below.`, action: "" });
-  }
-  const groups = new Map();
-  for (const d of r.db.filter(d => d.warning)) { const k = d.service + "|" + d.status; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); }
-  for (const g of groups.values()) {
-    const d = g[0], files = g.map(x => `<code>${esc(x.file)}</code>`).join(" ");
-    if (/STAGED/i.test(d.status)) out.push({ title: `Move ${n(g.length, "database script")} into a release (${d.service})`, text: `${files} ${g.length === 1 ? "is" : "are"} still in <code>dev/</code>. QA only gets scripts that are in a release folder.`, action: "" });
-    else if (/NOT found/i.test(d.status)) out.push({ title: `Find ${n(g.length, "missing database script")} (${d.service})`, text: `${files} left <code>dev/</code> but ${g.length === 1 ? "isn't" : "aren't"} in any release.`, action: "" });
-    else out.push({ title: `Database scripts in ${d.service}`, text: `${files}: ${esc(d.status)}.`, action: "" });
-  }
-  return out;
-}
+function renderTicket(animate = false) {
+  const r = current, i = r.issue, me = status?.account;
+  const st = r.stations.map(s => s.state);
+  const { k, clear } = position(st);
+  const none = r.repos.length === 0;
+  const todo = r.stations.reduce((n, s) => n + s.items.filter(x => x.state === "todo").length, 0);
+  const kids = r.scope.length - 1;
 
-function tree(scope) {
-  const kids = new Map(), keys = new Set(scope.map(t => t.key));
-  // a sub-task whose story was filtered out (someone else's) hangs directly under the ticket
-  for (const t of scope.slice(1)) { const p = keys.has(t.parentKey) ? t.parentKey : scope[0].key; if (!kids.has(p)) kids.set(p, []); kids.get(p).push(t); }
-  const out = [];
-  const walk = (t, d) => { out.push({ ...t, depth: d }); (kids.get(t.key) || []).forEach(c => walk(c, d + 1)); };
-  if (scope.length) walk(scope[0], 0);
-  return out;
-}
+  const verdict = none ? { cls: "", big: "No trace of this ticket in git.", p: `Nothing in your ${plural(status?.repoCount ?? 0, "repository", "repositories")} mentions ${esc(r.key)}${kids ? ` or your ${plural(kids, "sub-ticket")}` : ""}.` }
+    : !clear ? { cls: "todo", big: `Stuck at ${STATIONS[k].no} ${STATIONS[k].name}.`, p: `${plural(todo, "thing")} to do before QA can test this. Start with the station marked in red.` }
+    : st[5] === "done" ? { cls: "", big: "This ticket is with QA.", p: "Every station is clear. Confirm the hatched ones if you haven't already." }
+    : { cls: "", big: "Clear to hand over.", p: "Nothing is blocking QA. Confirm the hatched stations, then post the handover." };
 
-function renderTicket() {
-  const r = current, i = r.issue, meId = status?.account?.accountId, kids = r.scope.length - 1;
-  const todos = todoList(r), none = r.repos.length === 0;
-  const openKids = r.scope.slice(1).filter(t => t.statusCategory !== "done");
-  const s = r.stats;
-
-  const crumbs = r.ancestors.length ? `<div class="crumbs">${r.ancestors.map(x => `<button data-go="${esc(x.key)}">${esc(x.type)} <span class="key">${esc(x.key)}</span>: ${esc(x.summary)}</button><span>›</span>`).join("")}</div>` : "";
-  const hero = none
-    ? `<div class="hero idle"><div class="hd"><span class="badge">${I.dash}</span><div><h2>No trace of this ticket in git</h2><p>No commit, branch or merge request in your ${n(status?.repoCount ?? 0, "repository", "repositories")} mentions ${esc(r.key)}${kids ? ` or its ${n(kids, "sub-ticket")}` : ""}.</p></div></div>
-       ${!r.fetched ? `<div class="stale">Maybe it was pushed from another computer. <button class="btn small" data-again>${I.refresh} Fetch latest and check again</button></div>` : ""}</div>`
-    : todos.length
-    ? `<div class="hero todo"><div class="hd"><span class="badge">${I.alert}</span><div><h2>${n(todos.length, "thing", "things")} to do before QA</h2><p>Once these are done, this ticket is ready for QA.</p></div></div>
-       <ol class="steps">${todos.map(t => `<li><div class="what"><b>${esc(t.title)}</b><span>${t.text}</span></div>${t.action}</li>`).join("")}</ol>
-       ${openKids.length ? `<div class="also">Also still open in Jira: ${openKids.map(t => `<b class="key">${esc(t.key)}</b> ${esc(t.assignee)} (${esc(t.status)})`).join(", ")}</div>` : ""}
-       ${!r.fetched ? `<div class="stale">Based on your local copies. Someone may have merged since you last pulled. <button class="btn small" data-again>${I.refresh} Fetch latest and check again</button></div>` : ""}</div>`
-    : `<div class="hero ready"><div class="hd"><span class="badge">${I.check}</span><div><h2>Ready for QA</h2><p>All code is merged${r.db.length ? " and every database script is in a release" : ""}.</p></div></div>
-       ${openKids.length ? `<div class="also">The code is in, but Jira still has ${openKids.map(t => `<b class="key">${esc(t.key)}</b> ${esc(t.assignee)} (${esc(t.status)})`).join(", ")} open.</div>` : ""}
-       ${!r.fetched ? `<div class="stale">Based on your local copies. <button class="link" data-again>Fetch latest to be sure</button></div>` : ""}</div>`;
-
-  const sections = [];
-  if (!none) {
-    sections.push(["code", "Code changes", `<section class="card sec" id="code"><header><h3>Code changes</h3><span class="sub">${n(r.repos.length, "repository", "repositories")}</span></header>
-      <div class="rows">${r.repos.map(repo => {
-        const target = branchName(repo.defaultRef), waiting = repo.branches.filter(b => b.unmerged);
-        const total = repo.commits.length, merged = repo.commits.filter(c => c.inDefault).length;
-        const ok = !waiting.length && merged === total;
-        const detail = ok ? `Everything is in <b>${esc(target)}</b>.`
-          : waiting.length ? waiting.map(b => `${n(b.unmerged, "commit")} on <code>${esc(b.name)}</code> waiting to be merged into ${esc(target)}`).join("<br>")
-          : `${total - merged} of ${total} commits aren't in ${esc(target)}.`;
-        const mrs = repo.merges.map(m => m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">MR ${esc(m.label)}</a> <span class="muted">${day(m.date)}</span>` : `<span title="${esc(m.label)}">merged directly ${day(m.date)}</span>`).join("<br>");
-        return `<div class="r"><span class="st ${ok ? "ready" : "todo"}">${ok ? I.check : I.alert}</span>
-          <div><div class="name">${A(repo.name, repo.webUrl)}</div><div class="detail">${detail}</div></div>
-          <div class="aside">${mrs || "no merge request yet"}</div></div>`;
-      }).join("")}</div></section>`]);
-
-    if (r.db.length) {
-      const g = new Map();
-      for (const d of r.db) { const k = d.service + "|" + d.location; if (!g.has(k)) g.set(k, []); g.get(k).push(d); }
-      const label = { Schema: "Schema", Routines: "Functions", DataSeeding: "Seed data" };
-      sections.push(["db", "Database", `<section class="card sec" id="db"><header><h3>Database scripts</h3><span class="sub">${n(r.db.length, "script")}</span></header>
-        <div class="rows">${[...g.values()].map(list => {
-          const f = list[0], bad = list.some(d => d.warning);
-          const kinds = new Map(); list.forEach(d => { const k = d.kind || "Other"; if (!kinds.has(k)) kinds.set(k, []); kinds.get(k).push(d.file); });
-          const desc = [...kinds].map(([k, fs]) => `${label[k] || esc(k)}: ${fs.length <= 2 ? fs.map(x => `<code>${esc(x)}</code>`).join(" ") : `<span title="${esc(fs.join("\n"))}" style="text-decoration:underline dotted;cursor:help">${fs.length} files</span>`}`).join(" · ");
-          return `<div class="r"><span class="st ${bad ? "todo" : "ready"}">${bad ? I.alert : I.check}</span>
-            <div><div class="name">${esc(f.service)}</div><div class="detail">${desc}</div></div>
-            <div class="aside">${f.location === "dev" ? "staged in dev" : `release ${esc(f.location)}`}</div></div>`;
-        }).join("")}</div></section>`]);
-    }
-
-    if (kids > 0) sections.push(["team", "Team & sub-tickets", `<section class="card sec" id="team"><header><h3>Team &amp; sub-tickets</h3><span class="sub">${n(r.scope.length, "ticket")}</span></header>
-      <div class="rows">${tree(r.scope).map(t => {
-        const you = meId && t.assigneeId === meId, codeOk = t.commits && t.merged === t.commits;
-        return `<div class="r ${t.depth ? "sub" + Math.min(t.depth, 2) : ""} ${you ? "you" : ""}">
-          <span class="st ${t.statusCategory === "done" ? "ready" : "idle"}">${t.statusCategory === "done" ? I.check : I.dash}</span>
-          <div><div class="name"><button class="link key" data-go="${esc(t.key)}">${esc(t.key)}</button> ${esc(t.summary)}</div>
-            <div class="detail"><span class="avatar sm" style="display:inline-grid;vertical-align:middle;margin-right:4px">${esc(initials(t.assignee))}</span>${esc(t.assignee)}${you ? " (you)" : ""} · ${esc(t.type)} · ${esc(t.status)}</div></div>
-          <div class="aside">${t.commits ? `<span style="color:var(--${codeOk ? "ready" : "todo"})">${codeOk ? "all code merged" : `${t.merged} of ${t.commits} merged`}</span><span class="repos">${t.repos.map(esc).join(", ")}</span>` : "no code of its own"}</div></div>`;
-      }).join("")}</div></section>`]);
-
-    if (r.highlights.length) sections.push(["check", "Double-check these", `<section class="card sec" id="check"><header><h3>Double-check these</h3></header>
-      <p class="lead">Permissions, scopes, menus, configuration and deployment files are easy to forget when moving to QA. Make sure each one reaches QA too.</p>
-      <div class="rows">${r.highlights.map(h => h.hits.map(x => `<div class="r"><span class="st idle">${I.dash}</span><div><div class="name" style="font-weight:500"><code>${esc(x.path)}</code></div><div class="detail">${esc(x.repo)}</div></div><div class="aside">${esc(h.name)}</div></div>`).join("")).join("")}</div></section>`]);
-
-    sections.push(["all", "Full details", `<section class="card sec" id="all"><header><h3>Full details</h3></header>
-      <details class="fold"><summary>${I.chev} Every changed file <span class="count">${s.files}</span></summary><div class="fold-in">
-        <div class="tool"><input id="ff" placeholder="Filter by file name or path" aria-label="Filter files"></div>
-        <div id="fl">${r.repos.filter(x => x.files.length).map(repo => `<h4>${esc(repo.name)}</h4><ul class="files">${repo.files.map(f => `<li data-p="${esc((repo.name + " " + f.path).toLowerCase())}"><span class="op ${esc(f.status)}" title="${({ A: "added", M: "changed", D: "deleted", R: "renamed" })[f.status] || ""}">${esc(f.status)}</span><span>${esc(f.path)}</span></li>`).join("")}</ul>`).join("")}</div>
-      </div></details>
-      <details class="fold"><summary>${I.chev} Every commit <span class="count">${s.commits}</span></summary><div class="fold-in" id="cl"></div></details>
-      ${r.foreign.length ? `<details class="fold"><summary>${I.chev} Commits from other tickets on these branches <span class="count">${r.foreign.length}</span></summary><div class="fold-in">
-        <p class="muted" style="margin:0 0 8px;font-size:13.5px">Not counted above. This usually means a branch was started from another ticket's branch.</p>
-        ${r.foreign.map(c => commitHtml(c, null, `<span class="tag">${esc(c.otherKey)}</span><span>${esc(c.repo)}</span>`)).join("")}</div></details>` : ""}
-    </section>`]);
-  }
-
-  $("#page").innerHTML = `
-    <button class="back" id="back">${I.back} ${status?.account ? "My tickets" : "Home"}</button>
-    <section class="card t-head">
-      ${crumbs}
-      <div class="idrow"><a class="key" href="${esc(r.jiraUrl)}" target="_blank" rel="noopener">${esc(r.key)}</a>${i ? `<span class="tag">${esc(i.type)}</span>${jiraPill(i.status, i.statusCategory)}` : ""}</div>
-      <h1>${esc(i?.summary || (status?.account ? r.key : r.key))}</h1>
-      <div class="meta">
-        ${i ? `<span class="m"><span class="avatar sm">${esc(initials(i.assignee))}</span>${esc(i.assignee)}</span>` : ""}
-        ${i && i.fixVersions !== "none" ? `<span class="m"><span class="lbl">Fix version</span>${esc(i.fixVersions)}</span>` : ""}
-        ${!i && !status?.account ? `<span class="m muted"><button class="link" id="hdConnect">Connect Jira</button>&nbsp;to see the title, status and sub-tasks</span>` : ""}
-        ${status?.account ? `<label class="switch" style="margin-left:auto" title="Include the sub-tickets under this one that are assigned to you"><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}> Include my sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
-      </div>
-    </section>
-    <div class="t-grid">
-      <div class="t-main">${hero}${sections.map(x => x[2]).join("")}</div>
-      <aside class="t-side">
-        <div class="card glance">
-          <h3>At a glance</h3>
-          <dl>
-            ${kids ? `<dt>Tickets</dt><dd>${r.scope.length}</dd>` : ""}
-            <dt>Repositories</dt><dd>${s.repos}</dd>
-            <dt>Merge requests</dt><dd>${s.mergeRequests}</dd>
-            <dt>Commits merged</dt><dd>${s.merged} of ${s.commits}</dd>
-            <dt>Files changed</dt><dd>${s.files}</dd>
-            <dt>Database scripts</dt><dd>${s.dbScripts}</dd>
-          </dl>
-          <div class="acts">
-            <button class="btn primary full" id="post" ${status?.account && !none ? "" : "disabled"} title="${status?.account ? "Adds this summary to the Jira ticket, or updates the one you posted before" : "Connect your Jira account first"}">${I.jira} Post to Jira</button>
-            <button class="btn full" data-again>${I.refresh} Fetch latest &amp; check again</button>
-            <div style="display:flex;gap:8px"><button class="btn small" style="flex:1" id="copy">Copy text</button><a class="btn small" style="flex:1" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">Download</a></div>
-          </div>
-          <div class="when">Checked ${when(r.generated)}${r.fetched ? ", with the latest from the server" : ", from local copies"}</div>
+  $("#main").innerHTML = `
+    <div class="crumb"><button id="back">← Your line</button>${r.ancestors.map(a => `<span>/</span><button data-go="${esc(a.key)}">${esc(a.type)} ${esc(a.key)}</button>`).join("")}</div>
+    <div class="t-head">
+      <div>
+        <div class="kicker"><a class="key" href="${esc(r.jiraUrl)}" target="_blank" rel="noopener" title="Open in Jira">${esc(r.key)} ↗</a>${i ? `<span class="label">${esc(i.type)}</span><span class="label">· ${esc(i.status)}</span>` : ""}</div>
+        <h1 class="title">${esc(i?.summary || r.key)}</h1>
+        <div class="facts">
+          ${i ? `<span class="f"><span class="label">Owner</span>${esc(i.assignee)}</span>` : ""}
+          ${i && i.fixVersions !== "none" ? `<span class="f"><span class="label">Fix version</span>${esc(i.fixVersions)}</span>` : ""}
+          ${!i && !me ? `<span class="f"><button class="txt" id="hdConnect">Connect Jira</button> to see title, status and sub-tickets</span>` : ""}
+          ${me ? `<label class="switch"><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}> Include my sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
         </div>
-        ${sections.length > 2 ? `<nav class="card toc"><h3>On this page</h3>${sections.map(x => `<a href="#${x[0]}" data-jump="${x[0]}">${esc(x[1])}</a>`).join("")}</nav>` : ""}
+      </div>
+      <div class="actions">
+        <button class="btn" data-again title="git fetch every repository, then check again">Fetch &amp; re-check</button>
+        <button class="btn solid" id="post" ${me && !none ? "" : "disabled"} title="${me ? "Posts the checklist to the Jira ticket, or updates the one you posted before" : "Connect Jira first"}">Post handover <span class="arr">→</span></button>
+      </div>
+    </div>
+
+    <div class="verdict ${verdict.cls}">
+      <div class="grow"><div class="big">${verdict.big}</div><p>${verdict.p}</p></div>
+      <div class="stale">${r.fetched ? `fresh from the server · ${when(r.generated)}` : `from local copies · ${when(r.generated)} · <button class="txt" data-again>fetch latest</button>`}</div>
+    </div>
+
+    ${none ? "" : `
+    <div class="rail ${clear ? "clear" : ""}" role="tablist" aria-label="Stations to QA" style="--k:${animate ? 0 : k}">
+      <span class="fill"></span><span class="carriage"></span>
+      ${r.stations.map((s, idx) => `<button class="stop ${animate ? "light" : ""}" role="tab" id="tab-${s.id}" aria-controls="station" aria-selected="${s.id === sel}" tabindex="${s.id === sel ? 0 : -1}" data-st="${s.id}" style="animation-delay:${idx * 90}ms">
+        ${glyph(s.state)}<span class="txtwrap"><span class="no">${STATIONS[idx].no} · ${WORD[s.state]}</span><span class="nm">${esc(s.name)}</span><span class="hl">${esc(s.headline)}</span></span></button>`).join("")}
+    </div>
+
+    <div class="desk">
+      <section class="station" id="station" role="tabpanel"></section>
+      <aside class="aside">
+        <div class="panel">
+          <h4 class="label">The numbers</h4>
+          <div class="counts">
+            <div><div class="v">${r.stats.repos}</div><div class="l">repositories</div></div>
+            <div><div class="v">${r.stats.mergeRequests}</div><div class="l">merge requests</div></div>
+            <div><div class="v">${r.stats.merged}/${r.stats.commits}</div><div class="l">commits merged</div></div>
+            <div><div class="v">${r.stats.dbScripts}</div><div class="l">database scripts</div></div>
+          </div>
+        </div>
+        ${kids ? `<div class="panel"><h4 class="label">Your tickets on this line</h4><ul class="mini-tickets">${r.scope.map(t => `<li><button class="key txt" data-go="${esc(t.key)}">${esc(t.key)}</button><span>${esc(t.summary)}</span><span class="s">${esc(t.status)} · ${t.commits ? `${t.merged}/${t.commits} merged` : "no code of its own"}</span></li>`).join("")}</ul></div>` : ""}
+        <div class="panel"><h4 class="label">Take it with you</h4><div class="more">
+          <button class="btn sm" id="copy">Copy checklist <span class="arr">→</span></button>
+          <a class="btn sm" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">Download .md <span class="arr">↓</span></a>
+        </div></div>
       </aside>
-    </div>`;
+    </div>
 
-  if (!none) renderCommits();
+    <details class="evidence" id="evidence">
+      <summary><span class="plus">+</span><h2>The evidence</h2><span class="dim">every repository, file and commit behind the stations</span></summary>
+      <div class="tabs" role="tablist">${[["repos", `Repositories · ${r.repos.length}`], ["files", `Files · ${r.stats.files}`], ["commits", `Commits · ${r.stats.commits}`], ...(r.foreign.length ? [["foreign", `Other tickets · ${r.foreign.length}`]] : [])]
+        .map(([id, l]) => `<button role="tab" aria-selected="${tab === id}" data-tab="${id}">${l}</button>`).join("")}</div>
+      <div class="tabpane" id="pane"></div>
+    </details>`}`;
+
   wireTicket();
+  if (!none) {
+    renderStation();
+    renderPane();
+    if (animate) requestAnimationFrame(() => requestAnimationFrame(() => { const rl = $(".rail"); if (rl) rl.style.setProperty("--k", k); }));
+  }
 }
 
-function renderCommits() {
-  const r = current, multi = r.scope.length > 1;
-  const repos = r.repos.map(repo => ({ ...repo, commits: repo.commits.filter(c => !commitTicket || c.ticket === commitTicket) })).filter(x => x.commits.length);
-  $("#cl").innerHTML = `${multi ? `<div class="tool">Show <select id="ts"><option value="">all tickets</option>${tree(r.scope).filter(t => t.commits).map(t => `<option value="${esc(t.key)}" ${t.key === commitTicket ? "selected" : ""}>${esc(t.key)} · ${esc(t.assignee)}</option>`).join("")}</select></div>` : ""}
-    ${repos.map(repo => `<h4>${esc(repo.name)}</h4>${repo.commits.map(c => commitHtml(c, repo.defaultRef, multi && c.ticket ? `<span class="tag">${esc(c.ticket)}</span>` : "")).join("")}`).join("") || `<p class="muted">None.</p>`}`;
-  $("#ts")?.addEventListener("change", e => { commitTicket = e.target.value; renderCommits(); });
+function renderStation() {
+  const s = current.stations.find(x => x.id === sel), meta = STATIONS.find(x => x.id === sel);
+  const items = [...s.items].sort((a, b) => ["todo", "wait", "check", "done", "skip"].indexOf(a.state) - ["todo", "wait", "check", "done", "skip"].indexOf(b.state));
+  $("#station").setAttribute("aria-labelledby", `tab-${s.id}`);
+  $("#station").innerHTML = `
+    <div class="sh"><span class="label">${meta.no} · ${WORD[s.state]}</span><h3>${esc(s.name)}</h3></div>
+    <p class="means">${esc(meta.means)}</p>
+    ${items.length ? `<ul class="items">${items.map(it => `<li class="item">${glyph(it.state)}
+        <div>${it.repo ? `<div class="repo">${esc(it.repo)}</div>` : ""}<div class="it">${esc(it.title)}</div>${it.detail ? `<div class="id">${esc(it.detail)}</div>` : ""}</div>
+        ${it.actionUrl === "post:" ? `<button class="btn sm go go-btn" data-post>${esc(it.actionLabel)} <span class="arr">→</span></button>`
+          : it.actionUrl ? `<a class="btn sm ${it.state === "todo" ? "go" : ""} go-btn" href="${esc(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")} <span class="arr">↗</span></a>` : ""}
+      </li>`).join("")}</ul>`
+      : `<p class="dim">${esc(s.headline)}.</p>`}
+    <div class="legend">${["done", "todo", "check", "wait", "skip"].map(x => `<span>${glyph(x)} ${WORD[x]}</span>`).join("")}</div>`;
+  $$("[data-post]").forEach(b => b.onclick = post);
 }
 
-function commitHtml(c, defaultRef, extra = "") {
-  return `<div class="commit"><div>${A(c.short, c.url)} ${esc(c.subject)}</div>
-    <div class="m">${extra}<span>${esc(c.author)}</span><span>${day(c.date)}</span>${c.inDefault ? pill("ready", "merged") : pill("todo", `not in ${branchName(defaultRef) || "main"}`)}</div>
-    ${c.note ? `<div class="note">${esc(c.note)}</div>` : ""}</div>`;
+function renderPane() {
+  const r = current, pane = $("#pane");
+  if (tab === "repos") {
+    pane.innerHTML = `<div class="scroll-x"><table class="t"><thead><tr><th>Repository</th><th>Merge requests</th><th>Branches</th><th>Commits merged</th></tr></thead><tbody>
+      ${r.repos.map(x => `<tr><td>${x.webUrl ? `<a href="${esc(x.webUrl)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}<div class="dim mono" style="font-size:12px">${esc(branch(x.defaultRef))}</div></td>
+        <td>${x.merges.map(m => m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="dim">${day(m.date)}</span>` : `<span class="dim">direct merge ${day(m.date)}</span>`).join("<br>") || `<span class="dim">none</span>`}</td>
+        <td>${x.branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--signal)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="dim">none</span>`}</td>
+        <td class="mono">${x.commits.filter(c => c.inDefault).length}/${x.commits.length}</td></tr>`).join("")}</tbody></table></div>`;
+  } else if (tab === "files") {
+    pane.innerHTML = `<div class="tool"><input id="ff" placeholder="Filter by path" aria-label="Filter files"></div>
+      <div id="fl">${r.repos.filter(x => x.files.length).map(x => `<h3 class="repo-h">${esc(x.name)}</h3><ul class="files">${x.files.map(f => `<li data-p="${esc((x.name + " " + f.path).toLowerCase())}"><span class="op ${esc(f.status)}" title="${({ A: "added", M: "changed", D: "deleted", R: "renamed" })[f.status] || ""}">${esc(f.status)}</span><span>${esc(f.path)}</span></li>`).join("")}</ul>`).join("")}</div>`;
+    $("#ff").oninput = e => { const q = e.target.value.toLowerCase(); $$("#fl li").forEach(li => li.hidden = q && !li.dataset.p.includes(q)); };
+  } else if (tab === "commits") {
+    const multi = r.scope.length > 1;
+    const repos = r.repos.map(x => ({ ...x, commits: x.commits.filter(c => !commitFilter || c.ticket === commitFilter) })).filter(x => x.commits.length);
+    pane.innerHTML = `${multi ? `<div class="tool"><select id="cf" aria-label="Show commits for"><option value="">All your tickets</option>${r.scope.filter(t => t.commits).map(t => `<option value="${esc(t.key)}" ${t.key === commitFilter ? "selected" : ""}>${esc(t.key)} · ${esc(t.summary)}</option>`).join("")}</select></div>` : ""}
+      ${repos.map(x => `<h3 class="repo-h">${esc(x.name)}</h3>${x.commits.map(c => commitHtml(c, x.defaultRef, multi && c.ticket ? `${esc(c.ticket)} · ` : "")).join("")}`).join("") || `<p class="dim">None.</p>`}`;
+    $("#cf")?.addEventListener("change", e => { commitFilter = e.target.value; renderPane(); });
+  } else if (tab === "foreign") {
+    pane.innerHTML = `<p class="dim" style="margin-top:0">Commits from other tickets that sit on these branches, usually because a branch was started from another ticket's branch. They don't count toward any station.</p>
+      ${r.foreign.map(c => commitHtml(c, null, `${esc(c.otherKey)} · ${esc(c.repo)} · `)).join("")}`;
+  }
+}
+
+function commitHtml(c, defaultRef, prefix = "") {
+  return `<div class="commit"><span class="key">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.short)}</a>` : esc(c.short)}</span><span>${esc(c.subject)}</span>
+    <span class="m">${prefix}${esc(c.author)} · ${day(c.date)} · ${c.inDefault ? "merged" : `<span style="color:var(--signal)">not in ${esc(branch(defaultRef) || "main")}</span>`}</span>
+    ${c.note ? `<span class="note">${esc(c.note)}</span>` : ""}</div>`;
+}
+
+async function post() {
+  const btns = $$("#post, [data-post]");
+  btns.forEach(b => { b.disabled = true; b.dataset.label = b.innerHTML; b.innerHTML = `<span class="spin"></span> Posting…`; });
+  try {
+    const res = await api(`/api/post?key=${encodeURIComponent(current.key)}`, { method: "POST" });
+    tick(`Handover posted to ${esc(current.key)} as ${esc(status.account.name)}. <a href="${esc(res.url)}" target="_blank" rel="noopener">Open in Jira ↗</a>`, 7000);
+  } catch (e) { tick(`Jira refused: ${esc(e.message)}`, 7000); }
+  finally { btns.forEach(b => { b.disabled = false; b.innerHTML = b.dataset.label; }); }
 }
 
 function wireTicket() {
   const r = current;
-  $("#back").onclick = () => goHome();
-  $("#hdConnect")?.addEventListener("click", openAccount);
+  $("#back").onclick = goHome;
+  $("#hdConnect")?.addEventListener("click", openSheet);
   $("#kids")?.addEventListener("change", e => { includeKids = e.target.checked; openTicket(r.key, false); });
-  document.querySelectorAll("[data-again]").forEach(b => b.onclick = () => openTicket(r.key, true));
-  document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
-  document.querySelectorAll("[data-jump]").forEach(a => a.onclick = e => { e.preventDefault(); document.getElementById(a.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" }); });
-  $("#ff")?.addEventListener("input", e => { const q = e.target.value.toLowerCase(); document.querySelectorAll("#fl li").forEach(li => li.hidden = q && !li.dataset.p.includes(q)); });
+  $$("[data-again]").forEach(b => b.onclick = () => openTicket(r.key, true));
+  $$("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
+  $("#post")?.addEventListener("click", post);
   $("#copy")?.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Copied. Paste it anywhere."); }
-    catch (e) { toast("Couldn't copy: " + esc(e.message)); }
+    try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); tick("Checklist copied. Paste it anywhere."); }
+    catch (e) { tick(`Couldn't copy: ${esc(e.message)}`); }
   });
-  $("#post")?.addEventListener("click", async () => {
-    const b = $("#post"); b.disabled = true; b.innerHTML = `<span class="spinner sm"></span> Posting…`;
-    try { const res = await api(`/api/post?key=${encodeURIComponent(r.key)}`, { method: "POST" });
-          toast(`Posted to ${esc(r.key)} as ${esc(status.account.name)}. <a href="${esc(res.url)}" target="_blank" rel="noopener">Open it in Jira</a>`, 6500); }
-    catch (e) { toast("Jira didn't accept it: " + esc(e.message), 6500); }
-    finally { b.disabled = false; b.innerHTML = `${I.jira} Post to Jira`; }
+  const stops = $$(".stop");
+  stops.forEach((b, idx) => {
+    b.onclick = () => { sel = b.dataset.st; stops.forEach(x => { const on = x === b; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; }); renderStation(); };
+    b.onkeydown = e => {
+      const dir = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!dir) return;
+      e.preventDefault(); const nxt = stops[(idx + dir + stops.length) % stops.length]; nxt.focus(); nxt.click();
+    };
   });
+  $$(".tabs [data-tab]").forEach(b => b.onclick = () => { tab = b.dataset.tab; $$(".tabs [data-tab]").forEach(x => x.setAttribute("aria-selected", x === b)); renderPane(); });
 }
 
-/* ───────────── routing ───────────── */
+/* ═══════════════ search: your tickets only ═══════════════ */
+let hits = [], hitIdx = -1, seq = 0, timer;
+const closeHits = () => { $("#hits").hidden = true; $("#q").setAttribute("aria-expanded", "false"); };
+const showHits = html => { $("#hits").innerHTML = html; $("#hits").hidden = false; $("#q").setAttribute("aria-expanded", "true"); };
+function pick(key) { $("#q").value = ""; $("#q").blur(); closeHits(); go(key); }
+function drawHits(q) {
+  if (!hits.length) return showHits(`<div class="msg">None of your tickets match “${esc(q)}”.</div>`);
+  showHits(hits.map((h, k) => `<button type="button" role="option" aria-selected="${k === hitIdx}" class="${k === hitIdx ? "on" : ""}" data-key="${esc(h.key)}"><span class="key">${esc(h.key)}</span><span class="t">${esc(h.summary)}</span><span class="dim">${esc(h.status)}</span></button>`).join(""));
+  $$("#hits [data-key]").forEach(b => b.onmousedown = e => { e.preventDefault(); pick(b.dataset.key); });
+}
+$("#q").addEventListener("input", () => {
+  const q = $("#q").value.trim();
+  clearTimeout(timer);
+  if (!status?.account) return showHits(`<div class="msg">Connect Jira to search your tickets.</div>`);
+  if (q.length < 2) { hits = []; return closeHits(); }
+  timer = setTimeout(async () => {
+    const n = ++seq;
+    showHits(`<div class="msg"><span class="spin"></span> Searching your tickets…</div>`);
+    try { const r = await api(`/api/search?q=${encodeURIComponent(q)}`); if (n !== seq) return; hits = r; hitIdx = r.length ? 0 : -1; drawHits(q); }
+    catch (e) { if (n === seq) showHits(`<div class="msg">${esc(e.message)}</div>`); }
+  }, 220);
+});
+$("#q").addEventListener("keydown", e => {
+  if (e.key === "Escape") { closeHits(); $("#q").blur(); return; }
+  if ($("#hits").hidden || !hits.length) return;
+  if (e.key === "ArrowDown") { e.preventDefault(); hitIdx = (hitIdx + 1) % hits.length; drawHits($("#q").value); }
+  if (e.key === "ArrowUp") { e.preventDefault(); hitIdx = (hitIdx - 1 + hits.length) % hits.length; drawHits($("#q").value); }
+});
+$("#q").addEventListener("blur", () => setTimeout(closeHits, 120));
+$("#find").onsubmit = e => { e.preventDefault(); if (hits.length && hitIdx >= 0 && !$("#hits").hidden) pick(hits[hitIdx].key); };
+document.addEventListener("keydown", e => { if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); } });
 
+/* ═══════════════ routing ═══════════════ */
 function route() {
   const k = decodeURIComponent(location.hash.slice(1)).toUpperCase();
   if (k) openTicket(k, false); else home();
 }
 window.addEventListener("popstate", route);
-$("#home").onclick = () => goHome();
-/* search: only tickets assigned to you, by key or words in the title */
-let hits = [], hitIdx = -1, searchSeq = 0, searchTimer;
-function closeSugg() { $("#sugg").hidden = true; $("#q").setAttribute("aria-expanded", "false"); hitIdx = -1; }
-function showSugg(html) { $("#sugg").innerHTML = html; $("#sugg").hidden = false; $("#q").setAttribute("aria-expanded", "true"); }
-function pick(key) { $("#q").value = ""; $("#q").blur(); closeSugg(); go(key); }
-function drawHits(q) {
-  if (!hits.length) { showSugg(`<div class="msg">None of your tickets match “${esc(q)}”.</div>`); return; }
-  showSugg(hits.map((h, k) => `<button type="button" role="option" class="${k === hitIdx ? "on" : ""}" data-key="${esc(h.key)}">
-    <span class="key">${esc(h.key)}</span><span class="t">${esc(h.summary)}</span><span class="s">${esc(h.status)}</span></button>`).join(""));
-  $("#sugg").querySelectorAll("[data-key]").forEach(b => b.onmousedown = e => { e.preventDefault(); pick(b.dataset.key); });
-}
-$("#q").addEventListener("input", () => {
-  const q = $("#q").value.trim();
-  clearTimeout(searchTimer);
-  if (!status?.account) { showSugg(`<div class="msg">Connect your Jira account to search your tickets.</div>`); return; }
-  if (q.length < 2) { closeSugg(); return; }
-  searchTimer = setTimeout(async () => {
-    const seq = ++searchSeq;
-    showSugg(`<div class="msg"><span class="spinner sm"></span> Searching your tickets…</div>`);
-    try { const r = await api(`/api/search?q=${encodeURIComponent(q)}`); if (seq !== searchSeq) return; hits = r; hitIdx = r.length ? 0 : -1; drawHits(q); }
-    catch (e) { if (seq === searchSeq) showSugg(`<div class="msg">${esc(e.message)}</div>`); }
-  }, 250);
-});
-$("#q").addEventListener("keydown", e => {
-  if ($("#sugg").hidden || !hits.length) { if (e.key === "Escape") closeSugg(); return; }
-  if (e.key === "ArrowDown") { e.preventDefault(); hitIdx = (hitIdx + 1) % hits.length; drawHits($("#q").value); }
-  else if (e.key === "ArrowUp") { e.preventDefault(); hitIdx = (hitIdx - 1 + hits.length) % hits.length; drawHits($("#q").value); }
-  else if (e.key === "Escape") closeSugg();
-});
-$("#q").addEventListener("blur", () => setTimeout(closeSugg, 120));
-$("#search").onsubmit = e => {
-  e.preventDefault();
-  if (hits.length && hitIdx >= 0 && !$("#sugg").hidden) pick(hits[hitIdx].key);
-};
-document.addEventListener("keydown", e => { if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); } });
-
+$("#brand").onclick = e => { e.preventDefault(); goHome(); };
 (async () => { await loadStatus(); route(); })();
 </script>
 </body>
