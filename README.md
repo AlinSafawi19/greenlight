@@ -77,19 +77,17 @@ The environment variables `JIRA_EMAIL` / `JIRA_API_TOKEN` still work as a fallba
 
 ## What's in the app
 
-- **Overview**: what needs you, what's ready, reviews waiting, today's time, yesterday's standup.
-- **My tickets**: grouped by story (the header checks the whole story with its sub-tickets) or by readiness; sprint, priority, labels and due date on each row. A ticket page shows the six steps to QA, your footprint, time, code review, and where each service is deployed. It can create a merge request or a version tag, move the ticket in Jira, and post the handover.
-- **Reviews** (GitLab): merge requests waiting for you, with a grouped checklist, side-by-side changes, discussions, tags, and approve, request changes or comment.
-- **Worklogs**: the week against the daily target, suggestions from your commits, standup text, and an end-of-day reminder.
-- **Sprint release**: check every ticket in a sprint, then see blockers, the tag to deploy per service, database releases, settings and access, with release notes to copy.
-- **Team**: open sprint work by person.
-- **Ctrl K** opens search and commands. Light, dark (default) or follow Windows, from the sidebar.
+Greenlight has one job: you and the reviewer know exactly what a feature needs to reach QA, and every feature leaves a clean, lasting record.
+
+- **My tickets**: your tickets, grouped by story (the header checks the whole story with your sub-tickets) or by readiness. A ticket shows the six steps to QA (code, tagged, database, access, config, handover) with what to do next, the evidence behind each step (repositories, files, commits, side-by-side changes, open in VS Code or Visual Studio), where each service is deployed, and the handover you post to Jira. Where Greenlight can do the fix itself, it offers it: create the merge request, cut the tag, move the ticket in Jira.
+- **Reviews** (GitLab): merge requests waiting for your review, with a grouped checklist, the changes, discussions and tags; approve, request changes or comment. On your own ticket, the code review section shows each reviewer's state and comments.
+- **Worklogs**: a feature isn't done until its time is logged. The Handover step says whether you logged time on the ticket; the Worklogs page shows your week against the daily target, suggests entries from your commits, and reminds you at the end of the day.
+
+Light or dark, from the sidebar. Ctrl K or / finds one of your tickets.
 
 ## More settings (`greenlight.json`)
 
 - `time.dailyTargetHours`, `time.workDays` (0 = Sunday), `time.reminderAt` ("17:00").
-- `team.jql`: who the Team page shows; by default the open sprint of the key's project.
-
 ## Checks
 
 `dotnet run greenlight.cs -- --selftest` checks the core rules (tags, versions, ticket keys, path safety, config keys) without network.

@@ -76,7 +76,6 @@ class Ledger
     public string KeyPattern { get; }
     public double DailyTargetHours { get; }
     public string ReminderAt { get; }   // "17:00": the page reminds you if today is short
-    public string? TeamJql { get; }
     public HashSet<int> WorkDays { get; }   // 0 = Sunday ... 6 = Saturday
     public string OutDir { get; }
     public Jira Jira { get; private set; } = null!;
@@ -98,7 +97,6 @@ class Ledger
         KeyPattern = (string)cfg["keyPattern"]!;
         DailyTargetHours = (double?)cfg["time"]?["dailyTargetHours"] ?? 5;
         ReminderAt = (string?)cfg["time"]?["reminderAt"] ?? "17:00";
-        TeamJql = (string?)cfg["team"]?["jql"];
         WorkDays = cfg["time"]?["workDays"]?.AsArray().Select(n => (int)n!).ToHashSet() ?? [1, 2, 3, 4, 5];
         OutDir = Path.Combine(appDir, "out");
         var db = cfg["db"]!;
@@ -336,6 +334,21 @@ class Ledger
         var tagDetails = new ConcurrentDictionary<string, TagDetail>(StringComparer.OrdinalIgnoreCase);
         var stations = QaPrep.Compute(issue, results, dbCfg, name => paths.GetValueOrDefault(name), tagDetails,
             s => emit(new JsonObject { ["type"] = "station", ["station"] = ReportJson.Station(s) }));
+        // a feature isn't finished until its time is logged: the handover says whether yours is
+        if (Jira.Configured && await CurrentUser() is { } me && stations.FirstOrDefault(x => x.Id == "qa") is { } handover)
+        {
+            try
+            {
+                var keysToCheck = scope.Select(s => s.Key).Prepend(key).Distinct().ToList();
+                var mine = (await Task.WhenAll(keysToCheck.Select(async k => (await Jira.Worklogs(k)).Where(w => (string?)w["author"]?["accountId"] == me.AccountId).Sum(w => (int?)w["timeSpentSeconds"] ?? 0)))).Sum();
+                var hours = mine / 3600; var minutes = mine % 3600 / 60;
+                handover.Items.Add(mine > 0
+                    ? new("done", $"{(hours > 0 ? $"{hours}h " : "")}{(minutes > 0 ? $"{minutes}m " : "")}logged by you".Trim(), keysToCheck.Count > 1 ? $"Across {keysToCheck.Count} tickets." : null)
+                    : new("check", "No time logged by you yet", "Log your time on the ticket before it goes to QA, so nothing is missing later."));
+                emit(new JsonObject { ["type"] = "station", ["station"] = ReportJson.Station(handover) });
+            }
+            catch { /* worklogs unreadable: the handover just doesn't mention time */ }
+        }
 
         Lap("steps");
         var doc = Manifest.Build(key, issue, scope, results, highlights, dbCfg, (int)cfg["jiraMaxFilesPerRepo"]!);
@@ -968,15 +981,7 @@ class Doc
 // Level is Jira's hierarchy level: 1 epic, 0 story/task/bug, -1 sub-task. StatusCategory: new | indeterminate | done.
 record IssueInfo(string Key, string Summary, string Type, int Level, string Status, string StatusCategory,
                  string Assignee, string? AssigneeId, string? ParentKey, string? ParentSummary, string? ParentType,
-                 string FixVersions, string Updated)
-{
-    public string Priority { get; init; } = "";
-    public List<string> Labels { get; init; } = [];
-    public List<string> Components { get; init; } = [];
-    public string? Sprint { get; init; }        // the current sprint, else the latest one the ticket was in
-    public string? SprintState { get; init; }   // active, future, closed
-    public string? Due { get; init; }
-}
+                 string FixVersions, string Updated);
 
 static class Manifest
 {
@@ -1702,12 +1707,6 @@ class GitLab
     // environments and what was last deployed to each (QA, staging, production, ...)
     public Task<JsonArray> Environments(string project) => All($"projects/{P(project)}/environments?states=available");
     public Task<JsonNode> Environment(string project, long id) => Get($"projects/{P(project)}/environments/{id}");
-    public Task<JsonArray> MyOpenMergeRequests(string username) =>
-        All($"merge_requests?scope=all&state=opened&author_username={Uri.EscapeDataString(username)}&order_by=updated_at");
-    public async Task<JsonNode?> LatestPipeline(string project, long iid)
-    {
-        try { return (await Get($"{Mr(project, iid)}/pipelines?per_page=1")).AsArray().FirstOrDefault(); } catch { return null; }
-    }
     public Task<JsonArray> Events(long userId, DateOnly after, DateOnly before) =>
         All($"users/{userId}/events?after={after:yyyy-MM-dd}&before={before:yyyy-MM-dd}");
     public Task<JsonNode> CreateMergeRequest(string project, string source, string target, string title) =>
@@ -2052,17 +2051,14 @@ static class TimeSheet
     }
 }
 
-// ───────────────────────────── day-to-day: deployments, sprints, team, standup, suggestions, notifications ─────────────────────────────
+// ───────────────────────────── getting to QA: deployments, actions, my day (standup and worklog suggestions) ─────────────────────────────
 
 static class Work
 {
     static Regex KeyRx(Ledger l) => new($@"(?<![A-Za-z0-9])(?:{l.KeyPattern})(?!\d)", RegexOptions.IgnoreCase);
     static readonly Regex MergeOf = new(@"^Merge (?:remote-tracking )?branch '([^']+)'");
     static async Task<T?> Try<T>(Func<Task<T>> f) where T : class { try { return await f(); } catch { return null; } }
-    static string Jql(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
-    // the project prefix of the key pattern, e.g. "MM" from "MM-[0-9]+"
-    public static string? Project(Ledger l) => Regex.Match(l.KeyPattern, @"^([A-Z][A-Z0-9_]+)-") is { Success: true } m ? m.Groups[1].Value : null;
 
     // ── where is it deployed? ──
     public static async Task<JsonArray> Deployments(Ledger l, Report rep)
@@ -2104,31 +2100,6 @@ static class Work
             finally { gate.Release(); }
         }));
         return new JsonArray(rows.Where(x => x?["environments"]?.AsArray().Count > 0).ToArray());
-    }
-
-    // ── sprints and the tickets in one ──
-    public static async Task<JsonArray> Sprints(Ledger l)
-    {
-        var p = Project(l);
-        var issues = await l.Jira.Search($"{(p is null ? "" : $"project = {p} AND ")}assignee = currentUser() AND (sprint in openSprints() OR sprint in futureSprints() OR sprint in closedSprints()) ORDER BY updated DESC", 300);
-        var groups = issues.Where(i => i.Sprint is not null).GroupBy(i => (i.Sprint!, i.SprintState ?? "")).ToList();
-        int Rank(string s) => s == "active" ? 0 : s == "future" ? 1 : 2;
-        return new JsonArray(groups.OrderBy(g => Rank(g.Key.Item2)).ThenByDescending(g => g.Key.Item1, StringComparer.OrdinalIgnoreCase)
-            .Where((g, i) => g.Key.Item2 != "closed" || i < 12)
-            .Select(g => (JsonNode)new JsonObject { ["name"] = g.Key.Item1, ["state"] = g.Key.Item2, ["mine"] = g.Count() }).ToArray());
-    }
-
-    public static async Task<(List<IssueInfo> Items, string? Next)> SprintIssues(Ledger l, string sprint, bool onlyMine, string? next)
-    {
-        var p = Project(l);
-        return await l.Jira.SearchPage($"{(p is null ? "" : $"project = {p} AND ")}sprint = \"{Jql(sprint)}\"{(onlyMine ? " AND assignee = currentUser()" : "")} ORDER BY rank", 50, next);
-    }
-
-    public static async Task<(List<IssueInfo> Items, string? Next)> Team(Ledger l, string? jql, string? next)
-    {
-        var p = Project(l);
-        jql ??= $"{(p is null ? "" : $"project = {p} AND ")}sprint in openSprints() AND statusCategory != Done ORDER BY assignee, rank";
-        return await l.Jira.SearchPage(jql, 50, next);
     }
 
     // ── my commits on a day, from the index (author time, local day) ──
@@ -2235,38 +2206,6 @@ static class Work
         return d;
     }
 
-    // ── what changed for me in GitLab (the page compares it with what it saw last time) ──
-    public static async Task<JsonObject> Notifications(Ledger l)
-    {
-        var me = await l.GitLabUser() ?? throw new Exception("Connect your GitLab account first.");
-        var toReview = await Try(() => l.GitLab.ReviewRequests(me.Username)) ?? [];
-        var mine = await Try(() => l.GitLab.MyOpenMergeRequests(me.Username)) ?? [];
-        var gate = new SemaphoreSlim(6);
-        var rows = await Task.WhenAll(mine.Take(30).Select(async mr =>
-        {
-            await gate.WaitAsync();
-            try
-            {
-                var project = Review.Project(mr!); var iid = (long)mr!["iid"]!;
-                var pipe = await l.GitLab.LatestPipeline(project, iid);
-                var rv = await l.GitLab.Reviewers(project, iid);
-                return (JsonNode)new JsonObject
-                {
-                    ["id"] = $"{project}!{iid}", ["project"] = project, ["iid"] = iid, ["title"] = (string?)mr["title"], ["url"] = (string?)mr["web_url"],
-                    ["notes"] = (int?)mr["user_notes_count"] ?? 0, ["pipeline"] = (string?)pipe?["status"],
-                    ["changesRequested"] = new JsonArray(rv.Where(r => (string?)r!["state"] == "requested_changes").Select(r => (JsonNode)((string?)r!["user"]?["name"] ?? "")).ToArray()),
-                    ["approved"] = new JsonArray(rv.Where(r => (string?)r!["state"] == "approved").Select(r => (JsonNode)((string?)r!["user"]?["name"] ?? "")).ToArray()),
-                };
-            }
-            finally { gate.Release(); }
-        }));
-        return new JsonObject
-        {
-            ["reviews"] = new JsonArray(toReview.Select(mr => (JsonNode)new JsonObject { ["id"] = $"{Review.Project(mr!)}!{(long)mr!["iid"]!}", ["title"] = (string?)mr["title"], ["author"] = (string?)mr["author"]?["name"], ["project"] = Review.Project(mr), ["iid"] = (long)mr["iid"]! }).ToArray()),
-            ["mine"] = new JsonArray(rows),
-        };
-    }
-
     // ── actions ──
     static string ProjectOf(string repo) => Git.WebUrl(repo) is { Length: > 0 } w ? new Uri(w).AbsolutePath.Trim('/') : throw new Exception("This repository has no GitLab remote.");
 
@@ -2364,24 +2303,7 @@ record JiraUser(string AccountId, string DisplayName, string Email, string? Avat
 
 class Jira
 {
-    const string BaseFields = "summary,status,issuetype,parent,assignee,fixVersions,updated,priority,labels,components,duedate";
-    // the sprint field is a custom field whose id differs per Jira site; looked up once
-    static string? sprintField;
-    static bool fieldsKnown;
-    string Fields => sprintField is null ? BaseFields : $"{BaseFields},{sprintField}";
-    async Task KnowFields()
-    {
-        if (fieldsKnown || http is null) return;
-        try
-        {
-            var res = await http.GetAsync("rest/api/3/field");
-            if (res.IsSuccessStatusCode)
-                sprintField = JsonNode.Parse(await res.Content.ReadAsStringAsync())!.AsArray()
-                    .FirstOrDefault(f => (string?)f?["schema"]?["custom"] == "com.pyxis.greenhopper.jira:gh-sprint")?["id"]?.ToString();
-        }
-        catch { }
-        fieldsKnown = true;
-    }
+    const string Fields = "summary,status,issuetype,parent,assignee,fixVersions,updated";
     // Request paths below are relative ("rest/api/..."), so they work against both the site and the API gateway base.
     HttpClient? http;
     readonly string baseUrl;   // the Jira site, used for browse links
@@ -2459,7 +2381,6 @@ class Jira
 
     public async Task<List<IssueInfo>> Search(string jql, int max = 200)
     {
-        await KnowFields();
         var all = new List<IssueInfo>();
         string? next = null;
         do
@@ -2483,7 +2404,6 @@ class Jira
     // one page of results; pass the returned token to get the next page (null when there are no more)
     public async Task<(List<IssueInfo> Items, string? Next)> SearchPage(string jql, int size, string? token)
     {
-        await KnowFields();
         var body = new JsonObject
         {
             ["jql"] = jql,
@@ -2501,7 +2421,6 @@ class Jira
     {
         try
         {
-            await KnowFields();
             var res = await http!.GetAsync($"rest/api/3/issue/{key}?fields={Fields}");
             if (!res.IsSuccessStatusCode) { Console.Error.WriteLine($"Jira: could not read {key} ({(int)res.StatusCode})."); return null; }
             return Parse(JsonNode.Parse(await res.Content.ReadAsStringAsync())!);
@@ -2542,7 +2461,6 @@ class Jira
         var f = i["fields"]!;
         var fix = f["fixVersions"]?.AsArray().Select(v => (string?)v?["name"]).Where(v => v is not null).ToList() ?? [];
         var p = f["parent"];
-        var sprint = CurrentSprint(f);
         return new IssueInfo(
             Key: (string)i["key"]!,
             Summary: (string?)f["summary"] ?? "",
@@ -2556,25 +2474,9 @@ class Jira
             ParentSummary: (string?)p?["fields"]?["summary"],
             ParentType: (string?)p?["fields"]?["issuetype"]?["name"],
             FixVersions: fix.Count == 0 ? "none" : string.Join(", ", fix),
-            Updated: ((string?)f["updated"])?[..Math.Min(10, ((string?)f["updated"])!.Length)] ?? "")
-        {
-            Priority = (string?)f["priority"]?["name"] ?? "",
-            Labels = f["labels"]?.AsArray().Select(l => (string?)l ?? "").Where(l => l != "").ToList() ?? [],
-            Components = f["components"]?.AsArray().Select(c => (string?)c?["name"] ?? "").Where(c => c != "").ToList() ?? [],
-            Due = (string?)f["duedate"],
-            Sprint = sprint?.Name, SprintState = sprint?.State,
-        };
+            Updated: ((string?)f["updated"])?[..Math.Min(10, ((string?)f["updated"])!.Length)] ?? "");
     }
 
-    static (string Name, string State)? CurrentSprint(JsonNode f)
-    {
-        if (sprintField is null || f[sprintField] is not JsonArray arr || arr.Count == 0) return null;
-        var all = arr.Select(s => (Name: (string?)s?["name"] ?? "", State: (string?)s?["state"] ?? "", End: (string?)s?["endDate"] ?? "")).Where(s => s.Name != "").ToList();
-        var pick = all.FirstOrDefault(s => s.State == "active");
-        if (pick.Name is null or "") pick = all.Where(s => s.State == "future").FirstOrDefault();
-        if (pick.Name is null or "") pick = all.OrderByDescending(s => s.End, StringComparer.Ordinal).FirstOrDefault();
-        return pick.Name is null or "" ? null : (pick.Name, pick.State);
-    }
 
     // Replaces our previous manifest comment if there is one, so the ticket always shows a single, current manifest.
     // Only comments written by the connected account are replaced; someone else's manifest comment is left alone.
@@ -2692,9 +2594,6 @@ static class ReportJson
     public static JsonObject Issue(IssueInfo i) => new()
     {
         ["key"] = i.Key, ["summary"] = i.Summary, ["type"] = i.Type, ["level"] = i.Level,
-        ["priority"] = i.Priority, ["labels"] = new JsonArray(i.Labels.Select(l => (JsonNode)l).ToArray()),
-        ["components"] = new JsonArray(i.Components.Select(c => (JsonNode)c).ToArray()),
-        ["sprint"] = i.Sprint, ["sprintState"] = i.SprintState, ["due"] = i.Due,
         ["status"] = i.Status, ["statusCategory"] = i.StatusCategory, ["assignee"] = i.Assignee, ["assigneeId"] = i.AssigneeId,
         ["parentKey"] = i.ParentKey, ["parentSummary"] = i.ParentSummary, ["parentType"] = i.ParentType,
         ["fixVersions"] = i.FixVersions, ["updated"] = i.Updated,
@@ -2907,7 +2806,6 @@ static class UiServer
                         ["avatar"] = await MyAvatar(ledger) is not null,
                         ["reminderAt"] = ledger.ReminderAt,
                         ["diskFree"] = Work.DiskFree(ledger.AppDir),
-                        ["project"] = Work.Project(ledger),
                     });
                     return;
                 }
@@ -2984,27 +2882,6 @@ static class UiServer
                     return;
                 }
 
-                case ("GET", "/api/sprints"):
-                    if (await ledger.CurrentUser() is null) { await Send(res, 401, Err("Connect your Jira account first")); return; }
-                    await Send(res, 200, await Work.Sprints(ledger));
-                    return;
-
-                case ("GET", "/api/sprint"):
-                case ("GET", "/api/team"):
-                {
-                    if (await ledger.CurrentUser() is null) { await Send(res, 401, Err("Connect your Jira account first")); return; }
-                    var built = Recent(ledger, 1000).Select(n => n!).ToDictionary(n => (string)n["key"]!, n => n, StringComparer.OrdinalIgnoreCase);
-                    var (items, next) = path == "/api/sprint"
-                        ? await Work.SprintIssues(ledger, req.QueryString["name"] ?? "", req.QueryString["who"] != "all", req.QueryString["next"])
-                        : await Work.Team(ledger, ledger.TeamJql, req.QueryString["next"]);
-                    await Send(res, 200, new JsonObject
-                    {
-                        ["items"] = new JsonArray(items.Select(i => { var j = ReportJson.Issue(i); if (built.TryGetValue(i.Key, out var b)) j["lastBuild"] = b.DeepClone(); return (JsonNode)j; }).ToArray()),
-                        ["next"] = next,
-                    });
-                    return;
-                }
-
                 case ("GET", "/api/standup"):
                 {
                     if (await ledger.CurrentUser() is null) { await Send(res, 401, Err("Connect your Jira account first")); return; }
@@ -3020,10 +2897,6 @@ static class UiServer
                     await Send(res, 200, await Work.Suggest(ledger, day));
                     return;
                 }
-
-                case ("GET", "/api/notifications"):
-                    await Send(res, 200, await Work.Notifications(ledger));
-                    return;
 
                 case ("GET", "/api/jira/transitions"):
                     if (key is null || !ledger.IsValidKey(key)) { await Send(res, 400, Err("Invalid key")); return; }

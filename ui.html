@@ -58,20 +58,15 @@
 <div class="app" id="app">
   <aside class="sb" id="sb" aria-label="Greenlight">
     <div class="sb-top">
-      <a class="brand" href="#" id="brandHome" aria-label="greenlight. home"><span id="brandGlim"></span><span class="word">greenlight<span class="dot">.</span></span></a>
+      <a class="brand" href="#tickets" id="brandHome" aria-label="greenlight. home"><span id="brandGlim"></span><span class="word">greenlight<span class="dot">.</span></span></a>
       <button class="btn only small sb-toggle" id="sbToggle" title="Collapse the sidebar" aria-label="Collapse the sidebar" aria-pressed="false"><svg class="ico s"><use href="#i-sidebar"/></svg></button>
     </div>
-    <button class="sb-search" id="cmdBtn" data-tip="Search and commands (Ctrl K)"><svg class="ico s" aria-hidden="true"><use href="#i-search"/></svg><span>Search or jump to…</span><kbd>Ctrl K</kbd></button>
+    <button class="sb-search" id="cmdBtn" data-tip="Find one of your tickets (Ctrl K)"><svg class="ico s" aria-hidden="true"><use href="#i-search"/></svg><span>Find a ticket…</span><kbd>Ctrl K</kbd></button>
     <nav class="nav" aria-label="Main">
-      <a class="nav-i" href="#overview" data-nav="overview" data-tip="Overview"><svg class="ico"><use href="#i-home"/></svg><span class="lbl">Overview</span></a>
       <a class="nav-i" href="#tickets" data-nav="tickets" data-tip="My tickets"><svg class="ico"><use href="#i-ticket"/></svg><span class="lbl">My tickets</span><span class="cnt" id="nTickets"></span></a>
       <a class="nav-i" href="#reviews" data-nav="reviews" data-tip="Reviews"><svg class="ico"><use href="#i-review"/></svg><span class="lbl">Reviews</span><span class="cnt" id="nReviews"></span></a>
       <a class="nav-i" href="#worklogs" data-nav="worklogs" data-tip="Worklogs"><svg class="ico"><use href="#i-clock"/></svg><span class="lbl">Worklogs</span><span class="cnt" id="nTime"></span></a>
-      <a class="nav-i" href="#sprint" data-nav="sprint" data-tip="Sprint release"><svg class="ico"><use href="#i-sprint"/></svg><span class="lbl">Sprint release</span></a>
-      <a class="nav-i" href="#team" data-nav="team" data-tip="Team"><svg class="ico"><use href="#i-team"/></svg><span class="lbl">Team</span></a>
     </nav>
-    <div class="sb-sec" id="recentCap" hidden>Recent</div>
-    <div class="recent" id="recent"></div>
     <div class="sb-fill"></div>
     <div class="sb-foot">
       <div class="themes" role="radiogroup" aria-label="Theme" id="themes">
@@ -111,7 +106,6 @@
 </div>
 
 <dialog class="dlg" id="settings" aria-labelledby="dlgTitle"></dialog>
-<dialog class="cmdk" id="cmdk" aria-label="Search and commands"></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/assets/jquery.min.js"></script>
