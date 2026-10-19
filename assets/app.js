@@ -1512,7 +1512,8 @@ function setSection(s) {
   section = s;
   $$(".nav-i").forEach(a => { if (a.dataset.nav === s) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   // the review list only exists once GitLab is connected; before that Reviews is a single "connect" page
-  const listy = s === "tickets" || (s === "reviews" && !!status?.gitlab);
+  // a list only exists once its account is connected: before that the page is a single "connect" screen
+  const listy = (s === "tickets" && !!status?.account) || (s === "reviews" && !!status?.gitlab);
   $("#split").classList.toggle("solo", !listy);
   if (!listy) $("#split").classList.remove("open");
   if (listy) {
