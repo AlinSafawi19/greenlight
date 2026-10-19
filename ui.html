@@ -63,7 +63,7 @@ kbd { font: 500 10.5px var(--sans); color: var(--ink-3); background: var(--tint-
 .qbar i.done { background: var(--green); } .qbar i.todo { background: var(--amber); }
 .qbar i.check { background: var(--ink-3); }
 
-.app { display: grid; grid-template-rows: 52px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); height: 100vh; }
+.app { position: fixed; inset: 0; display: grid; grid-template-rows: 52px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
 .top { display: grid; grid-template-columns: 352px minmax(0, 1fr) auto; align-items: center; background: var(--rail); border-bottom: 1px solid var(--hair); }
 .brand { display: flex; align-items: center; gap: 10px; padding-left: 20px; font: 600 14px var(--sans); letter-spacing: -.02em; }
 .brand svg { width: 18px; height: 18px; }
@@ -299,8 +299,8 @@ table.tb a:hover { text-decoration: underline; text-decoration-color: var(--ink-
 .s2-repo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 /* in multi-selects, chosen items leave the list (they are shown in the field instead) */
 .select2-results__options[aria-multiselectable="true"] .select2-results__option--selected { display: none; }
-.tgl { display: inline-flex; align-items: center; gap: 9px; color: var(--ink-2); font-weight: 500; cursor: pointer; user-select: none; margin-left: 4px; }
-.tgl input { position: absolute; opacity: 0; pointer-events: none; }
+.tgl { position: relative; display: inline-flex; align-items: center; gap: 9px; color: var(--ink-2); font-weight: 500; cursor: pointer; user-select: none; margin-left: 4px; }
+.tgl input { position: absolute; left: 0; top: 50%; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
 .tgl .knob { width: 28px; height: 16px; border-radius: 999px; background: var(--tint-3); position: relative; transition: background .2s var(--ease); }
 .tgl .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-2); transition: transform .25s var(--ease), background .2s; }
 .tgl input:checked + .knob { background: var(--ink-2); }
@@ -1241,6 +1241,9 @@ document.addEventListener("keydown", e => {
 $("#checkAll").onclick = checkAll;
 $("#reload").onclick = () => status?.account && loadTickets();
 window.addEventListener("popstate", () => { const k = decodeURIComponent(location.hash.slice(1)).toUpperCase(); if (k) load(k, false); else back(); });
+
+// the app frame never scrolls as a whole; only its panes do. If focus ever nudges the document, put it back.
+addEventListener("scroll", () => { if (scrollX || scrollY) scrollTo(0, 0); }, { passive: true });
 
 async function boot() {
   await loadStatus();
