@@ -759,8 +759,11 @@ function toast(html, ms = 4200, error = false) {
 }
 const fail = msg => toast(msg, 0, true);
 async function api(path, opts = {}) {
-  if (opts.method && opts.method !== "GET") opts.headers = { "X-Greenlight": "1", "Content-Type": "application/json" };
-  const res = await fetch(path, opts);
+  // the server only accepts changes that carry this header (another site can't add it without CORS)
+  if (opts.method && opts.method !== "GET") opts.headers = { "X-Ledger": "1", "Content-Type": "application/json" };
+  let res;
+  try { res = await fetch(path, opts); }
+  catch { throw new Error("Can't reach Greenlight. It may be restarting; try again in a moment."); }
   const body = res.headers.get("content-type")?.includes("json") ? await res.json() : await res.text();
   if (!res.ok) throw new Error(body?.error || res.statusText);
   return body;
@@ -1481,7 +1484,21 @@ async function renderDiffPage() {
   $("#dpBody").onclick = e => { const b = e.target.closest(".lnb"); if (b) openLocal(d.repo, "code", d.path, +b.dataset.line); };
   if (!d.data) {
     try { d.data = await api("/api/diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); }
-    catch (e) { $("#dpBody").innerHTML = `<div class="pane-empty"><b>Couldn't load the changes</b><span>${esc(e.message)}</span></div>`; return; }
+    catch (e) {
+      if (diffState !== d) return;
+      $("#dpBody").innerHTML = `<div class="void fail-c">${icon("alert", "ico big")}<h3>Couldn't load the changes</h3>
+        <p>The comparison for ${esc(d.path.split("/").pop())} didn't come back.</p>
+        <div class="void-acts"><button class="btn solid" id="dpRetry">${icon("refresh")}Try again</button></div>
+        <details class="why"><summary>Technical details</summary><code>${esc(e.message)}</code></details></div>`;
+      $("#dpRetry").onclick = async () => {
+        const b = $("#dpRetry"); b.disabled = true; b.innerHTML = `<span class="spinner"></span>Trying again`;
+        const t0 = Date.now();
+        try { d.data = await api("/api/diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); }
+        catch (e2) { await new Promise(ok => setTimeout(ok, Math.max(0, 600 - (Date.now() - t0)))); b.disabled = false; b.innerHTML = `${icon("refresh")}Try again`; $(".dpage .why code").textContent = e2.message; return; }
+        if (diffState === d) { $("#dpBody").innerHTML = diffBody(d); soften($("#dpBody")); }
+      };
+      return;
+    }
     // commits that cancel out (e.g. a change and its revert) have nothing to combine: show them one by one
     if (!(d.data.net || "").trim() && d.mode === "net") { d.mode = "each"; $$(".dpage [data-mode]").forEach(x => x.setAttribute("aria-checked", x.dataset.mode === "each")); }
     if (diffState === d) $("#dpBody").innerHTML = diffBody(d);
@@ -1558,7 +1575,7 @@ async function post() {
   const bs = $$("#post, [data-post]");
   bs.forEach(b => { b.disabled = true; b.dataset.l = b.innerHTML; b.innerHTML = `<span class="spinner"></span>Posting`; });
   try { const res = await api(`/api/post?key=${encodeURIComponent(report.key)}`, { method: "POST" }); toast(`Handover posted to ${esc(report.key)}.<a href="${esc(res.url)}" target="_blank" rel="noopener">View in Jira</a>`, 6500); }
-  catch (e) { fail(`Jira didn't accept it: ${esc(e.message)}`); }
+  catch (e) { fail(/^Jira /.test(e.message) ? esc(e.message) : `Couldn't post the handover: ${esc(e.message)}`); }
   finally { bs.forEach(b => { b.disabled = false; b.innerHTML = b.dataset.l; }); }
 }
 
