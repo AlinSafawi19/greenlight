@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ledger</title>
+<title>Greenlight</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2032%22%3E%3Crect%20x%3D%223%22%20y%3D%221%22%20width%3D%2218%22%20height%3D%2230%22%20rx%3D%227%22%20fill%3D%22%231d2023%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%228.5%22%20r%3D%223.6%22%20fill%3D%22%23e5675d%22%20opacity%3D%22.3%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2216%22%20r%3D%223.6%22%20fill%3D%22%23e8a33d%22%20opacity%3D%22.3%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2223.5%22%20r%3D%223.9%22%20fill%3D%22%235ab88a%22%2F%3E%3C%2Fsvg%3E">
 <link rel="stylesheet" href="/assets/select2.min.css">
 <style>
 @font-face { font-family: "Inter"; src: url(/assets/Inter.ttf) format("truetype"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "JBMono"; src: url(/assets/JetBrainsMono.ttf) format("truetype"); font-weight: 100 800; font-display: swap; }
 
-/*  Ledger — design tokens
+/*  Greenlight — design tokens
     Surfaces are separated by tone, not by borders. Amber means "this needs you"; green means done; everything else is neutral. */
 :root {
   color-scheme: dark;
@@ -66,7 +67,7 @@ kbd { font: 500 10.5px var(--sans); color: var(--ink-3); background: var(--tint-
 .app { position: fixed; inset: 0; display: grid; grid-template-rows: 52px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
 .top { display: grid; grid-template-columns: 352px minmax(0, 1fr) auto; align-items: center; background: var(--rail); border-bottom: 1px solid var(--hair); }
 .brand { display: flex; align-items: center; gap: 10px; padding-left: 20px; font: 600 14px var(--sans); letter-spacing: -.02em; }
-.brand svg { width: 18px; height: 18px; }
+.brand svg.tl { width: 15px; height: 20px; filter: drop-shadow(0 0 5px rgba(90, 184, 138, .35)); }
 .finder { display: flex; align-items: center; gap: 9px; height: 32px; width: min(420px, 100%); margin-left: 28px; padding: 0 10px; border-radius: 8px; background: var(--tint-1); color: var(--ink-3); transition: background .15s var(--ease); }
 .finder:hover { background: var(--tint-2); color: var(--ink-2); }
 .finder span { flex: 1; }
@@ -657,8 +658,15 @@ dialog[open] { animation: rise .16s var(--ease); }
 <div class="app">
   <header class="top">
     <div class="brand">
-      <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="2" width="16" height="3" rx="1.5" fill="#ededee"/><rect x="1" y="7.5" width="11" height="3" rx="1.5" fill="#ededee" opacity=".55"/><rect x="1" y="13" width="7" height="3" rx="1.5" fill="#e8a33d"/></svg>
-      Ledger
+      <svg class="tl" viewBox="0 0 18 24" aria-hidden="true">
+        <rect x="3" y="0.75" width="12" height="22.5" rx="4.5" fill="#1d2023" stroke="#33373c" stroke-width="1"/>
+        <circle cx="9" cy="6" r="2.6" fill="#e5675d" opacity=".22"/>
+        <circle cx="9" cy="12" r="2.6" fill="#e8a33d" opacity=".22"/>
+        <circle cx="9" cy="18" r="4.4" fill="#5ab88a" opacity=".22"/>
+        <circle cx="9" cy="18" r="2.6" fill="#5ab88a"/>
+        <circle cx="8.1" cy="17.1" r=".8" fill="#d6f5e4" opacity=".85"/>
+      </svg>
+      Greenlight
     </div>
     <div class="finder-wrap"><svg class="ico s fglass" aria-hidden="true"><use href="#i-search"/></svg><select id="finderSel" aria-label="Find a ticket"></select><kbd class="fkbd">Ctrl K</kbd></div>
     <div class="end">
@@ -751,7 +759,7 @@ function toast(html, ms = 4200, error = false) {
 }
 const fail = msg => toast(msg, 0, true);
 async function api(path, opts = {}) {
-  if (opts.method && opts.method !== "GET") opts.headers = { "X-Ledger": "1", "Content-Type": "application/json" };
+  if (opts.method && opts.method !== "GET") opts.headers = { "X-Greenlight": "1", "Content-Type": "application/json" };
   const res = await fetch(path, opts);
   const body = res.headers.get("content-type")?.includes("json") ? await res.json() : await res.text();
   if (!res.ok) throw new Error(body?.error || res.statusText);
@@ -776,7 +784,7 @@ function openSettings() {
       ${me ? `
         <div class="acct"><span class="face">${esc(initials(me.name))}</span><div style="flex:1;min-width:0">${esc(cap(me.name))}<small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div><button class="btn danger small" id="disc">Disconnect</button></div>
         <p class="intro" style="margin:0">Your API token is kept in ${esc(me.source)} on this computer. Handovers are posted under your name.</p>` : `
-        <p class="intro">Ledger lists the tickets assigned to you and posts handovers as you. The token is stored in Windows Credential Manager, never in the project.</p>
+        <p class="intro">Greenlight lists the tickets assigned to you and posts handovers as you. The token is stored in Windows Credential Manager, never in the project.</p>
         ${status?.credentialsRejected ? `<p class="intro" style="color:var(--red);margin:0">The saved token was rejected. Enter a new one.</p>` : ""}
         <label class="fld"><span>Jira site</span><input id="fSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"><span class="err" id="eSite"></span></label>
         <label class="fld"><span>Atlassian sign-in email</span><input id="fEmail" type="email" autocomplete="username" spellcheck="false"><small>Can differ from the email on your Jira profile.</small><span class="err" id="eEmail"></span></label>
@@ -820,7 +828,7 @@ function openSettings() {
 // GitLab, for code review: a personal access token with the api scope (approving needs it)
 function gitlabSection() {
   const g = status?.gitlab, base = status?.gitlabBaseUrl || "https://gitlab.com";
-  const create = `${base}/-/user_settings/personal_access_tokens?name=Ledger&scopes=api`;
+  const create = `${base}/-/user_settings/personal_access_tokens?name=Greenlight&scopes=api`;
   return g ? `<div class="fld"><span>GitLab · code review</span>
       <div class="acct"><span class="face">${esc(initials(g.name))}</span><div style="flex:1;min-width:0">${esc(g.name)}<small>@${esc(g.username)} · ${esc(base.replace("https://", ""))}</small></div><button class="btn danger small" id="glDisc">Disconnect</button></div></div>`
     : `<div class="fld"><span>GitLab · code review <span class="ink-3">(optional)</span></span>
@@ -966,7 +974,7 @@ async function load(key, fetchFirst, inPlace = false) {
   selected = key; commitFilter = ""; openStep = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
-  document.title = `${key} · Ledger`;
+  document.title = `${key} · Greenlight`;
   const n = ++seq;
   // switching scope keeps the page and dims what is about to change, instead of blanking it
   if (inPlace && $(".page")) $(".page").classList.add("dim");
@@ -1030,13 +1038,13 @@ async function load(key, fetchFirst, inPlace = false) {
 function back() { history.pushState(null, "", location.pathname); selected = null; report = null; reviewing = null; reviewerMode = false; $("#split").classList.remove("open"); renderList(); blank(); }
 
 function blank() {
-  document.title = "Ledger";
+  document.title = "Greenlight";
   const me = status?.account;
   $("#main").innerHTML = `<div class="blank"><div class="blank-in">
     ${icon("list", "ico")}
-    ${me ? `<h2>Pick a ticket</h2><p>Ledger shows what stands between it and QA: code, tags, database, access, config and the handover.</p>
+    ${me ? `<h2>Pick a ticket</h2><p>Greenlight shows what stands between it and QA: code, tags, database, access, config and the handover.</p>
       <div class="keys"><span><kbd>J</kbd><kbd>K</kbd></span><span>Next and previous ticket</span><span><kbd>Ctrl K</kbd></span><span>Find a ticket</span><span><kbd>R</kbd></span><span>Fetch and check again</span></div>`
-    : `<h2>Set up Ledger</h2><p>Two steps, once on this computer.</p>
+    : `<h2>Set up Greenlight</h2><p>Two steps, once on this computer.</p>
       <ol class="setup">
         <li><b>Connect your Jira account</b><div><p>Lists your tickets and posts handovers under your name.</p><button class="btn success small" id="s1">Connect Jira</button></div></li>
         <li class="${status?.repoCount ? "ok" : ""}"><b>Repositories folder</b><div><p>${status?.repoCount ? `${pl(status.repoCount, "repository", "repositories")} found in <code>${esc(status.reposRoot)}</code>` : "Point to the folder with your local clones."}</p><button class="btn line small" id="s2">${status?.repoCount ? "Change" : "Choose folder"}</button></div></li>
@@ -1176,7 +1184,7 @@ function voidHtml(r, kids) {
       ${!includeKids && status?.account ? `<button class="btn line" id="voidKids">Include my sub-tickets</button>` : ""}
     </div>
     <div class="void-start">
-      <span>Starting now? Create the branch with the ticket key so Ledger can follow it:</span>
+      <span>Starting now? Create the branch with the ticket key so Greenlight can follow it:</span>
       <div class="cmd"><code>${esc(cmd)}</code><button class="btn only small" id="copyCmd" title="Copy command" aria-label="Copy command" data-cmd="${esc(cmd)}">${icon("copy")}</button></div>
     </div>
   </div>`;
@@ -1459,7 +1467,7 @@ async function renderDiffPage() {
     </div>
     <div class="dp-b" id="dpBody">${d.data ? diffBody(d) : `<div class="s2-msg" style="padding:24px"><span class="spinner"></span>Loading the changes</div>`}</div>
   </div>`;
-  document.title = `${name} · ${report.key} · Ledger`;
+  document.title = `${name} · ${report.key} · Greenlight`;
   $("#dpBack").onclick = leaveDiff;
   $$(".dpage [data-mode]").forEach(b => b.onclick = () => { d.mode = b.dataset.mode; $$(".dpage [data-mode]").forEach(x => x.setAttribute("aria-checked", x === b)); $("#dpBody").innerHTML = diffBody(d); });
   $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { fail(esc(e.message)); } };
@@ -1764,7 +1772,7 @@ async function loadReview(project, iid) {
     const r = await api(`/api/review?project=${encodeURIComponent(project)}&iid=${iid}`);
     if (!reviewing || reviewing.iid !== iid || reviewing.project !== project) return;
     reviewing = { ...r, project, iid, fileQuery: "" };
-    document.title = `!${iid} · ${r.repo} · Ledger`;
+    document.title = `!${iid} · ${r.repo} · Greenlight`;
     renderReview();
   } catch (e) {
     $("#main").innerHTML = `<div class="page"><button class="btn back" id="back">${icon("back")}To review</button>

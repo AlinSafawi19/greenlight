@@ -1,6 +1,6 @@
 {
   "reposRoot": "..",
-  "excludeRepos": [ "feature-ledger" ],
+  "excludeRepos": [ "greenlight", "feature-ledger" ],
   "keyPattern": "MM-[0-9]+",
   "jira": {
     "baseUrl": "https://montyholding.atlassian.net",

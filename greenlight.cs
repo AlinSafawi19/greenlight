@@ -1,10 +1,10 @@
-// feature-ledger: builds a per-ticket manifest from git history across all local repos,
+// Greenlight: is a ticket ready to go live? Builds a per-ticket manifest from git history across all local repos,
 // writes it to out/<KEY>.md and optionally posts/updates it as a comment on the Jira ticket.
 //
-//   dotnet run ledger.cs -- MM-1234            build the manifest (local only)
-//   dotnet run ledger.cs -- MM-1234 --fetch    git fetch all repos first
-//   dotnet run ledger.cs -- MM-1234 --post     also create/update the manifest comment on Jira
-//   dotnet run ledger.cs -- --ui               open the browser UI on http://localhost:5199
+//   dotnet run greenlight.cs -- MM-1234            build the manifest (local only)
+//   dotnet run greenlight.cs -- MM-1234 --fetch    git fetch all repos first
+//   dotnet run greenlight.cs -- MM-1234 --post     also create/update the manifest comment on Jira
+//   dotnet run greenlight.cs -- --ui               open the browser UI on http://localhost:5199
 //
 // Every item in the manifest comes from git with a deterministic rule:
 //   1. commits whose message contains the key
@@ -34,8 +34,8 @@ if (flags.Contains("--ui"))
 
 if (key is null || !ledger.IsValidKey(key))
 {
-    Console.Error.WriteLine($"Usage: dotnet run ledger.cs -- <KEY matching {ledger.KeyPattern}> [--fetch] [--post]");
-    Console.Error.WriteLine("       dotnet run ledger.cs -- --ui");
+    Console.Error.WriteLine($"Usage: dotnet run greenlight.cs -- <KEY matching {ledger.KeyPattern}> [--fetch] [--post]");
+    Console.Error.WriteLine("       dotnet run greenlight.cs -- --ui");
     return 2;
 }
 
@@ -90,7 +90,7 @@ class Ledger
     public Ledger(string appDir)
     {
         AppDir = appDir;
-        cfg = JsonNode.Parse(File.ReadAllText(Path.Combine(appDir, "ledger.json")))!;
+        cfg = JsonNode.Parse(File.ReadAllText(Path.Combine(appDir, "greenlight.json")))!;
         KeyPattern = (string)cfg["keyPattern"]!;
         DailyTargetHours = (double?)cfg["time"]?["dailyTargetHours"] ?? 5;
         WorkDays = cfg["time"]?["workDays"]?.AsArray().Select(n => (int)n!).ToHashSet() ?? [1, 2, 3, 4, 5];
@@ -107,7 +107,7 @@ class Ledger
 
     // ── GitLab account (code review): a personal access token, also kept in Windows Credential Manager ──
 
-    static string GitLabTarget(string baseUrl) => $"feature-ledger-gitlab:{new Uri(baseUrl).Host}";
+    static string GitLabTarget(string baseUrl) => Migrated($"greenlight-gitlab:{new Uri(baseUrl).Host}", $"feature-ledger-gitlab:{new Uri(baseUrl).Host}");
 
     // the GitLab host the repositories are cloned from
     string? GuessGitLab() => Repos.Select(r => Git.WebUrl(r)).Where(u => u.StartsWith("https://"))
@@ -144,7 +144,14 @@ class Ledger
 
     // ── per-user account: each person connects their own Jira account; the token lives in their Windows Credential Manager ──
 
-    static string CredTarget(string baseUrl) => $"feature-ledger:{new Uri(baseUrl).Host}";
+    static string CredTarget(string baseUrl) => Migrated($"greenlight:{new Uri(baseUrl).Host}", $"feature-ledger:{new Uri(baseUrl).Host}");
+
+    // the tool used to be called feature-ledger: a token saved under the old name moves to the new one, once
+    static string Migrated(string target, string old)
+    {
+        if (CredStore.Read(target) is null && CredStore.Read(old) is { } c) { CredStore.Write(target, c.User, c.Secret); CredStore.Delete(old); }
+        return target;
+    }
 
     void LoadJira()
     {
@@ -313,10 +320,11 @@ class Ledger
         Environment.GetEnvironmentVariable(name) ?? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User);
 }
 
-// Per-user settings, outside the repo: %APPDATA%\feature-ledger\settings.json
+// Per-user settings, outside the repo: %APPDATA%\greenlight\settings.json
 class UserSettings
 {
-    static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "feature-ledger", "settings.json");
+    static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "greenlight", "settings.json");
+    static readonly string OldPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "feature-ledger", "settings.json");
     public string? JiraBaseUrl { get; set; }
     public string? ReposRoot { get; set; }
     public string? GitLabBaseUrl { get; set; }
@@ -325,7 +333,7 @@ class UserSettings
     {
         try
         {
-            var j = JsonNode.Parse(File.ReadAllText(FilePath))!;
+            var j = JsonNode.Parse(File.ReadAllText(File.Exists(FilePath) ? FilePath : OldPath))!;   // settings saved before the rename still count
             return new UserSettings { JiraBaseUrl = (string?)j["jiraBaseUrl"], ReposRoot = (string?)j["reposRoot"], GitLabBaseUrl = (string?)j["gitlabBaseUrl"] };
         }
         catch { return new UserSettings(); }
@@ -382,7 +390,7 @@ static class CredStore
             var c = new CREDENTIAL
             {
                 Type = Generic, TargetName = target, UserName = user, Persist = PersistLocalMachine,
-                CredentialBlob = blob, CredentialBlobSize = secret.Length * 2, Comment = "feature-ledger Jira API token",
+                CredentialBlob = blob, CredentialBlobSize = secret.Length * 2, Comment = "Greenlight token",
             };
             if (!CredWrite(ref c, 0)) throw new Exception($"Could not save the credential (error {Marshal.GetLastWin32Error()}).");
         }
@@ -659,7 +667,8 @@ record JiraOnly(Block Inner) : Block;   // shown in the Jira comment, omitted fr
 
 class Doc
 {
-    public const string Marker = "Feature manifest (feature-ledger)";
+    public const string Marker = "Greenlight handover";
+    public const string OldMarker = "Feature manifest (feature-ledger)";   // comments posted before the rename
     public List<Block> Blocks { get; } = [];
 
     public string Markdown()
@@ -1231,7 +1240,7 @@ static class LocalApps
         var code = VsCode() ?? throw new Exception("VS Code isn't installed on this computer.");
         var ordered = Chronological(repo, shas);
         var first = ordered[0]; var last = ordered[^1];
-        var dir = Path.Combine(Path.GetTempPath(), "feature-ledger", "diff", Path.GetFileName(repo), first[..8] + "-" + last[..8]);
+        var dir = Path.Combine(Path.GetTempPath(), "greenlight", "diff", Path.GetFileName(repo), first[..8] + "-" + last[..8]);
         Directory.CreateDirectory(dir);
         var name = Path.GetFileName(rel);
         var before = Path.Combine(dir, "before " + name);
@@ -1915,7 +1924,7 @@ class Jira
             var page = JsonNode.Parse(await (await http!.GetAsync($"rest/api/2/issue/{key}/comment?startAt={start}&maxResults=100")).EnsureSuccessStatusCode()
                                           .Content.ReadAsStringAsync())!;
             var comments = page["comments"]!.AsArray();
-            existing = comments.FirstOrDefault(c => ((string?)c?["body"])?.Contains(Doc.Marker) == true
+            existing = comments.FirstOrDefault(c => (((string?)c?["body"])?.Contains(Doc.Marker) == true || ((string?)c?["body"])?.Contains(Doc.OldMarker) == true)
                                                      && (string?)c?["author"]?["accountId"] == me.AccountId)?["id"]?.ToString();
             if (start + comments.Count >= (int)page["total"]!) break;
         }
@@ -2124,7 +2133,7 @@ static class UiServer
         if (listener is null) { Console.Error.WriteLine("No free port between 5199 and 5209."); return; }
 
         var url = $"http://localhost:{port}/";
-        Console.WriteLine($"feature-ledger UI running at {url}  (Ctrl+C to stop)");
+        Console.WriteLine($"Greenlight running at {url}  (Ctrl+C to stop)");
         if (open) { try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { } }
 
         while (listener.IsListening)

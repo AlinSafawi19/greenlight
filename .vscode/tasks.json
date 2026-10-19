@@ -2,29 +2,29 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Ledger: open UI",
+      "label": "Greenlight: open UI",
       "type": "shell",
-      "command": "dotnet run ledger.cs -- --ui",
+      "command": "dotnet run greenlight.cs -- --ui",
       "options": { "cwd": "${workspaceFolder}" },
       "isBackground": true,
       "problemMatcher": []
     },
     {
-      "label": "Ledger: build manifest",
+      "label": "Greenlight: build manifest",
       "type": "shell",
-      "command": "dotnet run ledger.cs -- ${input:key} --fetch",
+      "command": "dotnet run greenlight.cs -- ${input:key} --fetch",
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
-      "label": "Ledger: build manifest and post to Jira",
+      "label": "Greenlight: build manifest and post to Jira",
       "type": "shell",
-      "command": "dotnet run ledger.cs -- ${input:key} --fetch --post",
+      "command": "dotnet run greenlight.cs -- ${input:key} --fetch --post",
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
-      "label": "Ledger: install git hooks in all repos",
+      "label": "Greenlight: install git hooks in all repos",
       "type": "shell",
       "command": "powershell -NoProfile -ExecutionPolicy Bypass -File install-hooks.ps1",
       "options": { "cwd": "${workspaceFolder}" },

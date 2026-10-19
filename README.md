@@ -1,4 +1,4 @@
-# feature-ledger
+# Greenlight
 
 Answers "what did ticket MM-1234 touch, and is all of it ready for QA?" from git alone, across every repo.
 No manual notes and no third-party tools: just Git, the Jira REST API and VS Code.
@@ -8,7 +8,7 @@ No manual notes and no third-party tools: just Git, the Jira REST API and VS Cod
 1. **Git hooks guarantee the key.** `hooks/commit-msg` rejects commits without a Jira key. On a branch named
    `MM-1234-...` it prefixes the key for you, so following the branch convention is all it takes.
    Commits that really have no ticket must say `[no-ticket]`.
-2. **The manifest is computed, not written.** `ledger.cs` scans all repos under `reposRoot` and collects, per ticket:
+2. **The manifest is computed, not written.** `greenlight.cs` scans all repos under `reposRoot` and collects, per ticket:
    - commits whose message contains the key
    - commits brought in by merges whose *source* branch contains the key (GitLab MR merges, with MR links)
    - commits on branches named after the key that are not yet in the default branch (patch-equivalent rebased copies are ignored)
@@ -37,17 +37,17 @@ Untick *Child tickets* to scan a single key only.
 ## Usage
 
 ```powershell
-dotnet run ledger.cs -- --ui               # browser UI on http://localhost:5199 (Ctrl+C to stop)
-dotnet run ledger.cs -- MM-1234            # build out/MM-1234.md
-dotnet run ledger.cs -- MM-1234 --fetch    # git fetch every repo first
-dotnet run ledger.cs -- MM-1234 --post     # also create/update the comment on the Jira ticket
+dotnet run greenlight.cs -- --ui               # browser UI on http://localhost:5199 (Ctrl+C to stop)
+dotnet run greenlight.cs -- MM-1234            # build out/MM-1234.md
+dotnet run greenlight.cs -- MM-1234 --fetch    # git fetch every repo first
+dotnet run greenlight.cs -- MM-1234 --post     # also create/update the comment on the Jira ticket
 .\install-hooks.ps1                        # enable the commit-msg hook in every repo (local git config)
 .\install-hooks.ps1 -Uninstall
 ```
 
-In VS Code: *Terminal → Run Task → Ledger: ...*
+In VS Code: *Terminal → Run Task → Greenlight: ...*
 
-The UI (`ui.html`, served by `ledger.cs`) listens on localhost only. It builds the same manifest as the CLI,
+The UI (`ui.html`, served by `greenlight.cs`) listens on localhost only. It builds the same manifest as the CLI,
 shows readiness for QA, merge requests, DB scripts, changed files and commits, and posts to Jira with one click.
 The sidebar always lists **your open tickets** (assigned to you, status not Done), grouped under their story or epic;
 click the group header to build the whole story. Deep link: `http://localhost:5199/#MM-1234`.
@@ -55,17 +55,17 @@ click the group header to build the whole story. Deep link: `http://localhost:51
 ## Setup (each person, once)
 
 1. .NET 10 SDK and Git.
-2. `dotnet run ledger.cs -- --ui`, then **Connect Jira** (top right): your Jira site, your Atlassian email and an
+2. `dotnet run greenlight.cs -- --ui`, then **Connect Jira** (top right): your Jira site, your Atlassian email and an
    API token created at <https://id.atlassian.com/manage-profile/security/api-tokens> while logged in as yourself.
-   The token is checked against Jira and stored in **your Windows Credential Manager** (entry `feature-ledger:<site>`),
+   The token is checked against Jira and stored in **your Windows Credential Manager** (entry `greenlight:<site>`),
    never in this folder. *Disconnect* removes it.
 3. In the same dialog, set your **repositories folder** if your clones aren't next to this folder.
-   Per-user settings live in `%APPDATA%\feature-ledger\settings.json`.
+   Per-user settings live in `%APPDATA%\greenlight\settings.json`.
 
 Everything you do in Jira (reading your tickets, posting comments) runs as your own account.
 The environment variables `JIRA_EMAIL` / `JIRA_API_TOKEN` still work as a fallback for the CLI.
 
-## Configuration (`ledger.json`)
+## Configuration (`greenlight.json`)
 
 | Key | Meaning |
 |---|---|

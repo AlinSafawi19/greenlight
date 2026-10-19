@@ -1,11 +1,11 @@
 #!/bin/sh
-# feature-ledger commit-msg hook: every commit must reference a Jira key.
+# Greenlight commit-msg hook: every commit must reference a Jira key.
 #  - message already has a key          -> accepted as is
 #  - branch name has a key (MM-1234-x)  -> key is prefixed automatically: "MM-1234: <message>"
 #  - neither                            -> rejected, unless the message contains [no-ticket]
-# The key pattern comes from `git config ledger.keyPattern` (set by install-hooks.ps1).
+# The key pattern comes from `git config greenlight.keyPattern` (set by install-hooks.ps1).
 
-KEY_RE=$(git config --get ledger.keyPattern)
+KEY_RE=$(git config --get greenlight.keyPattern || git config --get ledger.keyPattern)
 [ -z "$KEY_RE" ] && KEY_RE='MM-[0-9]+'
 msg_file="$1"
 body=$(grep -v '^#' "$msg_file")
@@ -23,7 +23,7 @@ printf '%s' "$body" | grep -qiF '[no-ticket]' && exit 0
 branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
 key=$(printf '%s' "$branch" | grep -oiE "$KEY_RE" | head -n 1 | tr '[:lower:]' '[:upper:]')
 if [ -n "$key" ]; then
-  tmp="$msg_file.ledger"
+  tmp="$msg_file.greenlight"
   { printf '%s: ' "$key"; cat "$msg_file"; } > "$tmp" && mv "$tmp" "$msg_file"
   exit 0
 fi

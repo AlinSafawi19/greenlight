@@ -1,11 +1,11 @@
-# Points every repo next to feature-ledger at the shared hooks folder (local git config only, nothing is committed).
+# Points every repo next to Greenlight at the shared hooks folder (local git config only, nothing is committed).
 #   .\install-hooks.ps1              install
 #   .\install-hooks.ps1 -Uninstall   remove
 param([switch]$Uninstall)
 
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
-$cfg = Get-Content (Join-Path $here 'ledger.json') -Raw | ConvertFrom-Json
+$cfg = Get-Content (Join-Path $here 'greenlight.json') -Raw | ConvertFrom-Json
 $root = [IO.Path]::GetFullPath((Join-Path $here $cfg.reposRoot))
 $hooks = (Join-Path $here 'hooks') -replace '\\', '/'
 
@@ -17,13 +17,13 @@ foreach ($dir in Get-ChildItem $root -Directory) {
     if ($Uninstall) {
         if ($current -eq $hooks) {
             git -C $dir.FullName config --local --unset core.hooksPath
-            git -C $dir.FullName config --local --unset ledger.keyPattern
+            git -C $dir.FullName config --local --unset greenlight.keyPattern
             "removed    $($dir.Name)"
         }
         continue
     }
     if ($current -and $current -ne $hooks) { "SKIPPED    $($dir.Name) (already uses hooks at $current)"; continue }
     git -C $dir.FullName config --local core.hooksPath $hooks
-    git -C $dir.FullName config --local ledger.keyPattern $cfg.keyPattern
+    git -C $dir.FullName config --local greenlight.keyPattern $cfg.keyPattern
     "installed  $($dir.Name)"
 }
