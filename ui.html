@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feature Ledger</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f1f3f6; --border: #e2e5ea;
+    --text: #1b1f24; --muted: #5d6673; --faint: #8a93a0;
+    --accent: #2f5bd3; --accent-ink: #ffffff; --accent-soft: #e8eefc;
+    --ok: #1e7a46; --ok-soft: #e5f4ec; --warn: #9a5b00; --warn-soft: #fdf2e0; --bad: #b42318; --bad-soft: #fdecea;
+    --add: #1e7a46; --mod: #2f5bd3; --del: #b42318;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --surface: #171b21; --surface-2: #1e232b; --border: #2a313b;
+      --text: #e6e9ee; --muted: #a2abb8; --faint: #77818f;
+      --accent: #7c9cff; --accent-ink: #0f1216; --accent-soft: #1f2a47;
+      --ok: #5cc98a; --ok-soft: #14291e; --warn: #f0b45a; --warn-soft: #2d2213; --bad: #f2867c; --bad-soft: #2f1716;
+      --add: #5cc98a; --mod: #7c9cff; --del: #f2867c;
+      --shadow: 0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  button { font: inherit; cursor: pointer; }
+
+  header.bar {
+    position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; padding: 10px 20px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 15px; white-space: nowrap; }
+  .brand svg { color: var(--accent); }
+  form.search { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 280px; max-width: 640px; }
+  .search input[type=text] {
+    flex: 1; min-width: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-2); color: var(--text); font: 600 14px var(--mono); text-transform: uppercase;
+  }
+  .search input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--surface); }
+  label.toggle { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; user-select: none; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 550; white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { background: var(--surface-2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .conn { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); display: inline-block; }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--warn); }
+
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; padding: 16px; } aside { order: 2; } }
+
+  aside .panel { position: sticky; top: 76px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  .panel > h3 { margin: 0; padding: 12px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .recent { list-style: none; margin: 0; padding: 6px; max-height: calc(100vh - 160px); overflow: auto; }
+  .recent li button {
+    width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 8px 10px; color: var(--text);
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+  }
+  .recent li button:hover, .recent li button.active { background: var(--surface-2); }
+  .recent .k { font: 600 13px var(--mono); }
+  .recent .s { grid-column: 1 / -1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent .t { color: var(--faint); font-size: 11px; }
+  .recent .empty { padding: 12px; color: var(--muted); font-size: 13px; }
+
+  main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+  .ticket { padding: 18px 20px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .ticket .title { flex: 1; min-width: 260px; }
+  .ticket .key { font: 650 13px var(--mono); color: var(--accent); }
+  .ticket h1 { margin: 2px 0 8px; font-size: 20px; line-height: 1.3; font-weight: 650; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+  .chip b { color: var(--text); font-weight: 600; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .banner { padding: 14px 18px; border-radius: 12px; border: 1px solid; display: flex; gap: 12px; align-items: flex-start; }
+  .banner.ok { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 35%, transparent); color: var(--ok); }
+  .banner.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); color: var(--warn); }
+  .banner h2 { margin: 0 0 2px; font-size: 15px; }
+  .banner ul { margin: 6px 0 0; padding-left: 18px; color: var(--text); }
+  .banner li { margin: 3px 0; }
+  .banner p { margin: 0; color: var(--text); }
+  .banner svg { flex: none; margin-top: 2px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .stat { padding: 14px 16px; }
+  .stat .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .stat .l { color: var(--muted); font-size: 12px; }
+  .stat .sub { color: var(--faint); font-size: 12px; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); padding: 0 12px; overflow-x: auto; }
+  .tabs button {
+    background: none; border: 0; padding: 12px 12px 10px; color: var(--muted); font-weight: 550; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tabs .n { font-size: 11px; background: var(--surface-2); border-radius: 999px; padding: 1px 7px; margin-left: 4px; color: var(--muted); }
+  .tabbody { padding: 16px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface-2); }
+  tr:last-child td { border-bottom: 0; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 550; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .badge.muted { background: var(--surface-2); color: var(--muted); }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .repo { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .repo > summary {
+    list-style: none; cursor: pointer; padding: 10px 14px; display: flex; gap: 10px; align-items: center; background: var(--surface-2); flex-wrap: wrap;
+  }
+  .repo > summary::-webkit-details-marker { display: none; }
+  .repo > summary .name { font-weight: 600; }
+  .repo > summary .meta { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .repo > summary::before { content: "▸"; color: var(--faint); transition: transform .15s; }
+  .repo[open] > summary::before { transform: rotate(90deg); }
+  .files { list-style: none; margin: 0; padding: 6px 0; }
+  .files li { display: flex; gap: 10px; padding: 3px 14px; align-items: baseline; }
+  .files li:hover { background: var(--surface-2); }
+  .fs { font: 700 11px var(--mono); width: 14px; text-align: center; flex: none; }
+  .fs.A { color: var(--add); } .fs.M { color: var(--mod); } .fs.D { color: var(--del); } .fs.R { color: var(--mod); }
+  .files code { word-break: break-all; }
+
+  .commits { list-style: none; margin: 0; padding: 4px 0; }
+  .commits li { padding: 8px 14px; border-top: 1px solid var(--border); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .commits li:first-child { border-top: 0; }
+  .commits .sha { font: 600 12.5px var(--mono); }
+  .commits .subj { word-break: break-word; }
+  .commits .by { grid-column: 2; color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .commits .note { grid-column: 2; font-size: 12px; color: var(--warn); }
+
+  .hl { margin-bottom: 14px; }
+  .hl h4 { margin: 0 0 6px; font-size: 13px; }
+  .filter { width: 100%; max-width: 360px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); margin-bottom: 12px; font: inherit; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+
+  .state { padding: 48px 24px; text-align: center; color: var(--muted); }
+  .state h2 { color: var(--text); font-size: 18px; margin: 12px 0 6px; }
+  .state ol { text-align: left; display: inline-block; margin: 12px auto 0; }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { background: var(--bad-soft); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); padding: 12px 16px; border-radius: 10px; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; transition: .2s;
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 10; max-width: calc(100vw - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+  .toast a { color: inherit; text-decoration: underline; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h12l4 4v12H4z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg>
+    Feature Ledger
+  </div>
+  <form class="search" id="searchForm" autocomplete="off">
+    <input type="text" id="keyInput" placeholder="MM-1234" aria-label="Jira key" spellcheck="false">
+    <label class="toggle" title="Run git fetch on every repo first (slower, but up to date)"><input type="checkbox" id="fetchBox" checked> Fetch first</label>
+    <button class="btn primary" id="buildBtn" type="submit">Build manifest</button>
+  </form>
+  <div class="conn" id="conn"><span class="dot"></span><span>Connecting…</span></div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="panel">
+      <h3>Recent tickets</h3>
+      <ul class="recent" id="recent"><li class="empty">Loading…</li></ul>
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const link = (text, url, cls = "") => url ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="${cls}">${esc(text)}</a>` : `<span class="${cls}">${esc(text)}</span>`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+let status = null, current = null, activeTab = "repos";
+
+const icons = {
+  ok: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>`,
+  warn: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`,
+};
+
+function toast(html, ms = 3500) {
+  const t = $("#toast");
+  t.innerHTML = html; t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const body = res.headers.get("content-type")?.includes("json") ? await res.json() : await res.text();
+  if (!res.ok) throw new Error(body?.error || res.statusText);
+  return body;
+}
+
+async function loadStatus() {
+  try {
+    status = await api("/api/status");
+    const c = $("#conn");
+    c.innerHTML = status.jiraConfigured
+      ? `<span class="dot on"></span><span>${status.repoCount} repos · Jira connected</span>`
+      : `<span class="dot off"></span><span title="Set JIRA_EMAIL and JIRA_API_TOKEN user env vars, then restart the UI">${status.repoCount} repos · Jira not connected</span>`;
+    renderRecent();
+  } catch (e) {
+    $("#conn").innerHTML = `<span class="dot off"></span><span>Server not reachable</span>`;
+  }
+}
+
+function renderRecent() {
+  const ul = $("#recent");
+  const items = status?.recent ?? [];
+  if (!items.length) { ul.innerHTML = `<li class="empty">Tickets you build appear here.</li>`; return; }
+  ul.innerHTML = items.map(r => `
+    <li><button data-key="${esc(r.key)}" class="${current?.key === r.key ? "active" : ""}">
+      <span class="k">${esc(r.key)}</span>
+      <span class="t">${r.warnings ? `<span class="badge warn">${r.warnings}</span>` : `<span class="badge ok">ready</span>`}</span>
+      <span class="s">${esc(r.summary || r.generated)}</span>
+    </button></li>`).join("");
+  ul.querySelectorAll("button").forEach(b => b.onclick = () => build(b.dataset.key, false));
+}
+
+function renderWelcome() {
+  $("#main").innerHTML = `
+    <div class="panel state">
+      ${icons.ok.replace('width="20" height="20"', 'width="36" height="36"')}
+      <h2>Everything a ticket touched, from git</h2>
+      <p>Enter a Jira key to collect its merge requests, commits, changed files and DB scripts across all repos.</p>
+      <ol>
+        <li>Name branches after the ticket: <code>MM-1234-short-title</code></li>
+        <li>Before QA, build the manifest and fix anything under <b>Needs attention</b></li>
+        <li>Post it to Jira so it's on the ticket when QA asks months later</li>
+      </ol>
+    </div>`;
+}
+
+function renderLoading(key, fetchFirst) {
+  $("#main").innerHTML = `
+    <div class="panel state">
+      <div class="spinner"></div>
+      <h2>${esc(key)}</h2>
+      <p>${fetchFirst ? `Fetching ${status?.repoCount ?? ""} repos, then scanning…` : "Scanning local git history…"}<br>
+      <span style="color:var(--faint)">${fetchFirst ? "Usually 15–60 seconds." : "Usually a few seconds."}</span></p>
+    </div>`;
+}
+
+async function build(key, fetchFirst) {
+  key = (key || "").trim().toUpperCase();
+  if (!key) { $("#keyInput").focus(); return; }
+  $("#keyInput").value = key;
+  history.replaceState(null, "", "#" + key);
+  $("#buildBtn").disabled = true;
+  renderLoading(key, fetchFirst);
+  try {
+    current = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}`);
+    renderReport();
+    loadStatus();
+  } catch (e) {
+    $("#main").innerHTML = `<div class="error"><b>Could not build ${esc(key)}.</b> ${esc(e.message)}</div>`;
+  } finally {
+    $("#buildBtn").disabled = false;
+  }
+}
+
+function spansHtml(spans) {
+  return spans.map(s => s.url ? link(s.t, s.url) : s.code ? `<code>${esc(s.t)}</code>` : esc(s.t)).join("");
+}
+
+function renderReport() {
+  const r = current, s = r.stats, i = r.issue;
+  const empty = r.repos.length === 0;
+  const tabs = [
+    ["repos", "Repositories", r.repos.length],
+    ["db", "Database", r.db.length],
+    ["files", "Files", s.files],
+    ["commits", "Commits", s.commits],
+    ...(r.foreign.length ? [["foreign", "Other tickets", r.foreign.length]] : []),
+  ];
+  if (!tabs.some(t => t[0] === activeTab)) activeTab = "repos";
+
+  $("#main").innerHTML = `
+    <section class="panel ticket">
+      <div class="title">
+        <div class="key">${link(r.key, r.jiraUrl)}</div>
+        <h1>${esc(i?.summary || (status?.jiraConfigured ? "Ticket details unavailable" : "Connect Jira to see the ticket title"))}</h1>
+        <div class="chips">
+          ${i ? `<span class="chip">Status <b>${esc(i.status)}</b></span><span class="chip">Assignee <b>${esc(i.assignee)}</b></span><span class="chip">Fix version <b>${esc(i.fixVersions)}</b></span>` : ""}
+          <span class="chip">Generated <b>${esc(r.generated)}</b></span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="refreshBtn" title="Fetch all repos and rebuild">Refresh</button>
+        <button class="btn" id="copyBtn">Copy Markdown</button>
+        <a class="btn" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">Download .md</a>
+        <button class="btn primary" id="postBtn" ${status?.jiraConfigured && !empty ? "" : "disabled"}
+          title="${status?.jiraConfigured ? "Create or replace the manifest comment on the ticket" : "Set JIRA_EMAIL and JIRA_API_TOKEN, then restart the UI"}">Post to Jira</button>
+      </div>
+    </section>
+
+    ${empty ? `<div class="panel state"><h2>Nothing found</h2><p>No commits, merges or branches reference <b>${esc(r.key)}</b> in any of the ${status?.repoCount ?? ""} repos.<br>Check the key, or tick <b>Fetch first</b> if the work was pushed from another machine.</p></div>` : `
+    ${r.warnings.length
+      ? `<div class="banner warn">${icons.warn}<div><h2>Needs attention before QA</h2><ul>${r.warnings.map(w => `<li>${spansHtml(w)}</li>`).join("")}</ul></div></div>`
+      : `<div class="banner ok">${icons.ok}<div><h2>Ready for QA</h2><p>All work is merged and every DB script is in a release tag.</p></div></div>`}
+
+    <div class="stats">
+      <div class="panel stat"><div class="v">${s.repos}</div><div class="l">Repositories</div></div>
+      <div class="panel stat"><div class="v">${s.mergeRequests}</div><div class="l">Merge requests</div></div>
+      <div class="panel stat"><div class="v">${s.merged}/${s.commits}</div><div class="l">Commits merged</div></div>
+      <div class="panel stat"><div class="v">${s.files}</div><div class="l">Files changed</div></div>
+      <div class="panel stat"><div class="v">${s.dbScripts}</div><div class="l">DB scripts</div>${r.db.some(d => d.warning) ? `<div class="sub" style="color:var(--warn)">${r.db.filter(d => d.warning).length} need attention</div>` : ""}</div>
+    </div>
+
+    <section class="panel">
+      <nav class="tabs" role="tablist">${tabs.map(([id, label, n]) => `<button role="tab" data-tab="${id}" class="${id === activeTab ? "active" : ""}">${label}<span class="n">${n}</span></button>`).join("")}</nav>
+      <div class="tabbody" id="tabbody"></div>
+    </section>`}`;
+
+  $("#refreshBtn").onclick = () => build(r.key, true);
+  $("#copyBtn").onclick = copyMarkdown;
+  $("#postBtn").onclick = postToJira;
+  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { activeTab = b.dataset.tab; renderReport(); });
+  if (!empty) renderTab();
+  renderRecent();
+}
+
+function renderTab() {
+  const r = current, body = $("#tabbody");
+  if (activeTab === "repos") {
+    body.innerHTML = `<div class="tablewrap"><table>
+      <thead><tr><th>Repository</th><th>Merge requests</th><th>Branches</th><th>Commits merged</th></tr></thead>
+      <tbody>${r.repos.map(repo => {
+        const merged = repo.commits.filter(c => c.inDefault).length;
+        return `<tr>
+          <td>${link(repo.name, repo.webUrl)}<div class="mono" style="color:var(--faint)">${esc(repo.defaultRef)}</div></td>
+          <td><div class="pills">${repo.merges.length ? repo.merges.map(m => `<span class="badge ${m.inDefault ? "ok" : "warn"}" title="${m.inDefault ? "In " + esc(repo.defaultRef) : "Not in " + esc(repo.defaultRef)}">${link(m.label, m.url)} · ${esc(m.date)}</span>`).join("") : `<span class="badge muted">none</span>`}</div></td>
+          <td><div class="pills">${repo.branches.length ? repo.branches.map(b => `<span class="badge ${b.unmerged ? "warn" : "muted"}" title="${esc(b.name)}">${esc(b.name.length > 34 ? b.name.slice(0, 34) + "…" : b.name)}${b.unmerged ? ` · ${b.unmerged} unmerged` : ""}</span>`).join("") : `<span class="badge muted">none</span>`}</div></td>
+          <td><span class="badge ${merged === repo.commits.length ? "ok" : "warn"}">${merged}/${repo.commits.length}</span></td>
+        </tr>`; }).join("")}</tbody></table></div>`;
+  }
+  else if (activeTab === "db") {
+    body.innerHTML = r.db.length ? `<p class="hint">Scripts in <code>db-migration-scripts</code> touched by this ticket, and whether they made it into a release tag.</p>
+      <div class="tablewrap"><table>
+      <thead><tr><th>Service</th><th>Folder</th><th>Kind</th><th>File</th><th>Status</th></tr></thead>
+      <tbody>${r.db.map(d => `<tr><td>${esc(d.service)}</td><td class="mono">${esc(d.location)}</td><td>${esc(d.kind)}</td><td><code>${esc(d.file)}</code></td><td><span class="badge ${d.warning ? "warn" : "ok"}">${esc(d.status)}</span></td></tr>`).join("")}</tbody>
+      </table></div>` : `<p class="hint">This ticket didn't touch any DB migration scripts.</p>`;
+  }
+  else if (activeTab === "files") {
+    body.innerHTML = `
+      ${r.highlights.length ? r.highlights.map(h => `<div class="hl"><h4>${esc(h.name)}</h4><ul class="files" style="border:1px solid var(--border);border-radius:10px">${h.hits.map(x => `<li><span class="badge muted">${esc(x.repo)}</span><code>${esc(x.path)}</code></li>`).join("")}</ul></div>`).join("") : ""}
+      <input class="filter" id="fileFilter" placeholder="Filter files…" aria-label="Filter files">
+      <div id="fileList">${r.repos.filter(x => x.files.length).map(repo => `
+        <details class="repo" open><summary><span class="name">${esc(repo.name)}</span><span class="meta">${plural(repo.files.length, "file")}</span></summary>
+        <ul class="files">${repo.files.map(f => `<li data-p="${esc((repo.name + " " + f.path).toLowerCase())}"><span class="fs ${esc(f.status)}" title="${({ A: "Added", M: "Modified", D: "Deleted", R: "Renamed" })[f.status] || esc(f.status)}">${esc(f.status)}</span><code>${esc(f.path)}</code></li>`).join("")}</ul></details>`).join("")}</div>`;
+    $("#fileFilter").oninput = e => {
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll("#fileList li").forEach(li => li.hidden = q && !li.dataset.p.includes(q));
+    };
+  }
+  else if (activeTab === "commits") {
+    body.innerHTML = r.repos.filter(x => x.commits.length).map(repo => `
+      <details class="repo" open><summary><span class="name">${esc(repo.name)}</span><span class="meta">${plural(repo.commits.length, "commit")}</span></summary>
+      <ul class="commits">${repo.commits.map(c => commitHtml(c, repo.defaultRef)).join("")}</ul></details>`).join("");
+  }
+  else if (activeTab === "foreign") {
+    body.innerHTML = `<p class="hint">Commits from other tickets that sit on this ticket's branches. Listed for reference only; their files and merge state are not counted.</p>
+      <ul class="commits" style="border:1px solid var(--border);border-radius:10px">${r.foreign.map(c => commitHtml(c, null, `<span class="badge muted">${esc(c.repo)}</span><span class="badge warn">${esc(c.otherKey)}</span>`)).join("")}</ul>`;
+  }
+}
+
+function commitHtml(c, defaultRef, extra = "") {
+  return `<li>
+    ${link(c.short, c.url, "sha")}
+    <span class="subj">${esc(c.subject)}</span>
+    <span class="by">${extra}<span>${esc(c.date)}</span><span>${esc(c.author)}</span>${c.inDefault ? `<span class="badge ok">merged</span>` : `<span class="badge warn">not in ${esc(defaultRef || "default branch")}</span>`}</span>
+    ${c.note ? `<span class="note">${esc(c.note)}</span>` : ""}
+  </li>`;
+}
+
+async function copyMarkdown() {
+  try {
+    const md = await api(`/api/markdown?key=${encodeURIComponent(current.key)}`);
+    await navigator.clipboard.writeText(md);
+    toast("Markdown copied to clipboard");
+  } catch (e) { toast("Copy failed: " + esc(e.message)); }
+}
+
+async function postToJira() {
+  const btn = $("#postBtn");
+  btn.disabled = true; btn.textContent = "Posting…";
+  try {
+    const res = await api(`/api/post?key=${encodeURIComponent(current.key)}`, { method: "POST", headers: { "X-Ledger": "1" } });
+    toast(`Posted to Jira · <a href="${esc(res.url)}" target="_blank" rel="noopener">open comment</a>`, 6000);
+  } catch (e) { toast("Jira: " + esc(e.message), 6000); }
+  finally { btn.disabled = false; btn.textContent = "Post to Jira"; }
+}
+
+$("#searchForm").onsubmit = e => { e.preventDefault(); build($("#keyInput").value, $("#fetchBox").checked); };
+
+(async () => {
+  await loadStatus();
+  const hashKey = decodeURIComponent(location.hash.slice(1));
+  if (hashKey) build(hashKey, false); else renderWelcome();
+})();
+</script>
+</body>
+</html>

@@ -20,6 +20,7 @@ No manual notes and no third-party tools: just Git, the Jira REST API and VS Cod
 ## Usage
 
 ```powershell
+dotnet run ledger.cs -- --ui               # browser UI on http://localhost:5199 (Ctrl+C to stop)
 dotnet run ledger.cs -- MM-1234            # build out/MM-1234.md
 dotnet run ledger.cs -- MM-1234 --fetch    # git fetch every repo first
 dotnet run ledger.cs -- MM-1234 --post     # also create/update the comment on the Jira ticket
@@ -28,6 +29,10 @@ dotnet run ledger.cs -- MM-1234 --post     # also create/update the comment on t
 ```
 
 In VS Code: *Terminal → Run Task → Ledger: ...*
+
+The UI (`ui.html`, served by `ledger.cs`) listens on localhost only. It builds the same manifest as the CLI,
+shows readiness for QA, merge requests, DB scripts, changed files and commits, and posts to Jira with one click.
+Deep link: `http://localhost:5199/#MM-1234`.
 
 ## Setup
 

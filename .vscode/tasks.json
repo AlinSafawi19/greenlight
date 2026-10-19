@@ -2,6 +2,14 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Ledger: open UI",
+      "type": "shell",
+      "command": "dotnet run ledger.cs -- --ui",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "label": "Ledger: build manifest",
       "type": "shell",
       "command": "dotnet run ledger.cs -- ${input:key} --fetch",
