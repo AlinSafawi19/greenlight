@@ -380,6 +380,9 @@ table.diff tr.hunk td { background: rgba(92, 140, 235, .08); color: #8fb2f5; pad
 .loading { padding: 36px 48px; }
 .loading .line { height: 12px; border-radius: 6px; margin: 12px 0; background: linear-gradient(90deg, var(--tint-1) 30%, var(--tint-2), var(--tint-1) 70%); background-size: 300% 100%; animation: sweep 1.6s linear infinite; }
 .loading .note { color: var(--ink-3); display: flex; gap: 9px; align-items: center; margin-bottom: 24px; }
+.loading .title-row { margin-top: 10px; }
+.progress .pg-t { display: inline-flex; align-items: center; gap: 7px; margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--hair-2); }
+.progress .pg-t .mono { color: var(--ink-2); }
 .fail { max-width: 520px; }
 .fail h2 { font-size: 16px; font-weight: 600; margin: 0 0 6px; }
 .fail p { color: var(--ink-2); margin: 0 0 16px; }
@@ -696,11 +699,19 @@ async function load(key, fetchFirst, inPlace = false) {
   const n = ++seq;
   // switching scope keeps the page and dims what is about to change, instead of blanking it
   if (inPlace && $(".page")) $(".page").classList.add("dim");
-  else $("#main").innerHTML = `<div class="loading">
-    <button class="btn back" id="back">${icon("back")}My tickets</button>
-    <div class="note"><span class="spinner"></span>${fetchFirst ? `Fetching ${pl(status?.repoCount ?? 0, "repository", "repositories")}, then checking ${esc(key)}` : `Checking ${esc(key)}`}</div>
-    <div class="line" style="width:38%;height:14px"></div><div class="line" style="width:64%;height:22px"></div><div class="line" style="width:30%"></div>
-    <div style="height:30px"></div>${[72, 58, 66, 49, 61, 54].map(w => `<div class="line" style="width:${w}%"></div>`).join("")}</div>`;
+  else {
+    // what we already know about the ticket shows straight away; only the check result is a placeholder
+    const k = tickets?.find(t => t.key === key) || (report?.issue?.key === key ? report.issue : null);
+    $("#main").innerHTML = `<div class="loading">
+      <button class="btn back" id="back">${icon("back")}My tickets</button>
+      ${k ? `<div class="path"><span class="mono">${esc(key)}</span></div>
+        <div class="title-row"><h2>${esc(k.summary)}</h2></div>
+        <div class="facts"><span class="tag">${typeTag(k.type, true)}</span><span class="tag">${jiraBadge(k.status, k.statusCategory)}</span>${k.assignee ? `<span><b>${esc(cap(k.assignee))}</b></span>` : ""}</div>
+        <div style="height:32px"></div>`
+      : `<div class="line" style="width:38%;height:14px"></div><div class="line" style="width:64%;height:22px"></div><div class="line" style="width:30%"></div><div style="height:30px"></div>`}
+      <div class="note"><span class="spinner"></span>${fetchFirst ? `Fetching ${pl(status?.repoCount ?? 0, "repository", "repositories")}, then checking ${esc(key)}` : `Checking ${esc(key)}`}</div>
+      ${[72, 58, 66, 49, 61, 54].map(w => `<div class="line" style="width:${w}%"></div>`).join("")}</div>`;
+  }
   if ($("#back")) $("#back").onclick = back;
   try {
     const r = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=1`);
@@ -1148,7 +1159,7 @@ async function checkAll() {
   checking = true; $("#checkAll").disabled = true;
   for (let k = 0; k < tickets.length; k++) {
     const t = tickets[k]; t._busy = true; renderList();
-    $("#progress").innerHTML = `<span class="spinner"></span>${k === 0 ? "Fetching, then checking" : "Checking"} ${k + 1} of ${tickets.length}`;
+    $("#progress").innerHTML = `<span class="spinner"></span>${k === 0 ? "Fetching, then checking" : "Checking"} ${k + 1} of ${tickets.length}<span class="pg-t">${typeTag(t.type)}<span class="mono">${esc(t.key)}</span>${jiraBadge(t.status, t.statusCategory)}</span>`;
     try {
       const r = await api(`/api/manifest?key=${encodeURIComponent(t.key)}&fetch=${k === 0 ? 1 : 0}&children=1&mine=1`);
       t.lastBuild = { generated: r.generated, stations: r.stations };
