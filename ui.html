@@ -1362,8 +1362,9 @@ function mainClicks(e) {
   const t = e.target;
   const tog = t.closest(".gtoggle");
   if (tog) { toggleGroup(tog.closest(".gbox")); syncAll(); return; }
-  const op = t.closest("[data-open]");
-  if (op && op.closest("#main") && !op.closest("#pop") && !op.closest(".dpage")) { openLocal(op.dataset.repo, op.dataset.open, op.dataset.path); return; }
+  // only the open buttons: steps and groups also carry data-open (their expanded state), which must not count
+  const op = t.closest("button[data-open][data-repo]");
+  if (op && !op.closest("#pop") && !op.closest(".dpage")) { openLocal(op.dataset.repo, op.dataset.open, op.dataset.path); return; }
   const pv = t.closest("[data-preview]");
   if (pv) { preview(pv.dataset.preview, pv.dataset.path, pv.dataset.shas.split(",")); return; }
   const ol = t.closest("[data-open-line]");
@@ -1446,7 +1447,7 @@ async function renderDiffPage() {
   $("#dpBack").onclick = leaveDiff;
   $$(".dpage [data-mode]").forEach(b => b.onclick = () => { d.mode = b.dataset.mode; $$(".dpage [data-mode]").forEach(x => x.setAttribute("aria-checked", x === b)); $("#dpBody").innerHTML = diffBody(d); });
   $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { toast(esc(e.message)); } };
-  $$(".dpage [data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
+  $$(".dpage button[data-open][data-repo]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
   $("#dpBody").onclick = e => { const b = e.target.closest(".lnb"); if (b) openLocal(d.repo, "code", d.path, +b.dataset.line); };
   if (!d.data) {
     try { d.data = await api("/api/diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); }
@@ -1820,7 +1821,7 @@ function renderReview() {
   $("#rvComment").onclick = () => reviewDialog(false);
   const more = $("#more"), pop = $("#pop");
   more.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; more.setAttribute("aria-expanded", !pop.hidden); if (!pop.hidden) document.addEventListener("click", () => { pop.hidden = true; more.setAttribute("aria-expanded", "false"); }, { once: true }); };
-  $$("#pop [data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open));
+  $$("#pop button[data-open][data-repo]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open));
   $$("#rvTabs [data-rt]").forEach(b => b.onclick = () => { r.tab = b.dataset.rt; $$("#rvTabs [data-rt]").forEach(x => x.setAttribute("aria-selected", x === b)); glide($("#rvTabs"), b); renderReviewPane(); soften($("#rvPane")); });
   renderReviewPane();
 }
