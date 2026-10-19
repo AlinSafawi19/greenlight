@@ -602,6 +602,11 @@ dialog[open] { animation: rise .16s var(--ease); }
   background: var(--tint-3); color: var(--ink); border-radius: 10px; padding: 10px 16px; box-shadow: 0 0 0 1px var(--hair-2), 0 16px 40px rgba(0,0,0,.5); display: flex; gap: 10px; align-items: center; max-width: min(520px, calc(100vw - 32px)); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .toast a { color: var(--ink); border-bottom: 1px solid var(--ink-3); margin-left: 4px; }
+.toast .tmsg { flex: 1; min-width: 0; }
+.toast .tx { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--ink-3); flex: none; margin-right: -6px; }
+.toast .tx:hover { background: rgba(255,255,255,.08); color: var(--ink); }
+.toast.err { box-shadow: 0 0 0 1px rgba(229, 103, 93, .55), 0 16px 40px rgba(0,0,0,.5); }
+.toast.err > .ico { color: var(--red); }
 
 @media (max-width: 1180px) { .body { grid-template-columns: 1fr; gap: 40px; } .side { position: static; } .figs { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 900px) {
@@ -733,7 +738,18 @@ const GROUP = { todo: "Needs you", wait: "Waiting", check: "Ready to hand over",
 let viewsScroll = 0, evTicket = null, evRepos = [], evMine = true, fileQuery = "", groupOpen = {};
 let status = null, tickets = null, selected = null, report = null, view = "all", openStep = null, tab = "repos", commitFilter = "", includeKids = true, checking = false, seq = 0;
 
-function toast(html, ms = 4200) { const t = $("#toast"); t.innerHTML = html; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms); }
+// messages always have a close button; errors are marked and stay until closed
+function toast(html, ms = 4200, error = false) {
+  const t = $("#toast");
+  t.classList.toggle("err", error);
+  t.setAttribute("role", error ? "alert" : "status");
+  t.innerHTML = `${error ? icon("alert") : ""}<span class="tmsg">${html}</span><button class="tx" aria-label="Close" title="Close">${icon("x")}</button>`;
+  t.querySelector(".tx").onclick = () => { clearTimeout(toast.t); t.classList.remove("show"); };
+  t.classList.add("show");
+  clearTimeout(toast.t);
+  if (!error && ms > 0) toast.t = setTimeout(() => t.classList.remove("show"), ms);
+}
+const fail = msg => toast(msg, 0, true);
 async function api(path, opts = {}) {
   if (opts.method && opts.method !== "GET") opts.headers = { "X-Ledger": "1", "Content-Type": "application/json" };
   const res = await fetch(path, opts);
@@ -831,7 +847,7 @@ function wireGitlab(msg) {
 
 async function loadTickets() {
   $("#list").innerHTML = Array(8).fill(`<div class="ghost-row"></div>`).join("");
-  try { tickets = await api("/api/my-tickets"); } catch (e) { tickets = []; toast(esc(e.message)); }
+  try { tickets = await api("/api/my-tickets"); } catch (e) { tickets = []; fail(esc(e.message)); }
   renderList();
 }
 
@@ -1407,7 +1423,7 @@ function slide(el, open) {
 const APP = { code: "VS Code", vs: "Visual Studio", folder: "File Explorer" };
 async function openLocal(repo, app, path, line) {
   try { await api("/api/open", { method: "POST", body: JSON.stringify({ repo, app, path: path || null, line: line || 1 }) }); toast(`Opening ${esc(path ? path.split("/").pop() : repo)}${line ? ` at line ${line}` : ""} in ${APP[app]}.`); }
-  catch (e) { toast(esc(e.message)); }
+  catch (e) { fail(esc(e.message)); }
 }
 
 /* change preview: its own page, side by side like VS Code's diff editor */
@@ -1446,7 +1462,7 @@ async function renderDiffPage() {
   document.title = `${name} · ${report.key} · Ledger`;
   $("#dpBack").onclick = leaveDiff;
   $$(".dpage [data-mode]").forEach(b => b.onclick = () => { d.mode = b.dataset.mode; $$(".dpage [data-mode]").forEach(x => x.setAttribute("aria-checked", x === b)); $("#dpBody").innerHTML = diffBody(d); });
-  $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { toast(esc(e.message)); } };
+  $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { fail(esc(e.message)); } };
   $$(".dpage button[data-open][data-repo]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
   $("#dpBody").onclick = e => { const b = e.target.closest(".lnb"); if (b) openLocal(d.repo, "code", d.path, +b.dataset.line); };
   if (!d.data) {
@@ -1512,12 +1528,12 @@ function wireTicket() {
   $("#fetchNow")?.addEventListener("click", () => load(r.key, true));
   $("#voidFetch")?.addEventListener("click", () => load(r.key, true));
   $("#voidKids")?.addEventListener("click", () => { includeKids = true; load(r.key, false); });
-  $("#copyCmd")?.addEventListener("click", async e => { try { await navigator.clipboard.writeText(e.currentTarget.dataset.cmd); toast("Command copied."); } catch { toast("Couldn't copy."); } });
+  $("#copyCmd")?.addEventListener("click", async e => { try { await navigator.clipboard.writeText(e.currentTarget.dataset.cmd); toast("Command copied."); } catch { fail("Couldn't copy."); } });
   $$("[data-go]").forEach(b => b.onclick = () => select(b.dataset.go));
   $("#post").onclick = post; $$("[data-post]").forEach(b => b.onclick = post);
   const more = $("#more"), pop = $("#pop");
   more.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; more.setAttribute("aria-expanded", !pop.hidden); if (!pop.hidden) document.addEventListener("click", () => { pop.hidden = true; more.setAttribute("aria-expanded", "false"); }, { once: true }); };
-  $("#copy").onclick = async () => { try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Checklist copied."); } catch (e) { toast(`Couldn't copy: ${esc(e.message)}`); } };
+  $("#copy").onclick = async () => { try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Checklist copied."); } catch (e) { fail(`Couldn't copy: ${esc(e.message)}`); } };
   $$(".stp-h").forEach(h => h.onclick = () => {
     const s = h.closest(".stp"), open = s.dataset.open !== "true";
     s.dataset.open = open; h.setAttribute("aria-expanded", open); slide(s.querySelector(".stp-b"), open); if (open) openStep = s.dataset.id;
@@ -1528,7 +1544,7 @@ async function post() {
   const bs = $$("#post, [data-post]");
   bs.forEach(b => { b.disabled = true; b.dataset.l = b.innerHTML; b.innerHTML = `<span class="spinner"></span>Posting`; });
   try { const res = await api(`/api/post?key=${encodeURIComponent(report.key)}`, { method: "POST" }); toast(`Handover posted to ${esc(report.key)}.<a href="${esc(res.url)}" target="_blank" rel="noopener">View in Jira</a>`, 6500); }
-  catch (e) { toast(`Jira didn't accept it: ${esc(e.message)}`, 6500); }
+  catch (e) { fail(`Jira didn't accept it: ${esc(e.message)}`); }
   finally { bs.forEach(b => { b.disabled = false; b.innerHTML = b.dataset.l; }); }
 }
 
@@ -1886,7 +1902,7 @@ async function reviewAct(what, body = "", requestChanges = false, jira = true) {
     reviews = null;
     await loadReview(r.project, r.iid);
     loadReviews().then(() => { railMode = "review"; renderList(); });
-  } catch (e) { toast(esc(e.message), 6000); }
+  } catch (e) { fail(esc(e.message)); }
 }
 
 function reviewDialog(requestChanges) {
