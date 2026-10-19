@@ -47,6 +47,10 @@ code { font: 11.5px var(--mono); color: var(--ink-2); overflow-wrap: anywhere; }
 .btn.line:hover:not(:disabled) { box-shadow: inset 0 0 0 1px #3a3d42; background: var(--tint-1); }
 .btn.solid { background: var(--ink); color: #121315; }
 .btn.solid:hover:not(:disabled) { background: #fff; color: #121315; }
+.btn.success { background: var(--green); color: #0b1a12; }
+.btn.success:hover:not(:disabled) { background: #6fcb9c; color: #0b1a12; }
+.btn.danger { color: var(--red); box-shadow: inset 0 0 0 1px rgba(229, 103, 93, .45); }
+.btn.danger:hover:not(:disabled) { background: var(--red); color: #1d0b09; box-shadow: none; }
 .btn.small { height: 26px; padding: 0 9px; font-size: 12.5px; gap: 6px; }
 .btn.only { width: 30px; padding: 0; justify-content: center; }
 .btn:disabled { opacity: .4; cursor: default; }
@@ -576,7 +580,7 @@ async function loadStatus() {
   const me = status.account;
   $("#whoSlot").innerHTML = me
     ? `<button class="who" id="whoBtn" aria-label="Account and settings"><span class="face">${esc(initials(me.name))}</span><span class="nm">${esc(cap(me.name.split(" ")[0]))}</span></button>`
-    : `<button class="btn solid" id="whoBtn">Connect Jira</button>`;
+    : `<button class="btn success" id="whoBtn">Connect Jira</button>`;
   $("#whoBtn").onclick = openSettings;
   $("#checkAll").hidden = !me;
 }
@@ -586,7 +590,7 @@ function openSettings() {
   d.innerHTML = `<div class="dlg-in">
       <h2 id="dlgTitle">${me ? "Account" : "Connect your Jira account"}</h2>
       ${me ? `
-        <div class="acct"><span class="face">${esc(initials(me.name))}</span><div style="flex:1;min-width:0">${esc(cap(me.name))}<small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div><button class="btn line small" id="disc">Disconnect</button></div>
+        <div class="acct"><span class="face">${esc(initials(me.name))}</span><div style="flex:1;min-width:0">${esc(cap(me.name))}<small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div><button class="btn danger small" id="disc">Disconnect</button></div>
         <p class="intro" style="margin:0">Your API token is kept in ${esc(me.source)} on this computer. Handovers are posted under your name.</p>` : `
         <p class="intro">Ledger lists the tickets assigned to you and posts handovers as you. The token is stored in Windows Credential Manager, never in the project.</p>
         ${status?.credentialsRejected ? `<p class="intro" style="color:var(--red);margin:0">The saved token was rejected. Enter a new one.</p>` : ""}
@@ -599,7 +603,7 @@ function openSettings() {
     <div class="dlg-f"><span class="msg" id="msg"></span>
       <button class="btn" id="cancel">Close</button>
       <button class="btn line" id="saveRoot">Save folder</button>
-      ${me ? "" : `<button class="btn solid" id="connect">Connect</button>`}
+      ${me ? "" : `<button class="btn success" id="connect">Connect</button>`}
     </div>`;
   const msg = (h, bad) => { const m = $("#msg"); m.className = "msg" + (bad ? " bad" : ""); m.innerHTML = h; };
   $("#cancel").onclick = () => d.close();
@@ -635,7 +639,7 @@ async function loadTickets() {
 function renderList() {
   if (!status?.account) {
     $("#count").textContent = ""; $("#views").innerHTML = "";
-    $("#list").innerHTML = `<div class="rail-note"><b>Not connected</b>Connect your Jira account to see the tickets assigned to you.<div style="margin-top:14px"><button class="btn solid" id="rc">Connect Jira</button></div></div>`;
+    $("#list").innerHTML = `<div class="rail-note"><b>Not connected</b>Connect your Jira account to see the tickets assigned to you.<div style="margin-top:14px"><button class="btn success" id="rc">Connect Jira</button></div></div>`;
     $("#rc").onclick = openSettings; return;
   }
   const all = tickets || [];
@@ -732,7 +736,7 @@ function blank() {
       <div class="keys"><span><kbd>J</kbd><kbd>K</kbd></span><span>Next and previous ticket</span><span><kbd>Ctrl K</kbd></span><span>Find a ticket</span><span><kbd>R</kbd></span><span>Fetch and check again</span></div>`
     : `<h2>Set up Ledger</h2><p>Two steps, once on this computer.</p>
       <ol class="setup">
-        <li><b>Connect your Jira account</b><div><p>Lists your tickets and posts handovers under your name.</p><button class="btn solid small" id="s1">Connect Jira</button></div></li>
+        <li><b>Connect your Jira account</b><div><p>Lists your tickets and posts handovers under your name.</p><button class="btn success small" id="s1">Connect Jira</button></div></li>
         <li class="${status?.repoCount ? "ok" : ""}"><b>Repositories folder</b><div><p>${status?.repoCount ? `${pl(status.repoCount, "repository", "repositories")} found in <code>${esc(status.reposRoot)}</code>` : "Point to the folder with your local clones."}</p><button class="btn line small" id="s2">${status?.repoCount ? "Change" : "Choose folder"}</button></div></li>
       </ol>`}
   </div></div>`;
