@@ -1473,7 +1473,6 @@ function glim(mood = "welcome", label = "") {
   const cheeks = mood === "welcome" || mood === "success" ? `<ellipse cx="20.5" cy="35" rx="2.6" ry="1.6" fill="#E2553E" opacity=".45"/><ellipse cx="43.5" cy="35" rx="2.6" ry="1.6" fill="#E2553E" opacity=".45"/>` : "";
   return `<svg class="glim" viewBox="0 0 64 64" ${a}>
     <path d="M16 12 12.5 4.5M48 12l3.5-7.5" stroke="#DCE1D8" stroke-width="2" stroke-linecap="round"/>
-    <rect x="4" y="22" width="9" height="20" rx="4.5" fill="#EEF1EA"/><rect x="51" y="22" width="9" height="20" rx="4.5" fill="#EEF1EA"/>
     <rect x="8" y="8" width="48" height="45" rx="18" fill="#9ACD3C"/>
     <path d="M14 14q18-7 36 0" fill="none" stroke="#C7EB7C" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>
     <rect x="12.5" y="12.5" width="39" height="36" rx="13.5" fill="#F4F6F0"/>
