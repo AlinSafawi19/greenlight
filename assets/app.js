@@ -1027,7 +1027,7 @@ async function checkAll() {
   let done = 0;
   for (let k = 0; k < tickets.length && !stopAll; k++) {
     const t = tickets[k]; t._busy = true; renderList();
-    $("#progress").innerHTML = `<span class="spinner"></span>${k === 0 ? "Fetching, then checking" : "Checking"} ${k + 1} of ${tickets.length}<span class="pg-t">${typeTag(t.type)}<span class="mono">${esc(t.key)}</span>${jiraBadge(t.status, t.statusCategory)}</span>`;
+    $("#progress").innerHTML = `<span class="spinner"></span><span class="pt" title="${k === 0 ? "Fetching every repository, then checking" : "Checking"} ${esc(t.key)}">${k === 0 ? "Fetching, then checking" : "Checking"} ${k + 1} of ${tickets.length} · <span class="mono">${esc(t.key)}</span></span>`;
     try {
       const r = await api(`/api/manifest?key=${encodeURIComponent(t.key)}&fetch=${k === 0 ? 1 : 0}&children=1&mine=1`);
       t.lastBuild = { generated: r.generated, stations: r.stations };
