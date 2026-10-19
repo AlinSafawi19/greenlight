@@ -168,6 +168,7 @@ async function loadStatus() {
   $("#whoBtn").onclick = openSettings;
   wireFaces($("#whoSlot"));
   $("#checkAll").hidden = !me;
+  $(".finder-wrap").hidden = !me;   // searching your tickets needs Jira
   navCounts();
 }
 
@@ -371,6 +372,7 @@ function move(dir) {
 function select(key, fetchFirst = false) {
   key = (key || "").trim().toUpperCase();
   if (!key) return;
+  if (!status?.account) { openSettings(); return; }
   if (section !== "tickets") setSection("tickets");
   if (location.hash.slice(1) !== key) history.pushState(null, "", "#" + key);
   load(key, fetchFirst);
@@ -1447,7 +1449,7 @@ function initFinder() {
   el.on("select2:open", () => { const f = document.querySelector(".finder-wrap .select2-search__field"); if (f) { f.placeholder = "Key or words from the title"; f.focus(); } });
   el.on("select2:select", e => { const k = e.params.data.id; el.val(null).trigger("change.select2"); select(k); });
 }
-const openFind = () => jq("#finderSel").select2("open");
+const openFind = () => { if (status?.account) jq("#finderSel").select2("open"); };
 
 /* ─────────────────────────── Glim ───────────────────────────
    The mascot, drawn as a small vector so it stays crisp and themed at every size. Same character as the
@@ -1527,12 +1529,13 @@ function setSection(s) {
    #tickets (home) · #MM-1 · #MM-1/diff · #reviews · #review/<project>/<iid> · #worklogs[/<monday>] */
 function route() {
   const raw = decodeURIComponent(location.hash.slice(1)), low = raw.toLowerCase();
-  if (raw.startsWith("review/")) { setSection("reviews"); reviewRoute(); return; }
+  if (raw.startsWith("review/")) { setSection("reviews"); if (!status?.gitlab) return reviewsBlank(); reviewRoute(); return; }
   if (low === "" || low === "tickets" || low === "overview") { setSection("tickets"); selected = null; report = null; diffState = null; $("#split").classList.remove("open"); renderList(); return blank(); }
   if (low === "reviews") { setSection("reviews"); reviewing = null; $("#split").classList.remove("open"); return reviewsBlank(); }
   if (low.startsWith("worklogs")) { setSection("worklogs"); return renderWorklogs(raw.split("/")[1] || null); }
   const [k, sub] = raw.toUpperCase().split("/");
   setSection("tickets");
+  if (!status?.account) return blank();   // tickets come from Jira: nothing to show until it's connected
   if (sub === "DIFF" && diffState && report?.key === k) return renderDiffPage();
   if (k && report?.key === k && !sub) { diffState = null; $("#split").classList.add("open"); renderTicket(); return; }
   if (k) load(k, false); else blank();
