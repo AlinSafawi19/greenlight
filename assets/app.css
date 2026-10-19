@@ -185,7 +185,7 @@ kbd { font: 500 11px var(--sans); color: var(--gl-text-muted); background: var(-
 .ws { display: grid; grid-template-rows: 60px minmax(0, 1fr); min-width: 0; min-height: 0; }
 .hd { display: flex; align-items: center; gap: 18px; padding: 0 16px 0 18px; border-bottom: 1px solid var(--gl-border-soft); background: var(--gl-sidebar); min-width: 0; }
 .brand { display: flex; align-items: center; gap: 9px; flex: none; font: 700 18px/1 var(--display); letter-spacing: -.035em; color: var(--gl-text); }
-:root[data-theme="dark"] .brand .glim { width: 30px; height: 30px; flex: none; }
+.brand .glim { width: 30px; height: 30px; flex: none; }
 
 /* main tabs */
 .tnav { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; overflow-x: auto; scrollbar-width: none; padding: 2px; }
