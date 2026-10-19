@@ -320,6 +320,11 @@ table.tb a:hover { text-decoration: underline; text-decoration-color: var(--ink-
 .gbox-b, .stp-b { overflow: hidden; }
 .gbox-b { padding: 0 0 12px 24px; }
 .acts-i { display: inline-flex; gap: 2px; }
+/* app icons in their own colours: VS Code blue, Visual Studio purple */
+[data-open="code"] .ico, .i-code .ico { color: #3ea6f2; }
+[data-open="vs"] .ico { color: #a77bea; }
+.acts-i .btn.only.small[data-open="code"]:hover .ico, .facts-i .btn.only.small[data-open="code"]:hover .ico, #ddCode:hover .ico { color: #6cbcf7; }
+.acts-i .btn.only.small[data-open="vs"]:hover .ico, .facts-i .btn.only.small[data-open="vs"]:hover .ico { color: #c09cf3; }
 .acts-i .slot { width: 26px; height: 26px; flex: none; }
 /* counts and actions share one line height, so numbers sit level with the icons on every row */
 table.tb td.num, table.tb th.num { width: 96px; white-space: nowrap; }
@@ -1112,7 +1117,7 @@ async function openLocal(repo, app, path) {
 async function preview(repo, path, shas) {
   const d = $("#diffDlg");
   d.innerHTML = `<div class="dd-h"><div class="dd-t">${repoTag(repo)}<span class="mono">${esc(path)}</span></div>
-    <div class="dd-a"><button class="btn line small" id="ddCode">${icon("vscode")}Open diff in VS Code</button>${openBtns(repo, path, null)}<button class="btn only small" id="ddClose" aria-label="Close">${icon("x")}</button></div></div>
+    <div class="dd-a"><button class="btn line small" id="ddCode"><span class="i-code">${icon("vscode")}</span>Open diff in VS Code</button>${openBtns(repo, path, null)}<button class="btn only small" id="ddClose" aria-label="Close">${icon("x")}</button></div></div>
     <div class="dd-b" id="ddBody"><div class="s2-msg" style="padding:20px"><span class="spinner"></span>Loading the changes</div></div>`;
   d.showModal();
   $("#ddClose").onclick = () => d.close();
