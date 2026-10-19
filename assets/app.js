@@ -401,7 +401,7 @@ async function load(key, fetchFirst, inPlace = false, retrying = false) {
   selected = key; commitFilter = ""; openStep = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
-  document.title = `${key} · greenlight.`;
+  document.title = `${key} · greenlight`;
   crumb(`<a href="#tickets">My tickets</a><span class="sl">/</span><span class="mono">${esc(key)}</span>`);
   const n = ++seq;
   // switching scope keeps the page and dims what is about to change, instead of blanking it;
@@ -478,7 +478,7 @@ function back() {
 }
 
 function blank() {
-  document.title = "My tickets · greenlight.";
+  document.title = "My tickets · greenlight";
   crumb(`<b>My tickets</b>`);
   const me = status?.account;
   $("#main").innerHTML = `<div class="blank"><div class="blank-in">
@@ -509,7 +509,7 @@ function renderTicket() {
     : ["check", "Ready to hand over", `Nothing blocks QA. Confirm ${pl(confirm, "item")}, then post the handover.`];
 
   crumb(`<a href="#tickets">My tickets</a><span class="sl">/</span><span class="mono">${esc(r.key)}</span>`);
-  document.title = `${r.key} · greenlight.`;
+  document.title = `${r.key} · greenlight`;
   const mood = nothing ? "empty" : ov === "todo" ? "warning" : ov === "wait" ? "thinking" : "success";
   $("#main").innerHTML = `<div class="page">
     <button class="btn back" id="back">${icon("back")}My tickets</button>
@@ -1237,7 +1237,7 @@ async function loadReview(project, iid, retrying = false) {
     if (retrying) await settle(500);
     if (!reviewing || reviewing.iid !== iid || reviewing.project !== project) return;
     reviewing = { ...r, project, iid, fileQuery: "" };
-    document.title = `!${iid} · ${r.repo} · greenlight.`;
+    document.title = `!${iid} · ${r.repo} · greenlight`;
     crumb(`<a href="#reviews">Reviews</a><span class="sl">/</span>${repoTag(r.repo)}<span class="mono">!${iid}</span>`);
     renderReview();
   } catch (e) {
@@ -1559,7 +1559,7 @@ function reviewRoute() {
 window.addEventListener("popstate", route);
 
 function reviewsBlank() {
-  document.title = "Reviews · greenlight.";
+  document.title = "Reviews · greenlight";
   crumb(`<b>Reviews</b>`);
   if (!status?.gitlab) {
     $("#main").innerHTML = `<div class="blank"><div class="blank-in">${glim("thinking")}<h2>Connect GitLab for reviews</h2>
@@ -1600,7 +1600,7 @@ const mondayOf = d => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDa
 const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return localDay(d); };
 
 async function renderWorklogs(from, pickDay) {
-  document.title = "Worklogs · greenlight.";
+  document.title = "Worklogs · greenlight";
   crumb(`<b>Worklogs</b>`);
   if (!status?.account) { $("#main").innerHTML = `<div class="page">${emptyNote("Connect Jira", "Worklogs come from Jira.", `<button class="btn success small" id="wlc">Connect Jira</button>`, "welcome")}</div>`; $("#wlc").onclick = openSettings; return; }
   const today = localDay(new Date());
