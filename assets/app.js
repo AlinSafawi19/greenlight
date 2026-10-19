@@ -1427,15 +1427,32 @@ function applyTheme(pref) {
   document.documentElement.dataset.themePref = pref;
   $$("#themes [data-theme-set]").forEach(b => b.setAttribute("aria-checked", b.dataset.themeSet === pref));
 }
-$$("#themes [data-theme-set]").forEach(b => b.onclick = () => { try { localStorage.setItem("gl-theme", b.dataset.themeSet); } catch { } applyTheme(b.dataset.themeSet); });
+$$("#themes [data-theme-set]").forEach(b => b.onclick = () => {
+  // in the narrow sidebar only the current theme shows: clicking it switches to the other one
+  let pick = b.dataset.themeSet;
+  if ($("#app").classList.contains("sb-mini") && b.getAttribute("aria-checked") === "true") pick = pick === "dark" ? "light" : "dark";
+  try { localStorage.setItem("gl-theme", pick); } catch { }
+  applyTheme(pick);
+});
 applyTheme(document.documentElement.dataset.themePref || "dark");
 
 $("#brandGlim").innerHTML = glim("welcome");
-if (document.documentElement.dataset.sb === "mini") $("#app").classList.add("sb-mini");
-$("#sbToggle").onclick = () => {
-  const mini = $("#app").classList.toggle("sb-mini");
+// collapsed: your choice, or automatically while the window is narrow
+let sbChoice = document.documentElement.dataset.sb === "mini";
+const narrow = matchMedia("(max-width: 1100px) and (min-width: 901px)");
+function syncSidebar() {
+  const mini = sbChoice || narrow.matches;
+  $("#app").classList.toggle("sb-mini", mini);
   $("#sbToggle").setAttribute("aria-pressed", mini);
-  try { localStorage.setItem("gl-sb", mini ? "mini" : "full"); } catch { }
+  $("#sbToggle").title = $("#sbToggle").ariaLabel = mini ? "Expand the sidebar" : "Collapse the sidebar";
+}
+syncSidebar();
+narrow.addEventListener("change", syncSidebar);
+$("#sbToggle").onclick = () => {
+  sbChoice = !$("#app").classList.contains("sb-mini");
+  if (!sbChoice && narrow.matches) { $("#app").classList.remove("sb-mini"); $("#sbToggle").setAttribute("aria-pressed", false); return; }   // a peek while narrow
+  try { localStorage.setItem("gl-sb", sbChoice ? "mini" : "full"); } catch { }
+  syncSidebar();
 };
 $("#menuBtn").onclick = e => { e.stopPropagation(); $("#app").classList.toggle("sb-open"); };
 document.addEventListener("click", e => { if ($("#app").classList.contains("sb-open") && !e.target.closest(".sb") && !e.target.closest("#menuBtn")) $("#app").classList.remove("sb-open"); });

@@ -225,16 +225,27 @@ kbd { font: 500 11px var(--sans); color: var(--gl-text-muted); background: var(-
 .who .nm small { display: block; font-weight: 400; font-size: 12px; color: var(--gl-text-muted); }
 img.face { object-fit: cover; background: var(--gl-fill-2); }
 .face { width: 28px; height: 28px; border-radius: 50%; background: var(--gl-soft-green); color: var(--gl-text); display: grid; place-items: center; font: 700 11px var(--sans); letter-spacing: .02em; flex: none; }
-/* collapsed sidebar: icons only, with tooltips */
-.app.sb-mini .brand .word, .app.sb-mini .sb-search span, .app.sb-mini .sb-search kbd, .app.sb-mini .nav-i .lbl, .app.sb-mini .nav-i .cnt,
-.app.sb-mini .sb-sec, .app.sb-mini .recent, .app.sb-mini .themes .tl, .app.sb-mini .who .nm { display: none; }
-.app.sb-mini .sb-top { flex-direction: column; padding: 14px 0 8px; }
-.app.sb-mini .sb-search { margin: 4px 10px 10px; justify-content: center; padding: 0; }
-.app.sb-mini .nav-i { justify-content: center; padding: 0; }
-.app.sb-mini .themes { flex-direction: column; }
-.app.sb-mini .who { justify-content: center; padding: 0; }
-.app.sb-mini .nav-i .cnt.hot { display: block; position: absolute; top: 6px; right: 8px; min-width: 8px; height: 8px; padding: 0; font-size: 0; }
-[data-tip] { position: relative; }
+/* collapsed sidebar: icons only, with tooltips. Nothing re-flows: the width animates, icons keep their
+   place, and labels fade and slide out of the way, so collapsing and expanding is one smooth motion. */
+.app { transition: grid-template-columns .36s cubic-bezier(.32, .72, 0, 1); }
+.sb, .sb * { --fade: opacity .2s ease, transform .3s cubic-bezier(.32, .72, 0, 1), visibility 0s; }
+.sb-top { position: relative; height: 56px; padding: 0 12px 0 17px; }
+.sb-toggle { position: absolute; right: 12px; top: 14px; }
+.brand { transition: opacity .2s ease; }
+.brand .word, .sb-search span, .sb-search kbd, .nav-i .lbl, .nav-i .cnt, .sb-sec, .recent, .themes .tl, .who .nm, .who > .ico {
+  transition: opacity .22s ease .08s, transform .32s cubic-bezier(.32, .72, 0, 1), visibility 0s linear 0s; white-space: nowrap; }
+.sb-search { padding: 0 11px; }
+.nav-i { padding: 0 12px; }
+.who { padding: 0 6px; }
+.themes button { transition: flex-grow .36s cubic-bezier(.32, .72, 0, 1), padding .36s cubic-bezier(.32, .72, 0, 1), opacity .2s ease, background .15s, color .15s; flex: 1 1 0; min-width: 0; overflow: hidden; }
+.app.sb-mini .brand { opacity: 0; pointer-events: none; }
+.app.sb-mini .sb-toggle { right: 18px; }
+.app.sb-mini :is(.brand .word, .sb-search span, .sb-search kbd, .nav-i .lbl, .nav-i .cnt:not(.hot), .sb-sec, .recent, .themes .tl, .who .nm, .who > .ico) {
+  opacity: 0; transform: translateX(-6px); visibility: hidden; pointer-events: none;
+  transition: opacity .14s ease, transform .2s ease, visibility 0s linear .2s; }
+.app.sb-mini .themes button[aria-checked="false"] { flex-grow: 0; padding: 0; opacity: 0; pointer-events: none; }
+.app.sb-mini .themes button[aria-checked="true"] { flex-grow: 1; }
+.app.sb-mini .nav-i .cnt.hot { position: absolute; top: 7px; left: 25px; min-width: 8px; height: 8px; padding: 0; font-size: 0; }[data-tip] { position: relative; }
 .app.sb-mini [data-tip]:hover::after { content: attr(data-tip); position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); z-index: 60; white-space: nowrap; background: var(--gl-text); color: var(--gl-bg); font-size: 12.5px; font-weight: 500; padding: 5px 9px; border-radius: 6px; pointer-events: none; }
 
 /* workspace */
@@ -923,8 +934,7 @@ input.date { cursor: pointer; background-image: none; }
   .body { grid-template-columns: 1fr; gap: 32px; } .side { position: static; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .figs { grid-template-columns: repeat(4, 1fr); } .grid2 { grid-template-columns: 1fr; }
 }
-@media (max-width: 1100px) { .app:not(.sb-open) { --sb-w: 64px; } .app:not(.sb-open) .brand .word, .app:not(.sb-open) .sb-search span, .app:not(.sb-open) .sb-search kbd, .app:not(.sb-open) .nav-i .lbl, .app:not(.sb-open) .nav-i .cnt:not(.hot), .app:not(.sb-open) .sb-sec, .app:not(.sb-open) .recent, .app:not(.sb-open) .themes .tl, .app:not(.sb-open) .who .nm { display: none; }
-  .app:not(.sb-open) .sb-top { flex-direction: column; padding: 14px 0 8px; } .app:not(.sb-open) .sb-search { margin: 4px 10px 10px; justify-content: center; padding: 0; } .app:not(.sb-open) .nav-i, .app:not(.sb-open) .who { justify-content: center; padding: 0; } .app:not(.sb-open) .themes { flex-direction: column; }
+@media (max-width: 1100px) {
   .split { grid-template-columns: 300px minmax(0, 1fr); } }
 @media (max-width: 900px) {
   .app { grid-template-columns: minmax(0, 1fr); }
