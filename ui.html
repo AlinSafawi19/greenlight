@@ -691,7 +691,7 @@ function select(key, fetchFirst = false) {
 }
 
 async function load(key, fetchFirst, inPlace = false) {
-  if (key !== selected) { evTicket = key; evRepos = []; fileQuery = ""; groupOpen = {}; }
+  if (key !== selected) { evTicket = "*"; evRepos = []; fileQuery = ""; groupOpen = {}; }
   selected = key; commitFilter = ""; openStep = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
@@ -811,8 +811,8 @@ function renderTicket() {
     <section class="ev">
       <div class="evbar">
         ${r.scope.length > 1 ? `<select id="evTicket" aria-label="Ticket">
-          ${r.scope.map(t => `<option value="${esc(t.key)}" ${t.key === evTicket ? "selected" : ""}>${esc(t.key)}${t.key === r.key ? " (this ticket)" : ""} · ${esc(t.summary)}</option>`).join("")}
-          <option value="*" ${evTicket === "*" ? "selected" : ""}>All ${r.scope.length} of your tickets here</option></select>` : ""}
+          <option value="*" ${evTicket === "*" ? "selected" : ""}>All ${r.scope.length} of your tickets here</option>
+          ${r.scope.map(t => `<option value="${esc(t.key)}" ${t.key === evTicket ? "selected" : ""}>${esc(t.key)}${t.key === r.key ? " (this ticket)" : ""} · ${esc(t.summary)}</option>`).join("")}</select>` : ""}
         <select id="evRepos" multiple aria-label="Repositories"></select>
         <label class="tgl"><input type="checkbox" id="evMine" ${evMine ? "checked" : ""}><span class="knob"></span>Only my commits</label>
       </div>
