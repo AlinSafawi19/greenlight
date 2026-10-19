@@ -206,6 +206,22 @@ table.tb a:hover { text-decoration: underline; text-decoration-color: var(--ink-
 .cm .m { grid-column: 2; font-size: 12px; color: var(--ink-3); }
 .cm .nt { grid-column: 2; font-size: 12px; color: var(--amber); }
 
+.void { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 520px; margin: 9vh auto 0; }
+.void-art { width: 120px; height: 64px; margin-bottom: 18px; }
+.void h3 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
+.void p { color: var(--ink-2); margin: 0; max-width: 46ch; line-height: 1.6; }
+.void-acts { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+.void-acts:empty { display: none; }
+.void-start { margin-top: 36px; padding-top: 22px; border-top: 1px solid var(--hair); width: 100%; color: var(--ink-3); font-size: 12.5px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.void .cmd { display: flex; align-items: center; gap: 4px; max-width: 100%; background: var(--tint-1); border-radius: 8px; padding: 4px 4px 4px 12px; }
+.void .cmd code { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* plain-looking links carry a small arrow at their top right */
+.ln { position: relative; padding-right: 10px; }
+.ln::after { content: ""; position: absolute; right: 0; top: .05em; width: 7px; height: 7px; background: currentColor; opacity: .7;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 6'%3E%3Cpath d='M1 5 5 1M1.6 1H5v3.4' fill='none' stroke='black' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 6'%3E%3Cpath d='M1 5 5 1M1.6 1H5v3.4' fill='none' stroke='black' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  transition: opacity .15s, transform .15s; }
+.ln:hover::after { opacity: 1; transform: translate(1px, -1px); }
 .blank { height: 100%; display: grid; place-items: center; padding: 40px; }
 .blank-in { width: min(380px, 100%); color: var(--ink-3); }
 .blank-in h2 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; margin: 18px 0 6px; color: var(--ink); }
@@ -576,7 +592,7 @@ function renderTicket() {
 
   $("#main").innerHTML = `<div class="page">
     <button class="btn back" id="back">${icon("back")}My tickets</button>
-    <div class="path">${r.ancestors.map(a => `<button data-go="${esc(a.key)}">${esc(a.type)} <span class="mono">${esc(a.key)}</span></button><span class="sl">/</span>`).join("")}<a class="mono" href="${esc(r.jiraUrl)}" target="_blank" rel="noopener" title="Open in Jira">${esc(r.key)}</a></div>
+    <div class="path">${r.ancestors.map(a => `<button class="ln" data-go="${esc(a.key)}">${esc(a.type)} <span class="mono">${esc(a.key)}</span></button><span class="sl">/</span>`).join("")}<a class="mono ln" href="${esc(r.jiraUrl)}" target="_blank" rel="noopener" title="Open in Jira">${esc(r.key)}</a></div>
     <div class="title-row">
       <h2>${esc(i?.summary || r.key)}</h2>
       <div class="acts">
@@ -596,11 +612,11 @@ function renderTicket() {
       ${me ? `<label><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}>Include my sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
     </div>
 
-    <div class="state">
+    ${nothing ? voidHtml(r, kids) : `<div class="state">
       <div class="say">${mark(v[0])}${v[1]}</div>
       <div class="sub">${v[2]}</div>
       <div class="fresh">Checked ${esc(ago(r.generated))}<br>${r.fetched ? "with the latest from the server" : `from your local copies · <button id="fetchNow">fetch latest</button>`}</div>
-    </div>
+    </div>`}
     ${nothing ? "" : `<div class="meter" aria-hidden="true">${STEPS.map((s, k) => `<div class="${k === at ? "here" : ""}"><i class="${st[k]}"></i><span>${s.name}</span></div>`).join("")}</div>
 
     <div class="body">
@@ -615,7 +631,7 @@ function renderTicket() {
           <div class="fig"><div class="v">${r.stats.merged}<small> / ${r.stats.commits}</small></div><div class="l">Commits merged</div></div>
           <div class="fig"><div class="v">${r.stats.dbScripts}</div><div class="l">Database scripts</div></div>
         </div></div>
-        ${kids ? `<div><h3 class="h3">Your tickets in scope</h3><ul class="scope">${r.scope.map(t => `<li><button data-go="${esc(t.key)}"><span class="k"><span class="mono">${esc(t.key)}</span><span>${t.commits ? `${t.merged}/${t.commits} merged` : "no code"}</span></span><span class="s">${esc(t.summary)}</span></button></li>`).join("")}</ul></div>` : ""}
+        ${kids ? `<div><h3 class="h3">Your tickets in scope</h3><ul class="scope">${r.scope.map(t => `<li><button data-go="${esc(t.key)}"><span class="k"><span class="mono ln">${esc(t.key)}</span><span>${t.commits ? `${t.merged}/${t.commits} merged` : "no code"}</span></span><span class="s">${esc(t.summary)}</span></button></li>`).join("")}</ul></div>` : ""}
       </aside>
     </div>
 
@@ -627,6 +643,29 @@ function renderTicket() {
   </div>`;
   wireTicket();
   if (!nothing) renderPane();
+}
+
+/* nothing in git yet: say why, and give the one command that fixes it */
+function voidHtml(r, kids) {
+  const slug = (r.issue?.summary || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").split("-").slice(0, 6).join("-");
+  const cmd = `git switch -c ${r.key}${slug ? "-" + slug : ""}`;
+  return `<div class="void">
+    <svg class="void-art" viewBox="0 0 120 64" aria-hidden="true">
+      <path d="M8 32h104" stroke="var(--hair-2)" stroke-width="1.5" stroke-dasharray="3 5" stroke-linecap="round"/>
+      ${[16, 36, 56, 76, 96].map(x => `<circle cx="${x}" cy="32" r="5.5" fill="var(--canvas)" stroke="var(--hair-2)" stroke-width="1.5"/>`).join("")}
+      <circle cx="16" cy="32" r="5.5" fill="var(--canvas)" stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="2.4 2.6"/>
+    </svg>
+    <h3>No work found for ${esc(r.key)} yet</h3>
+    <p>None of your ${pl(status?.repoCount ?? 0, "repository", "repositories")} has a commit, branch or merge request that mentions this ticket${kids ? ` or your ${pl(kids, "sub-ticket")}` : ""}${r.fetched ? "" : ", based on your local copies"}.</p>
+    <div class="void-acts">
+      ${r.fetched ? "" : `<button class="btn solid" id="voidFetch">${icon("refresh")}Fetch latest and check again</button>`}
+      ${!includeKids && status?.account ? `<button class="btn line" id="voidKids">Include my sub-tickets</button>` : ""}
+    </div>
+    <div class="void-start">
+      <span>Starting now? Create the branch with the ticket key so Ledger can follow it:</span>
+      <div class="cmd"><code>${esc(cmd)}</code><button class="btn only small" id="copyCmd" title="Copy command" aria-label="Copy command" data-cmd="${esc(cmd)}">${icon("copy")}</button></div>
+    </div>
+  </div>`;
 }
 
 function stepHtml(s, k) {
@@ -650,8 +689,8 @@ function renderPane() {
   const r = report, p = $("#pane");
   if (tab === "repos") {
     p.innerHTML = `<div class="wide"><table class="tb"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th class="r">Merged</th></tr></thead><tbody>
-      ${r.repos.map(x => `<tr><td>${x.webUrl ? `<a href="${esc(x.webUrl)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
-        <td>${x.merges.map(m => m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="ink-3">${day(m.date)}</span>` : `<span class="ink-3">Direct merge, ${day(m.date)}</span>`).join("<br>") || `<span class="ink-3">None</span>`}</td>
+      ${r.repos.map(x => `<tr><td>${x.webUrl ? `<a class="ln" href="${esc(x.webUrl)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
+        <td>${x.merges.map(m => m.url ? `<a class="ln" href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="ink-3">${day(m.date)}</span>` : `<span class="ink-3">Direct merge, ${day(m.date)}</span>`).join("<br>") || `<span class="ink-3">None</span>`}</td>
         <td>${x.branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--amber)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="ink-3">None</span>`}</td>
         <td class="r">${x.commits.filter(c => c.inDefault).length} <span class="ink-3">of ${x.commits.length}</span></td></tr>`).join("")}</tbody></table></div>`;
   } else if (tab === "files") {
@@ -668,7 +707,7 @@ function renderPane() {
     p.innerHTML = `<p class="ink-3" style="margin:0 0 12px">Commits from tickets outside this scope that sit on these branches. They don't count toward any step.</p>${r.foreign.map(c => cmHtml(c, null, `${esc(c.otherKey)} · ${esc(c.repo)} · `)).join("")}`;
   }
 }
-const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
+const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono ${c.url ? "ln" : ""}" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
   <span class="m">${pre}${esc(c.author)} · ${day(c.date)} · ${c.inDefault ? "merged" : `<span style="color:var(--amber)">not in ${esc(branch(ref) || "main")}</span>`}</span>${c.note ? `<span class="nt">${esc(c.note)}</span>` : ""}</div>`;
 
 function wireTicket() {
@@ -678,6 +717,9 @@ function wireTicket() {
   $("#kids")?.addEventListener("change", e => { includeKids = e.target.checked; load(r.key, false); });
   $("#recheck").onclick = () => load(r.key, true);
   $("#fetchNow")?.addEventListener("click", () => load(r.key, true));
+  $("#voidFetch")?.addEventListener("click", () => load(r.key, true));
+  $("#voidKids")?.addEventListener("click", () => { includeKids = true; load(r.key, false); });
+  $("#copyCmd")?.addEventListener("click", async e => { try { await navigator.clipboard.writeText(e.currentTarget.dataset.cmd); toast("Command copied."); } catch { toast("Couldn't copy."); } });
   $$("[data-go]").forEach(b => b.onclick = () => select(b.dataset.go));
   $("#post").onclick = post; $$("[data-post]").forEach(b => b.onclick = post);
   const more = $("#more"), pop = $("#pop");
