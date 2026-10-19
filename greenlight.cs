@@ -205,6 +205,7 @@ class Ledger
         if (!Directory.Exists(path)) throw new Exception($"Folder not found: {path}");
         LoadRepos(path);
         if (Repos.Count == 0) throw new Exception($"No git repositories found in {path}");
+        RepoIndex.Warm(Repos);
         settings.ReposRoot = path;
         settings.Save();
     }
@@ -241,6 +242,10 @@ class Ledger
     public async Task<Report> Build(string key, bool fetch, Action<string> progress, bool includeChildren = true, bool onlyMine = false, Action<JsonObject>? emit = null)
     {
         emit ??= _ => { };
+        // GREENLIGHT_TIMING=1 prints how long each phase took
+        var clock = Stopwatch.StartNew();
+        var timing = Environment.GetEnvironmentVariable("GREENLIGHT_TIMING") == "1";
+        void Lap(string what) { if (timing) Console.Error.WriteLine($"[timing] {key} {what}: {clock.ElapsedMilliseconds} ms"); clock.Restart(); }
         IssueInfo? issue = null;
         var scope = new List<IssueInfo>();
         var ancestors = new List<IssueInfo>();
@@ -282,10 +287,11 @@ class Ledger
             progress($"Fetching {Repos.Count} repos...");
             var fetched = 0;
             Step("fetch", 0);
-            Parallel.ForEach(Repos, r => { Git.Run(r, "fetch", "--all", "--prune", "--quiet"); Step("fetch", Interlocked.Increment(ref fetched)); });
+            Parallel.ForEach(Repos, new ParallelOptions { MaxDegreeOfParallelism = 10 }, r => { Git.Run(r, "fetch", "--all", "--prune", "--quiet"); Git.Forget(r); Step("fetch", Interlocked.Increment(ref fetched)); });
         }
 
         var keys = new HashSet<string>(scope.Select(s => s.Key).Prepend(key), StringComparer.OrdinalIgnoreCase);
+        Lap("jira + fetch");
         progress($"Scanning {Repos.Count} repos for {keys.Count} ticket(s)...");
         var alternation = string.Join("|", keys.OrderByDescending(k => k.Length).Select(Regex.Escape));
         var keyRx = new Regex($@"(?<![A-Za-z0-9])(?:{alternation})(?!\d)", RegexOptions.IgnoreCase);
@@ -296,12 +302,14 @@ class Ledger
         Parallel.ForEach(Repos, r => { var res = Scanner.Scan(r, keys, keyRx, anyKeyRx, dbCfg); if (res is not null) found.Add(res); Step("scan", Interlocked.Increment(ref scanned)); });
         var results = found.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
+        Lap("scan");
         progress("Working out what QA needs...");
         var paths = Repos.ToDictionary(Path.GetFileName, StringComparer.OrdinalIgnoreCase);
         var tagDetails = new ConcurrentDictionary<string, TagDetail>(StringComparer.OrdinalIgnoreCase);
         var stations = QaPrep.Compute(issue, results, dbCfg, name => paths.GetValueOrDefault(name), tagDetails,
             s => emit(new JsonObject { ["type"] = "station", ["station"] = ReportJson.Station(s) }));
 
+        Lap("steps");
         var doc = Manifest.Build(key, issue, scope, results, highlights, dbCfg, (int)cfg["jiraMaxFilesPerRepo"]!);
         QaPrep.AddToDoc(doc, stations);
 
@@ -313,6 +321,7 @@ class Ledger
         var report = new Report(key, DateTime.Now, issue, scope, ancestors, results, doc, Manifest.Warnings(key, results),
                                 Manifest.Highlights(results, highlights, dbCfg), markdown, mdPath, stations, subs, tagDetails);
         File.WriteAllText(Path.Combine(OutDir, $"{key}.json"), ReportJson.Summary(report).ToJsonString());
+        Lap("manifest + save");
         return report;
     }
 
@@ -441,6 +450,100 @@ static class Git
     public static string PatchId(string repo, string sha) =>
         RunWithInput(repo, Run(repo, "diff-tree", "-p", "--no-color", sha), "patch-id", "--stable").Split(' ')[0].Trim();
 
+    // One git process for many commits: `git log --no-walk` with the shas on stdin, split back per commit.
+    // The format must start with %x1e%H so each record begins with its sha.
+    public static Dictionary<string, string> Many(string repo, IEnumerable<string> shas, params string[] args)
+    {
+        var list = shas.Distinct().ToList();
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (list.Count == 0) return map;
+        var text = Cached(repo, string.Join("\n", list) + "\n", ["log", "--no-walk=unsorted", "--stdin", .. args]);
+        foreach (var rec in text.Split('\x1e', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var nl = rec.IndexOfAny(['\n', '\x1f']);
+            var sha = (nl < 0 ? rec : rec[..nl]).Trim();
+            if (sha.Length >= 40) map[sha[..40]] = rec;
+        }
+        return map;
+    }
+
+    // patch id per commit (same change under any sha), for many commits in two processes
+    public static Dictionary<string, string> PatchIds(string repo, IEnumerable<string> shas)
+    {
+        var list = shas.Distinct().ToList();
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (list.Count == 0) return map;
+        var patches = Cached(repo, string.Join("\n", list) + "\n", "log", "--no-walk=unsorted", "--stdin", "-p", "--no-color", "--format=commit %H");
+        foreach (var l in Lines(Cached(repo, patches, "patch-id", "--stable")))
+            if (l.Split(' ') is [var pid, var sha]) map[sha] = pid;
+        return map;
+    }
+
+    // changes whenever any branch, remote branch or tag moves; cheap enough to ask every check
+    // Every branch, remote branch and tag with the commit it points at, and a fingerprint of them all.
+    // Remembered until a file watcher sees the repository's refs change (or a minute passes, as a safety net),
+    // so an unchanged repository costs no git process at all.
+    public record RefSet(string Print, List<(string Sha, string Name)> Refs);
+    static readonly ConcurrentDictionary<string, (DateTime At, RefSet Value)> refSets = new(StringComparer.OrdinalIgnoreCase);
+    static readonly ConcurrentDictionary<string, FileSystemWatcher> watchers = new(StringComparer.OrdinalIgnoreCase);
+
+    public static RefSet Refs(string repo)
+    {
+        Watch(repo);
+        if (refSets.TryGetValue(repo, out var p) && DateTime.UtcNow - p.At < TimeSpan.FromSeconds(watchers.ContainsKey(repo) ? 60 : 5)) return p.Value;
+        var text = Run(repo, "for-each-ref", "--format=%(objectname)%09%(refname)", "refs/heads", "refs/remotes", "refs/tags");
+        var refs = Lines(text).Select(l => l.Split('\t')).Where(x => x.Length == 2).Select(x => (x[0], x[1])).ToList();
+        var v = new RefSet(Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(text))), refs);
+        refSets[repo] = (DateTime.UtcNow, v);
+        return v;
+    }
+    public static string Fingerprint(string repo) => Refs(repo).Print;
+    public static void Forget(string repo) => refSets.TryRemove(repo, out _);
+
+    static void Watch(string repo)
+    {
+        var dir = Path.Combine(repo, ".git");
+        if (watchers.ContainsKey(repo) || !Directory.Exists(dir)) return;   // a worktree's .git is a file: fall back to the 5 s memo
+        try
+        {
+            var w = new FileSystemWatcher(dir) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName };
+            void Changed(object? _, FileSystemEventArgs e)
+            {
+                var rel = e.FullPath[dir.Length..].TrimStart('\\', '/');
+                if (rel.StartsWith("refs") || rel.StartsWith("packed-refs") || rel.StartsWith("HEAD") || rel.StartsWith("FETCH_HEAD")) Forget(repo);
+            }
+            w.Changed += Changed; w.Created += Changed; w.Deleted += Changed; w.Renamed += (s, e) => Changed(s, e);
+            w.Error += (_, _) => { Forget(repo); };
+            w.EnableRaisingEvents = true;
+            if (!watchers.TryAdd(repo, w)) w.Dispose();
+        }
+        catch { /* no watcher: the short memo still applies */ }
+    }
+
+    // A read whose answer depends only on the repository's objects and refs: remembered while they don't change.
+    static readonly ConcurrentDictionary<string, string> reads = new();
+    public static string Cached(string repo, string? input, params string[] args)
+    {
+        var id = $"{repo}\x1f{Fingerprint(repo)}\x1f{string.Join('\x1f', args)}\x1f{(input is null ? "" : Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(input))))}";
+        if (reads.TryGetValue(id, out var hit)) return hit;
+        var v = RunWithInput(repo, input, args);
+        if (reads.Count > 3000) reads.Clear();
+        return reads[id] = v;
+    }
+
+    // default branch and remote address, read from the .git folder when possible (no process)
+    public static string DefaultRef(string repo)
+    {
+        try
+        {
+            var f = Path.Combine(repo, ".git", "refs", "remotes", "origin", "HEAD");
+            if (File.Exists(f) && File.ReadAllText(f).Trim() is var t && t.StartsWith("ref: refs/remotes/")) return t["ref: refs/remotes/".Length..];
+        }
+        catch { }
+        var r = Run(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD").Trim();
+        return r == "" ? "HEAD" : r;
+    }
+
     public static IEnumerable<string> Lines(string s) =>
         s.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -459,6 +562,67 @@ static class Git
         u = Regex.Replace(u, @"^(https?://)[^@/]+@", "$1");
         return Regex.Replace(u, @"\.git$", "");
     }
+}
+
+// ───────────────────────────── commit index: every repository's history, in memory ─────────────────────────────
+
+record IndexedCommit(string Sha, string[] Parents, string Date, string Subject, string Body)
+{
+    public string Message => Body.Length == 0 ? Subject : Subject + "\n" + Body;
+}
+
+// One `git log` over all branches, remote branches and tags, kept until those refs move. Ticket checks search it
+// in memory instead of walking history with git for every ticket, every repository, every time.
+sealed class RepoIndex
+{
+    public required string Print { get; init; }
+    public required string DefaultRef { get; init; }
+    public required string Web { get; init; }
+    public required List<(string Sha, string Name)> Refs { get; init; }
+    public required List<IndexedCommit> Commits { get; init; }
+    public required Dictionary<string, IndexedCommit> BySha { get; init; }
+
+    // commits reachable from a tip, walked in memory
+    public HashSet<string> Reachable(string tip, HashSet<string>? stopAt = null)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var todo = new Stack<string>();
+        todo.Push(tip);
+        while (todo.Count > 0)
+        {
+            var s = todo.Pop();
+            if (stopAt?.Contains(s) == true || !seen.Add(s)) continue;
+            if (BySha.TryGetValue(s, out var c)) foreach (var p in c.Parents) todo.Push(p);
+        }
+        return seen;
+    }
+
+    HashSet<string>? onDefault;
+    public HashSet<string> OnDefault(string repo) => onDefault ??=
+        Refs.FirstOrDefault(r => r.Name == $"refs/remotes/{DefaultRef}" || r.Name == $"refs/heads/{DefaultRef}") is { Sha.Length: > 0 } tip
+            ? Reachable(tip.Sha)
+            : Git.Lines(Git.Run(repo, "rev-list", DefaultRef)).ToHashSet(StringComparer.Ordinal);
+
+    static readonly ConcurrentDictionary<string, RepoIndex> all = new(StringComparer.OrdinalIgnoreCase);
+
+    public static RepoIndex For(string repo)
+    {
+        var refs = Git.Refs(repo);
+        if (all.TryGetValue(repo, out var ix) && ix.Print == refs.Print) return ix;
+        var commits = new List<IndexedCommit>();
+        foreach (var r in Git.Records(Git.Run(repo, "log", "--branches", "--remotes", "--tags", "--date=short", "--format=%x1e%H%x1f%P%x1f%ad%x1f%s%x1f%b")))
+            if (r.Length >= 5)
+                commits.Add(new IndexedCommit(r[0], r[1].Split(' ', StringSplitOptions.RemoveEmptyEntries), r[2], r[3], r[4].Trim()));
+        var bySha = new Dictionary<string, IndexedCommit>(commits.Count, StringComparer.Ordinal);
+        foreach (var c in commits) bySha.TryAdd(c.Sha, c);
+        ix = new RepoIndex { Print = refs.Print, DefaultRef = Git.DefaultRef(repo), Web = Git.WebUrl(repo), Refs = refs.Refs, Commits = commits, BySha = bySha };
+        all[repo] = ix;
+        return ix;
+    }
+
+    // built for every repository when Greenlight starts, so the first check is as quick as the rest
+    public static void Warm(IEnumerable<string> repos) =>
+        Task.Run(() => Parallel.ForEach(repos, new ParallelOptions { MaxDegreeOfParallelism = 12 }, r => { try { For(r); } catch { } }));
 }
 
 // ───────────────────────────── scanning ─────────────────────────────
@@ -484,41 +648,59 @@ static class Scanner
     static readonly Regex MergeRequest = new(@"See merge request (\S+)!(\d+)");
 
     // keys: the ticket plus, for a story or epic, every child ticket in scope. keyRx matches any of them.
+    // A repository whose branches and tags haven't moved gives the same answer for the same keys: reuse it.
+    static readonly ConcurrentDictionary<string, RepoResult?> cache = new();
+
     public static RepoResult? Scan(string repo, IReadOnlySet<string> keys, Regex keyRx, Regex anyKeyRx, DbConfig dbCfg)
     {
-        var defaultRef = Git.Run(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD").Trim();
-        if (defaultRef == "") defaultRef = "HEAD";
-        var web = Git.WebUrl(repo);
+        var id = $"{repo}|{string.Join(",", keys.Order(StringComparer.OrdinalIgnoreCase))}|{Git.Fingerprint(repo)}";
+        if (cache.TryGetValue(id, out var hit)) return hit;
+        var res = ScanFresh(repo, keys, keyRx, anyKeyRx, dbCfg);
+        if (cache.Count > 4000) cache.Clear();
+        cache[id] = res;
+        return res;
+    }
+
+    static RepoResult? ScanFresh(string repo, IReadOnlySet<string> keys, Regex keyRx, Regex anyKeyRx, DbConfig dbCfg)
+    {
+        var ix = RepoIndex.For(repo);
+        var defaultRef = ix.DefaultRef;
+        var web = ix.Web;
+        // everything on the default branch, merges included, walked in memory and only when something matched
+        var inDefaultL = new Lazy<HashSet<string>>(() => ix.OnDefault(repo));
         var sources = new Dictionary<string, string>();
         var via = new Dictionary<string, string>();   // sha -> key of the branch/merge that brought it in
-        var greps = keys.Select(k => $"--grep={k}").ToArray();
         string? KeyIn(string text) => keyRx.Match(text) is { Success: true } m ? m.Value.ToUpperInvariant() : null;
+        bool Mentions(string text) { foreach (var k in keys) if (text.Contains(k, StringComparison.OrdinalIgnoreCase)) return true; return false; }
 
-        // 1. commits whose message mentions a key (branches and tags only: --all would include stash entries)
-        foreach (var r in Git.Records(Git.Run(repo, ["log", "--branches", "--remotes", "--tags", "--no-merges", "-i", "-F", .. greps, "--format=%H%x1f%B%x1e"])))
-            if (r.Length >= 2 && KeyIn(r[1]) is { } msgKey && sources.TryAdd(r[0], "message")) via[r[0]] = msgKey;
-
+        // 1. commits whose message mentions a key (branches, remote branches and tags; never stash entries)
         // 2. commits brought in by merges of a branch named after a key
         var merges = new List<MergeInfo>();
-        foreach (var r in Git.Records(Git.Run(repo, ["log", "--branches", "--remotes", "--tags", "--merges", "-i", "-F", .. greps, "--date=short",
-                                              "--format=%H%x1f%P%x1f%ad%x1f%s%x1f%b%x1e"])))
+        foreach (var c in ix.Commits)
         {
-            if (r.Length < 5) continue;
-            var m = MergeSubject.Match(r[3]);
+            var msg = c.Message;
+            if (!Mentions(msg)) continue;
+            if (c.Parents.Length < 2)
+            {
+                if (KeyIn(msg) is { } msgKey && sources.TryAdd(c.Sha, "message")) via[c.Sha] = msgKey;
+                continue;
+            }
+            var m = MergeSubject.Match(c.Subject);
             if (!m.Success || KeyIn(m.Groups[1].Value) is not { } mergeKey) continue;   // skips "Merge branch 'main' into MM-…"
-            var parents = r[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parents.Length < 2) continue;
-            foreach (var sha in Git.Lines(Git.Run(repo, "rev-list", "--no-merges", $"{parents[0]}..{parents[1]}")))
-                if (sources.TryAdd(sha, "merge")) via[sha] = mergeKey;
-            var mr = MergeRequest.Match(r[4]);
+            // what the merge brought in: reachable from the merged branch but not from the first parent
+            var before = ix.Reachable(c.Parents[0]);
+            foreach (var sha in ix.Reachable(c.Parents[1], before))
+                if (ix.BySha.TryGetValue(sha, out var bc) && bc.Parents.Length < 2 && sources.TryAdd(sha, "merge")) via[sha] = mergeKey;
+            var mr = MergeRequest.Match(c.Body);
             var mrUrl = mr.Success && web != "" ? $"{web}/-/merge_requests/{mr.Groups[2].Value}" : null;
-            merges.Add(new MergeInfo(r[0], r[2], m.Groups[1].Value, m.Groups[2].Success ? m.Groups[2].Value : null, mrUrl,
-                                     IsAncestor(repo, r[0], defaultRef)));
+            merges.Add(new MergeInfo(c.Sha, c.Date, m.Groups[1].Value, m.Groups[2].Success ? m.Groups[2].Value : null, mrUrl,
+                                     inDefaultL.Value.Contains(c.Sha)));
         }
 
         // 3. branches named after the key: work not yet in the default branch.
         //    --cherry-pick drops commits whose patch already landed under another sha (rebased / squashed MRs).
-        var refs = Git.Lines(Git.Run(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"))
+        var refs = ix.Refs.Select(r => r.Name).Where(n => n.StartsWith("refs/heads/") || n.StartsWith("refs/remotes/"))
+                      .Select(n => n.StartsWith("refs/heads/") ? n["refs/heads/".Length..] : n["refs/remotes/".Length..])
                       .Where(b => !b.EndsWith("/HEAD") && keyRx.IsMatch(b)).ToList();
         var branchShas = new List<(string Name, HashSet<string> Unmerged)>();
         foreach (var group in refs.GroupBy(b => b.StartsWith("origin/") ? b["origin/".Length..] : b))
@@ -537,19 +719,38 @@ static class Scanner
 
         if (sources.Count == 0 && merges.Count == 0 && branchShas.Count == 0) return null;
 
-        var inDefault = Git.Lines(Git.Run(repo, "rev-list", defaultRef)).ToHashSet();
+        var inDefault = inDefaultL.Value;
+        // every matched commit in one git process: header fields, then its files
+        var shown = Git.Many(repo, sources.Keys, "--date=short", "--name-status", "-M", "--format=%x1e%H%x1f%h%x1f%an%x1f%ad%x1f%s%x1f%ae%x1f%at");
+
+        // A commit outside the default branch whose patch is already in it counts as merged (rebased or squashed
+        // MRs). Same rule as `rev-list --cherry-pick`, done once for all commits: compare patch ids against what
+        // landed on the default branch since the oldest of them was written.
+        var outside = sources.Keys.Where(s => !inDefault.Contains(s)).ToList();
+        var landed = new HashSet<string>(StringComparer.Ordinal);
+        if (outside.Count > 0)
+        {
+            var oldest = outside.Select(s => shown.TryGetValue(s, out var t) && long.TryParse(t.Split('\n')[0].Split('\x1f').ElementAtOrDefault(6)?.Trim(), out var at) ? at : 0)
+                                .DefaultIfEmpty(0).Min();
+            var upstream = Git.Lines(Git.Run(repo, "rev-list", "--no-merges", $"--since={Math.Max(0, oldest - 86400)}", defaultRef)).ToList();
+            if (upstream.Count > 0)
+            {
+                var ids = Git.PatchIds(repo, outside.Concat(upstream));
+                var onDefault = upstream.Select(s => ids.GetValueOrDefault(s)).Where(p => p is not null).ToHashSet(StringComparer.Ordinal);
+                foreach (var s in outside) if (ids.TryGetValue(s, out var pid) && onDefault.Contains(pid)) landed.Add(s);
+            }
+        }
+
         var commits = new List<Commit>();
         var copies = new List<string>();
         foreach (var (sha, source) in sources)
         {
-            // a commit outside the default branch whose patch is already in it counts as merged
-            var merged = inDefault.Contains(sha) ||
-                         !Git.Lines(Git.Run(repo, "rev-list", "--no-merges", "--cherry-pick", "--right-only", $"{defaultRef}...{sha}")).Contains(sha);
+            var merged = inDefault.Contains(sha) || landed.Contains(sha);
             if (merged && !inDefault.Contains(sha)) { copies.Add(sha); continue; }   // copy of a patch already in the default branch
-            var text = Git.Run(repo, "show", "--date=short", "--name-status", "-M", "--format=%x1e%h%x1f%an%x1f%ad%x1f%s%x1f%ae", sha);
+            if (!shown.TryGetValue(sha, out var text)) continue;
             var lines = text.Split('\n');
-            var head = lines.FirstOrDefault(l => l.StartsWith('\x1e'))?.TrimStart('\x1e').Split('\x1f');
-            if (head is null || head.Length < 4) continue;
+            var head = lines[0].Split('\x1f').Skip(1).ToArray();   // drop the full sha
+            if (head.Length < 4) continue;
             var files = new List<(string, string)>();
             foreach (var l in lines.Skip(1))
             {
@@ -572,13 +773,14 @@ static class Scanner
         // otherwise this ticket's change would look like someone else's work.
         if (copies.Count > 0)
         {
-            var twins = commits.Where(c => c.InDefault && !keyRx.IsMatch(c.Subject))
-                               .GroupBy(c => Git.PatchId(repo, c.Sha)).Where(g => g.Key != "")
-                               .ToDictionary(g => g.Key, g => g.First());
+            var candidates = commits.Where(c => c.InDefault && !keyRx.IsMatch(c.Subject)).ToList();
+            var ids = Git.PatchIds(repo, candidates.Select(c => c.Sha).Concat(copies));
+            var twins = candidates.Where(c => ids.ContainsKey(c.Sha)).GroupBy(c => ids[c.Sha])
+                                  .ToDictionary(g => g.Key, g => g.First());
             foreach (var sha in copies)
             {
-                var subject = Git.Run(repo, "log", "-1", "--format=%s", sha).Trim();
-                if (KeyIn(subject) is not { } copyKey || !twins.TryGetValue(Git.PatchId(repo, sha), out var twin)) continue;
+                var subject = shown.TryGetValue(sha, out var t) ? t.Split('\n')[0].Split('\x1f').ElementAtOrDefault(4) ?? "" : "";
+                if (KeyIn(subject) is not { } copyKey || !ids.TryGetValue(sha, out var pid) || !twins.TryGetValue(pid, out var twin)) continue;
                 twin.Note = $"contains {copyKey}'s change {sha[..8]} \"{subject}\", merged under this commit's message";
                 twin.Ticket = copyKey;
             }
@@ -1008,8 +1210,8 @@ static class QaPrep
             // a release whose dev seed has data but whose QA seed files are empty placeholders
             if (path is null) continue;
             var folder = $"{db.Root}/{svc}/{release}/DataSeeding/";
-            var seedFiles = Git.Lines(Git.Run(path, "ls-tree", "--name-only", dbRepo.DefaultRef, folder)).ToList();
-            int Content(string f) => Git.Run(path, "show", $"{dbRepo.DefaultRef}:{f}").Split('\n')
+            var seedFiles = Git.Lines(Git.Cached(path, null, "ls-tree", "--name-only", dbRepo.DefaultRef, folder)).ToList();
+            int Content(string f) => Git.Cached(path, null, "show", $"{dbRepo.DefaultRef}:{f}").Split('\n')
                 .Count(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith("--"));
             var dev = seedFiles.Where(f => Path.GetFileName(f).StartsWith("data-seeding-dev")).Sum(Content);
             var qaFiles = seedFiles.Where(f => Path.GetFileName(f).StartsWith("data-seeding-qa")).ToList();
@@ -1042,10 +1244,11 @@ static class QaPrep
             var keys = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
             var scopes = 0;
             var sqlAccess = new SortedSet<string>(StringComparer.Ordinal);
+            var patches = Git.Many(path, Own(r).Select(c => c.Sha), "-p", "--unified=0", "--no-color", "--format=%x1e%H");
             foreach (var c in Own(r))
             {
                 string? file = null;
-                foreach (var raw in Git.Run(path, "show", "--format=", "--unified=0", "--no-color", c.Sha).Split('\n'))
+                foreach (var raw in patches.GetValueOrDefault(c.Sha, "").Split('\n'))
                 {
                     var line = raw.TrimEnd('\r');
                     if (line.StartsWith("+++ ")) { file = line.StartsWith("+++ b/") ? line[6..] : null; continue; }
@@ -1290,12 +1493,26 @@ static class Tags
     }
 
     // Tags that hold every one of the commits (oldest first), the repository's newest tag, and the version that would come next.
+    static readonly ConcurrentDictionary<string, TagDetail> cache = new();
+
     public static TagDetail For(string repo, IEnumerable<string> shas, string web)
+    {
+        var list0 = shas.Distinct().Order(StringComparer.Ordinal).ToList();
+        var id = $"{repo}|{Git.Fingerprint(repo)}|{string.Join(",", list0)}";
+        if (cache.TryGetValue(id, out var hit)) return hit;
+        if (cache.Count > 4000) cache.Clear();
+        return cache[id] = Compute(repo, list0, web);
+    }
+
+    static TagDetail Compute(string repo, List<string> shas, string web)
     {
         var all = List(repo, web);
         var latest = all.FirstOrDefault();
         HashSet<string>? common = null;
-        foreach (var sha in shas)
+        // a tag holding the newest commits of each line of work holds their ancestors too: only those need asking
+        var list = shas.Distinct().ToList();
+        if (list.Count > 1) list = Git.Lines(Git.Run(repo, ["merge-base", "--independent", .. list])).ToList();
+        foreach (var sha in list)
         {
             var with = List(repo, web, "--contains", sha).Select(t => t.Name).ToHashSet();
             common = common is null ? with : common.Where(with.Contains).ToHashSet();
@@ -2121,6 +2338,7 @@ static class UiServer
 
     public static async Task Run(Ledger ledger, bool open)
     {
+        RepoIndex.Warm(ledger.Repos);   // history of every repository, read once in the background
         HttpListener? listener = null;
         var port = 0;
         for (var p = 5199; p < 5210 && listener is null; p++)
