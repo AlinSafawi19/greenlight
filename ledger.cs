@@ -146,6 +146,7 @@ record Commit(string Sha, string Short, string Author, string Date, string Subje
               string? OtherKey, List<(string Status, string Path)> Files)
 {
     public string? Note { get; set; }   // e.g. carries this ticket's change under another ticket's message
+    public bool IsForeign => OtherKey is not null && Note is null;
 }
 record MergeInfo(string Sha, string Date, string SourceBranch, string? Target, string? MrUrl, bool InDefault);
 record BranchInfo(string Name, int Unmerged);
@@ -191,7 +192,7 @@ static class Scanner
         //    --cherry-pick drops commits whose patch already landed under another sha (rebased / squashed MRs).
         var refs = Git.Lines(Git.Run(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"))
                       .Where(b => !b.EndsWith("/HEAD") && keyRx.IsMatch(b)).ToList();
-        var branches = new List<BranchInfo>();
+        var branchShas = new List<(string Name, HashSet<string> Unmerged)>();
         foreach (var group in refs.GroupBy(b => b.StartsWith("origin/") ? b["origin/".Length..] : b))
         {
             var unmerged = new HashSet<string>();
@@ -202,10 +203,10 @@ static class Scanner
                     sources.TryAdd(sha, "branch");
                 }
             var pushed = group.Any(b => b.StartsWith("origin/"));
-            branches.Add(new BranchInfo(group.Key + (pushed ? "" : " (local only, never pushed)"), unmerged.Count));
+            branchShas.Add((group.Key + (pushed ? "" : " (local only, never pushed)"), unmerged));
         }
 
-        if (sources.Count == 0 && merges.Count == 0 && branches.Count == 0) return null;
+        if (sources.Count == 0 && merges.Count == 0 && branchShas.Count == 0) return null;
 
         var inDefault = Git.Lines(Git.Run(repo, "rev-list", defaultRef)).ToHashSet();
         var commits = new List<Commit>();
@@ -248,9 +249,16 @@ static class Scanner
             }
         }
 
+        // Another ticket's commit that only rode along on this ticket's branch is listed, but neither its files
+        // nor its merge state count toward this ticket.
+        var foreign = commits.Where(c => c.IsForeign).Select(c => c.Sha).ToHashSet();
+        var branches = branchShas
+            .Select(b => new BranchInfo(b.Name, b.Unmerged.Count(s => !foreign.Contains(s))))
+            .ToList();
+
         // aggregate file status across the feature: A wins over M, a later D marks it deleted
         var agg = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        foreach (var c in commits)
+        foreach (var c in commits.Where(c => !c.IsForeign))
             foreach (var (st, path) in c.Files)
                 agg[path] = agg.TryGetValue(path, out var prev) && prev == "A" && st != "D" ? "A" : st == "R" ? "A" : st;
 
@@ -427,8 +435,8 @@ static class Manifest
                 r.Merges.Count == 0 ? T("-") : r.Merges.SelectMany((m, i) => (i > 0 ? T(", ") : [])
                     .Concat(m.MrUrl is null ? T($"merge {m.Sha[..8]} ({m.Date})") : L($"!{m.MrUrl.Split('/')[^1]} ({m.Date})", m.MrUrl))).ToList(),
                 r.Branches.Count == 0 ? T("-") : T(string.Join(", ", r.Branches.Select(x => x.Name).Distinct())),
-                T(r.Commits.Count.ToString()),
-                T($"{r.Commits.Count(c => c.InDefault)}/{r.Commits.Count} ({r.DefaultRef})"),
+                T(r.Commits.Count(c => !c.IsForeign).ToString()),
+                T($"{r.Commits.Count(c => !c.IsForeign && c.InDefault)}/{r.Commits.Count(c => !c.IsForeign)} ({r.DefaultRef})"),
             }).ToList()));
 
         var dbItems = repos.SelectMany(r => r.Db).ToList();
@@ -465,17 +473,26 @@ static class Manifest
                 : [.. items.Take(maxFiles), T($"... and {items.Count - maxFiles} more (full list in out/{key}.md)")])));
         }
 
+        List<Span> CommitLine(RepoResult r, Commit c) =>
+        [
+            r.WebUrl == "" ? new(c.Short, Code: true) : new(c.Short, $"{r.WebUrl}/-/commit/{c.Sha}"),
+            new($" {c.Date} {c.Author} - {c.Subject}{(c.InDefault ? "" : "  (not in " + r.DefaultRef + ")")}" +
+                (c.Note is not null ? $"  ({c.Note})" : "")),
+        ];
+
         b.Add(new FullOnly(new Heading(3, "Commits")));
-        foreach (var r in repos)
+        foreach (var r in repos.Where(r => r.Commits.Any(c => !c.IsForeign)))
         {
             b.Add(new FullOnly(new Para(T(r.Name))));
-            b.Add(new FullOnly(new Bullets(r.Commits.Select(c => new List<Span>
-            {
-                r.WebUrl == "" ? new(c.Short, Code: true) : new(c.Short, $"{r.WebUrl}/-/commit/{c.Sha}"),
-                new($" {c.Date} {c.Author} - {c.Subject}{(c.InDefault ? "" : "  (not in " + r.DefaultRef + ")")}" +
-                    (c.Note is not null ? $"  ({c.Note})"
-                     : c.OtherKey is null ? "" : $"  ({c.OtherKey} work that came in through this ticket's branch)")),
-            }).ToList())));
+            b.Add(new FullOnly(new Bullets(r.Commits.Where(c => !c.IsForeign).Select(c => CommitLine(r, c)).ToList())));
+        }
+
+        var foreign = repos.SelectMany(r => r.Commits.Where(c => c.IsForeign).Select(c => (r, c))).ToList();
+        if (foreign.Count > 0)
+        {
+            b.Add(new Heading(3, "Other tickets' commits on this ticket's branches"));
+            b.Add(new Para(T("Listed for reference only. Their files and merge state are not counted above.")));
+            b.Add(new Bullets(foreign.Select(x => (List<Span>)[new($"{x.r.Name} {x.c.OtherKey}: "), .. CommitLine(x.r, x.c)]).ToList()));
         }
         return d;
     }
