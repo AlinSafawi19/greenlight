@@ -3,398 +3,401 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Line · Feature Ledger</title>
+<title>Feature Ledger</title>
 <style>
-/* ═══════════════ type ═══════════════ */
-@font-face { font-family: "Archivo"; src: url(/assets/Archivo.ttf) format("truetype"); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: "Inter"; src: url(/assets/Inter.ttf) format("truetype"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "JBMono"; src: url(/assets/JetBrainsMono.ttf) format("truetype"); font-weight: 100 800; font-display: swap; }
 
-/* ═══════════════ tokens ═══════════════ */
+/* ── tokens: graphite console, amber only where a person has to act ── */
 :root {
-  --paper: #efece5; --sheet: #f7f5f0; --ink: #191917; --ink-2: #44423d; --steel: #7d7a72; --faint: #b3afa5;
-  --rule: #d9d5cb; --rule-2: #e5e2da; --signal: #f2471c; --signal-ink: #ffffff; --signal-wash: #fbe2d8;
-  --focus: #f2471c;
-  --display: "Archivo", "Segoe UI", system-ui, sans-serif;
-  --text: "Archivo", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+  --bg: #0d0f12; --pane: #121519; --raised: #181c21; --hover: #1d2228; --select: #222831;
+  --line: #242a32; --line-strong: #2f3640;
+  --text: #e4e7eb; --text-2: #a3abb6; --text-3: #6f7884; --text-4: #4b525c;
+  --action: #e0a03a; --action-dim: rgba(224, 160, 58, .14);
+  --ok: #4fae7c; --ok-dim: rgba(79, 174, 124, .14);
+  --confirm: #7f9fd4; --confirm-dim: rgba(127, 159, 212, .14);
+  --danger: #e2574c; --danger-dim: rgba(226, 87, 76, .12);
+  --focus: #e0a03a;
+  --sans: "Inter", "Segoe UI", system-ui, sans-serif;
   --mono: "JBMono", "Cascadia Mono", Consolas, monospace;
-  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 72px;
-  --ease: cubic-bezier(.2, .8, .2, 1);
-  --node: 14px;
+  --r: 6px; --r-lg: 8px;
+  --t: 140ms cubic-bezier(.2, .6, .2, 1);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #141412; --sheet: #1c1b19; --ink: #ece8df; --ink-2: #c4bfb4; --steel: #8d897f; --faint: #5c5951;
-    --rule: #2f2d29; --rule-2: #262522; --signal: #ff6a3d; --signal-ink: #160803; --signal-wash: #3a1a10;
-  }
-}
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
-
 * { box-sizing: border-box; }
-html, body { margin: 0; }
-body { background: var(--paper); color: var(--ink); font: 400 15px/1.55 var(--text); font-stretch: 100%; -webkit-font-smoothing: antialiased; }
-a { color: inherit; text-decoration-color: var(--faint); text-underline-offset: 3px; }
-a:hover { text-decoration-color: var(--signal); }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 400 13.5px/1.5 var(--sans); font-feature-settings: "cv11", "ss01", "tnum"; -webkit-font-smoothing: antialiased; overflow: hidden; }
+a { color: inherit; text-decoration: none; }
 button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
-input, select { font: inherit; color: var(--ink); }
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+input, select { font: inherit; color: var(--text); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 [hidden] { display: none !important; }
-::selection { background: var(--signal); color: var(--signal-ink); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border: 3px solid transparent; background-clip: padding-box; border-radius: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+.mono, .key { font-family: var(--mono); }
+.key { font-size: 12px; font-weight: 500; color: var(--text-2); letter-spacing: -.01em; }
+.t2 { color: var(--text-2); } .t3 { color: var(--text-3); }
+code { font: 12px var(--mono); color: var(--text-2); overflow-wrap: anywhere; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
-.mono { font-family: var(--mono); }
-.label { font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--steel); }
-.key { font: 600 13px var(--mono); letter-spacing: -.01em; }
-.dim { color: var(--steel); }
-code { font: 12.5px var(--mono); color: var(--ink-2); overflow-wrap: anywhere; }
+/* ── components ── */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r);
+  font-weight: 500; font-size: 13px; white-space: nowrap; border: 1px solid var(--line-strong); background: var(--raised); color: var(--text);
+  transition: background var(--t), border-color var(--t), color var(--t); }
+.btn:hover:not(:disabled) { background: var(--hover); border-color: #3a424e; }
+.btn:active:not(:disabled) { background: var(--select); }
+.btn.primary { background: var(--text); border-color: var(--text); color: #0d0f12; }
+.btn.primary:hover:not(:disabled) { background: #ffffff; border-color: #ffffff; }
+.btn.action { background: var(--action); border-color: var(--action); color: #1a1205; }
+.btn.action:hover:not(:disabled) { background: #eab155; border-color: #eab155; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.btn.sm { height: 26px; padding: 0 9px; font-size: 12.5px; }
+.btn.icon { width: 30px; padding: 0; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn svg { width: 14px; height: 14px; flex: none; }
+kbd { font: 500 10.5px var(--mono); color: var(--text-3); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; line-height: 16px; display: inline-block; }
 
-/* ═══════════════ controls ═══════════════ */
-.btn { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px; font: 600 14px var(--text); font-stretch: 105%;
-  border: 1.5px solid var(--ink); color: var(--ink); background: transparent; white-space: nowrap; text-decoration: none;
-  transition: background .15s, color .15s, transform .1s; }
-.btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
-.btn:active:not(:disabled) { transform: translateY(1px); }
-.btn.go { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
-.btn.go:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.btn.solid { background: var(--ink); color: var(--paper); }
-.btn.solid:hover:not(:disabled) { background: var(--signal); border-color: var(--signal); color: var(--signal-ink); }
-.btn.sm { height: 32px; padding: 0 12px; font-size: 13px; gap: 8px; }
-.btn:disabled { opacity: .35; cursor: not-allowed; }
-.btn .arr { font-family: var(--mono); transition: transform .15s var(--ease); }
-.btn:hover .arr { transform: translateX(3px); }
-.txt { font-weight: 600; text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px; }
-.txt:hover { text-decoration-color: var(--signal); }
+.badge { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; font-weight: 500; white-space: nowrap; background: var(--raised); color: var(--text-2); border: 1px solid var(--line); }
+.badge.action { background: var(--action-dim); color: var(--action); border-color: transparent; }
+.badge.ok { background: var(--ok-dim); color: var(--ok); border-color: transparent; }
+.badge.confirm { background: var(--confirm-dim); color: var(--confirm); border-color: transparent; }
 
-/* state glyphs: shape carries meaning, color only reinforces it */
-.n { width: var(--node); height: var(--node); border-radius: 50%; display: inline-block; flex: none; position: relative; }
-.n.done { background: var(--ink); }
-.n.todo { background: var(--signal); box-shadow: 0 0 0 4px var(--signal-wash); }
-.n.check { border: 2px solid var(--ink); background: repeating-linear-gradient(45deg, var(--ink) 0 1.5px, transparent 1.5px 4px); }
-.n.wait { border: 2px dashed var(--steel); background: var(--paper); }
-.n.skip { background: transparent; }
-.n.skip::after { content: ""; position: absolute; inset: 50% auto auto 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: var(--faint); }
-.n.none { border: 2px solid var(--rule); background: var(--paper); }
+/* status icons: shape + colour, so they read without colour too */
+.si { width: 14px; height: 14px; flex: none; display: block; }
 
-/* ═══════════════ frame ═══════════════ */
-.top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1.5px solid var(--ink); }
-.top-in { max-width: 1320px; margin: 0 auto; height: 64px; padding: 0 var(--s5); display: flex; align-items: center; gap: var(--s5); }
-.brand { display: flex; align-items: center; gap: 12px; font: 800 17px var(--display); font-stretch: 125%; letter-spacing: -.01em; white-space: nowrap; }
-.brand svg { display: block; }
-.brand small { font: 600 10.5px var(--mono); letter-spacing: .14em; color: var(--steel); text-transform: uppercase; font-stretch: 100%; }
-.find { flex: 1; max-width: 560px; margin-left: auto; position: relative; }
-.find input { width: 100%; height: 40px; border: 1.5px solid var(--rule); background: var(--sheet); padding: 0 48px 0 40px; font-size: 14.5px; transition: border-color .15s; }
-.find input::placeholder { color: var(--steel); }
-.find input:focus { outline: none; border-color: var(--ink); }
-.find .glass { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--steel); }
-.find kbd { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font: 600 11px var(--mono); color: var(--steel); border: 1px solid var(--rule); padding: 1px 6px; }
-.hits { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--sheet); border: 1.5px solid var(--ink); max-height: 62vh; overflow: auto; z-index: 40; box-shadow: 8px 8px 0 color-mix(in srgb, var(--ink) 12%, transparent); }
-.hits button { display: grid; grid-template-columns: 92px 1fr auto; gap: 12px; align-items: baseline; width: 100%; text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--rule-2); }
-.hits button:last-child { border-bottom: 0; }
-.hits button.on, .hits button:hover { background: var(--ink); color: var(--paper); }
-.hits button.on .dim, .hits button:hover .dim { color: var(--faint); }
-.hits .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hits .msg { padding: 14px; color: var(--steel); font-size: 14px; }
-.who { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 4px 0 0; white-space: nowrap; font-weight: 600; }
-.who .mark { width: 32px; height: 32px; display: grid; place-items: center; background: var(--ink); color: var(--paper); font: 700 12px var(--mono); }
-.who:hover .mark { background: var(--signal); color: var(--signal-ink); }
+/* the signature: six thin segments, one per step to QA */
+.pipe { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; width: 84px; flex: none; }
+.pipe i { height: 4px; border-radius: 1px; background: var(--line-strong); }
+.pipe i.done { background: var(--ok); } .pipe i.todo { background: var(--action); } .pipe i.check { background: var(--confirm); }
+.pipe i.wait { background: repeating-linear-gradient(90deg, var(--text-4) 0 2px, transparent 2px 4px); }
+.pipe i.skip { background: var(--line); }
+.pipe.lg { width: 100%; gap: 3px; }
+.pipe.lg i { height: 5px; }
 
-main { max-width: 1320px; margin: 0 auto; padding: var(--s7) var(--s5) var(--s8); }
-@media (max-width: 760px) {
-  .top-in { height: auto; padding: 10px 16px; flex-wrap: wrap; gap: 10px; }
-  .find { order: 3; flex-basis: 100%; max-width: none; }
-  .brand small { display: none; }
-  main { padding: var(--s5) 16px var(--s7); }
-}
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > span { font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+.input { height: 34px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line-strong); background: var(--bg); transition: border-color var(--t); width: 100%; }
+.input:hover { border-color: #3a424e; }
+.input:focus { outline: none; border-color: var(--text-2); }
+.input.bad { border-color: var(--danger); }
+.field small { font-size: 12px; color: var(--text-3); }
+.field .err { font-size: 12px; color: var(--danger); }
 
-/* ═══════════════ display type ═══════════════ */
-.kicker { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
-h1.hero { font: 800 clamp(30px, 4.4vw, 54px)/1.02 var(--display); font-stretch: 118%; letter-spacing: -.025em; margin: 0; max-width: 18ch; text-wrap: balance; }
-h1.title { font: 750 clamp(26px, 3.2vw, 40px)/1.08 var(--display); font-stretch: 112%; letter-spacing: -.02em; margin: 0; max-width: 28ch; text-wrap: balance; }
-.lede { font-size: 17px; color: var(--ink-2); max-width: 60ch; margin: 16px 0 0; }
-h2.sec { font: 700 13px var(--mono); letter-spacing: .12em; text-transform: uppercase; margin: 0; }
+/* ── shell ── */
+.app { display: grid; grid-template-rows: 48px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); height: 100vh; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); background: var(--pane); }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 13.5px; letter-spacing: -.01em; white-space: nowrap; }
+.brand .logo { width: 20px; height: 20px; border-radius: 5px; background: var(--text); display: grid; place-items: center; }
+.brand .logo i { width: 8px; height: 8px; border-radius: 2px; background: var(--bg); box-shadow: 4px 4px 0 -1px var(--action); transform: translate(-1px, -1px); }
+.sep { width: 1px; height: 20px; background: var(--line); }
+.findbtn { display: flex; align-items: center; gap: 8px; height: 30px; width: min(360px, 40vw); padding: 0 8px 0 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--bg); color: var(--text-3); transition: border-color var(--t); }
+.findbtn:hover { border-color: var(--line-strong); color: var(--text-2); }
+.findbtn span { flex: 1; text-align: left; }
+.bar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.me { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 4px; border-radius: var(--r); }
+.me:hover { background: var(--hover); }
+.avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--select); border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 10px; font-weight: 600; color: var(--text-2); }
+.check-progress { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 
-/* ═══════════════ the line: shared track geometry ═══════════════ */
-/* six equal columns; the wire runs from the centre of the first to the centre of the last */
-.track { --k: 0; position: relative; display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; height: 28px; }
-.track::before, .track .fill { content: ""; position: absolute; top: 50%; height: 2px; margin-top: -1px; left: calc(100% / 12); }
-.track::before { right: calc(100% / 12); background: repeating-linear-gradient(90deg, var(--faint) 0 4px, transparent 4px 8px); }
-.track .fill { width: calc(var(--k) * (100% / 6)); background: var(--ink); transition: width .7s var(--ease); }
-.track .cell { display: grid; place-items: center; position: relative; z-index: 1; }
-.track .cell .n { background-clip: padding-box; }
-.track .cell .n.wait, .track .cell .n.none, .track .cell .n.skip { background-color: var(--paper); }
-.carriage { position: absolute; top: -9px; left: calc(100% / 12 + var(--k) * (100% / 6)); width: 0; height: 0; z-index: 2;
-  border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid var(--signal); transform: translateX(-50%);
-  transition: left .7s var(--ease); }
-.track.clear .carriage { display: none; }
+.split { display: grid; grid-template-columns: 372px minmax(0, 1fr); min-height: 0; }
+.list { border-right: 1px solid var(--line); background: var(--pane); display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
+.list-h { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; }
+.list-h h2 { font-size: 13px; font-weight: 600; margin: 0; }
+.list-h .count { font-size: 12px; color: var(--text-3); }
+.list-h .btn { margin-left: auto; }
+.filters { display: flex; gap: 2px; padding: 0 12px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.filters button { flex: none; height: 24px; padding: 0 7px; border-radius: 5px; font-size: 12px; color: var(--text-3); display: inline-flex; gap: 6px; align-items: center; transition: background var(--t), color var(--t); }
+.filters button:hover { color: var(--text); background: var(--hover); }
+.filters button[aria-pressed="true"] { background: var(--select); color: var(--text); }
+.filters .n { color: var(--text-4); font-variant-numeric: tabular-nums; }
+.filters button[aria-pressed="true"] .n { color: var(--text-3); }
+.rows { overflow-y: auto; padding: 6px; }
+.tk { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; width: 100%; text-align: left; padding: 9px 10px; border-radius: var(--r); position: relative; transition: background var(--t); }
+.tk:hover { background: var(--hover); }
+.tk[aria-selected="true"] { background: var(--select); }
+.tk[aria-selected="true"]::before { content: ""; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: var(--text); }
+.tk .title { grid-column: 2 / 4; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk .meta { grid-column: 2 / 4; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--text-3); min-width: 0; }
+.tk .meta .js { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk .si { grid-row: 1; }
+.tk .ago { font-size: 11px; color: var(--text-4); white-space: nowrap; }
+.tk.busy .pipe i { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.group-label { font-size: 11px; font-weight: 600; color: var(--text-4); text-transform: uppercase; letter-spacing: .06em; padding: 12px 10px 4px; }
+.list-empty { padding: 28px 18px; color: var(--text-3); font-size: 13px; line-height: 1.55; }
+.list-empty b { color: var(--text); font-weight: 600; display: block; margin-bottom: 4px; }
+.sk { height: 52px; margin: 2px 4px; border-radius: var(--r); background: linear-gradient(90deg, var(--raised), var(--hover), var(--raised)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
 
-/* ═══════════════ home ═══════════════ */
-.home-head { display: grid; grid-template-columns: 1fr auto; gap: var(--s5); align-items: end; padding-bottom: var(--s6); border-bottom: 1.5px solid var(--ink); }
-.home-head .side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-.tally { display: flex; gap: var(--s5); margin-top: var(--s5); flex-wrap: wrap; }
-.tally button { text-align: left; padding: 0 0 6px; border-bottom: 2px solid transparent; }
-.tally button.on { border-color: var(--signal); }
-.tally .v { font: 750 34px/1 var(--display); font-stretch: 112%; display: block; font-variant-numeric: tabular-nums; }
-.tally button:hover .v { color: var(--signal); }
-.progress-line { font: 500 12.5px var(--mono); color: var(--steel); min-height: 18px; }
-@media (max-width: 760px) { .home-head { grid-template-columns: 1fr; } .home-head .side { align-items: flex-start; } }
+/* ── detail ── */
+.detail { overflow-y: auto; min-width: 0; }
+.detail-in { max-width: 1180px; padding: 22px 28px 64px; }
+.crumbs { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-3); margin-bottom: 10px; flex-wrap: wrap; }
+.crumbs button { color: var(--text-3); } .crumbs button:hover { color: var(--text); }
+.back { display: none; }
+.head { display: flex; gap: 16px; align-items: flex-start; }
+.head .grow { flex: 1; min-width: 0; }
+.head h1 { font-size: 19px; font-weight: 600; letter-spacing: -.015em; line-height: 1.3; margin: 4px 0 8px; }
+.head .facts { display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--text-3); }
+.head .facts b { color: var(--text-2); font-weight: 500; }
+.head .acts { display: flex; gap: 6px; flex: none; }
+.menu { position: relative; }
+.menu-pop { position: absolute; right: 0; top: calc(100% + 4px); min-width: 210px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: var(--r-lg); padding: 4px; z-index: 20; box-shadow: 0 12px 32px rgba(0,0,0,.45); }
+.menu-pop button, .menu-pop a { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 10px; border-radius: 5px; font-size: 13px; color: var(--text-2); }
+.menu-pop button:hover, .menu-pop a:hover, .menu-pop .on { background: var(--hover); color: var(--text); }
+.menu-pop hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 
-.board-head, .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 480px) 148px; gap: var(--s5); align-items: center; }
-.board-head { padding: var(--s5) 0 10px; position: sticky; top: 64px; background: var(--paper); z-index: 5; border-bottom: 1px solid var(--rule); }
-.board-head .stations { display: grid; grid-template-columns: repeat(6, 1fr); text-align: center; }
-.board-head .stations span { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--steel); text-transform: uppercase; }
-.row { padding: 18px 0; border-bottom: 1px solid var(--rule); cursor: pointer; position: relative; animation: rise .45s var(--ease) both; }
-.row::before { content: ""; position: absolute; left: -16px; top: 0; bottom: 0; width: 3px; background: var(--signal); transform: scaleY(0); transition: transform .2s var(--ease); }
-.row:hover::before, .row:focus-visible::before { transform: scaleY(1); }
-.row:focus-visible { outline: none; background: var(--sheet); }
-.row .who-t { min-width: 0; }
-.row .line1 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.row .typ { font: 500 11px var(--mono); color: var(--steel); text-transform: uppercase; letter-spacing: .08em; }
-.row .tt { font: 600 16px/1.35 var(--display); font-stretch: 104%; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.row .where { font-size: 13px; color: var(--steel); margin-top: 3px; }
-.row .act { text-align: right; font-size: 13px; }
-.row .act b { display: block; font-weight: 650; }
-.row .act .dim { font-size: 12px; }
-.row.busy .track .cell .n { animation: blink 1s ease-in-out infinite; }
-.row.busy .track .cell:nth-child(3) .n { animation-delay: .1s; } .row.busy .track .cell:nth-child(4) .n { animation-delay: .2s; }
-.row.busy .track .cell:nth-child(5) .n { animation-delay: .3s; } .row.busy .track .cell:nth-child(6) .n { animation-delay: .4s; } .row.busy .track .cell:nth-child(7) .n { animation-delay: .5s; }
-@keyframes blink { 50% { background: var(--ink); border-color: var(--ink); } }
-@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
-.status-word { font-weight: 650; }
-.status-word.todo { color: var(--signal); }
-@media (max-width: 980px) {
-  .board-head { display: none; }
-  .row { grid-template-columns: 1fr; gap: 12px; }
-  .row .act { text-align: left; }
-}
+.summary { margin-top: 18px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--pane); padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 20px; align-items: center; }
+.summary .verdict { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+.summary .verdict .si { width: 16px; height: 16px; }
+.summary .sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+.summary .fresh { font-size: 12px; color: var(--text-3); text-align: right; white-space: nowrap; }
+.summary .fresh button { color: var(--text-2); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.summary .fresh button:hover { color: var(--text); }
+.summary .stage-labels { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; font-size: 11px; color: var(--text-3); margin-top: 6px; }
+.summary .stage-labels span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.summary .stage-labels .cur { color: var(--action); font-weight: 600; }
+.summary .pipe-row { grid-column: 1 / -1; }
 
-.empty { padding: var(--s8) 0; text-align: center; }
-.empty h2 { font: 750 26px var(--display); font-stretch: 112%; margin: 18px 0 8px; }
-.empty p { color: var(--ink-2); margin: 0 auto; max-width: 52ch; }
-.empty .track { max-width: 360px; margin: 0 auto; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 24px; margin-top: 22px; align-items: start; }
+.section-h { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; }
+.section-h h3 { font-size: 13px; font-weight: 600; margin: 0; }
+.section-h span { font-size: 12px; color: var(--text-3); }
 
-.setup { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1.5px solid var(--ink); margin-top: var(--s6); }
-.setup > div { padding: var(--s5); }
-.setup > div + div { border-left: 1.5px solid var(--ink); }
-.setup .no { font: 800 44px/1 var(--display); font-stretch: 125%; color: var(--faint); }
-.setup .done .no { color: var(--ink); }
-.setup h3 { font: 700 18px var(--display); font-stretch: 108%; margin: 10px 0 6px; }
-.setup p { color: var(--ink-2); margin: 0 0 16px; font-size: 14.5px; }
-@media (max-width: 760px) { .setup { grid-template-columns: 1fr; } .setup > div + div { border-left: 0; border-top: 1.5px solid var(--ink); } }
+.steps { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--pane); overflow: hidden; }
+.step + .step { border-top: 1px solid var(--line); }
+.step-h { display: grid; grid-template-columns: 14px 20px 110px minmax(0, 1fr) auto 14px; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 11px 14px; transition: background var(--t); }
+.step-h:hover { background: var(--hover); }
+.step-h .no { font: 500 11px var(--mono); color: var(--text-4); }
+.step-h .name { font-weight: 600; font-size: 13px; }
+.step-h .hl { color: var(--text-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-h .chev { width: 14px; height: 14px; color: var(--text-3); transition: transform var(--t); }
+.step[data-open="true"] .step-h .chev { transform: rotate(90deg); }
+.step[data-open="true"] .step-h { background: var(--raised); }
+.step-b { border-top: 1px solid var(--line); background: var(--bg); }
+.step-b .means { padding: 10px 14px 4px 58px; font-size: 12px; color: var(--text-3); }
+.items { list-style: none; margin: 0; padding: 4px 0 6px; }
+.item { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 2px 12px; padding: 9px 14px 9px 34px; align-items: start; }
+.item + .item { border-top: 1px solid var(--line); }
+.item .si { margin-top: 2px; }
+.item .what { font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+.item .detail-t { font-size: 12.5px; color: var(--text-3); margin-top: 1px; overflow-wrap: anywhere; }
+.item .repo { font: 500 11px var(--mono); color: var(--text-3); margin-bottom: 1px; }
+.item .btn { align-self: center; }
+.no-items { padding: 12px 14px 14px 58px; font-size: 12.5px; color: var(--text-3); }
 
-/* ═══════════════ ticket ═══════════════ */
-.crumb { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--steel); margin-bottom: var(--s4); }
-.crumb button { color: var(--steel); }
-.crumb button:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.t-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s5); align-items: end; }
-.t-head .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-.facts { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 18px; font-size: 14px; color: var(--ink-2); align-items: center; }
-.facts .f { display: flex; gap: 8px; align-items: baseline; }
-.switch { display: inline-flex; gap: 10px; align-items: center; cursor: pointer; font-size: 14px; user-select: none; }
-.switch input { appearance: none; width: 34px; height: 18px; border: 1.5px solid var(--ink); position: relative; margin: 0; cursor: pointer; }
-.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; background: var(--ink); transition: transform .2s var(--ease); }
-.switch input:checked { background: var(--ink); }
-.switch input:checked::after { background: var(--paper); transform: translateX(16px); }
-@media (max-width: 860px) { .t-head { grid-template-columns: 1fr; } .t-head .actions { justify-content: flex-start; } }
+.props { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--pane); padding: 6px 14px; }
+.props dl { margin: 0; display: grid; grid-template-columns: 1fr auto; }
+.props dt, .props dd { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.props dt { color: var(--text-3); }
+.props dd { margin: 0; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.props dl > :nth-last-child(-n+2) { border-bottom: 0; }
+.subtk { list-style: none; margin: 0; padding: 0; }
+.subtk li + li { border-top: 1px solid var(--line); }
+.subtk button { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; width: 100%; text-align: left; padding: 8px 0; }
+.subtk .s { grid-column: 1 / -1; font-size: 12.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.subtk .m { font-size: 11.5px; color: var(--text-3); text-align: right; }
+.subtk button:hover .s { color: var(--text); }
+.side-stack { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 0; }
 
-.verdict { margin-top: var(--s6); padding: 18px 22px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; border: 1.5px solid var(--ink); background: var(--sheet); }
-.verdict .grow { min-width: min(100%, 280px); }
-.verdict.todo { border-color: var(--signal); background: var(--signal-wash); }
-.verdict .big { font: 800 24px/1.1 var(--display); font-stretch: 115%; letter-spacing: -.01em; }
-.verdict p { margin: 4px 0 0; color: var(--ink-2); font-size: 14.5px; }
-.verdict .grow { flex: 1; }
-.stale { font: 500 12.5px var(--mono); color: var(--steel); }
-
-/* the big rail */
-.rail { --k: 0; position: relative; display: grid; grid-template-columns: repeat(6, 1fr); margin-top: var(--s7); }
-.rail::before, .rail .fill { content: ""; position: absolute; top: 30px; height: 3px; left: calc(100% / 12); }
-.rail::before { right: calc(100% / 12); background: repeating-linear-gradient(90deg, var(--faint) 0 6px, transparent 6px 12px); }
-.rail .fill { width: calc(var(--k) * (100% / 6)); background: var(--ink); transition: width .8s var(--ease); }
-.rail .carriage { top: 6px; border-left-width: 8px; border-right-width: 8px; border-top-width: 11px; }
-.rail.clear .carriage { display: none; }
-.stop { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 22px 8px 16px; --node: 22px; }
-.stop .n { background-clip: padding-box; }
-.stop .n.wait, .stop .n.skip, .stop .n.none { background-color: var(--paper); }
-.stop .txtwrap { display: flex; flex-direction: column; align-items: center; }
-.stop .no { font: 600 10.5px var(--mono); letter-spacing: .12em; color: var(--steel); margin-top: 14px; text-transform: uppercase; }
-.stop .nm { font: 750 17px var(--display); font-stretch: 112%; margin-top: 2px; }
-.stop .hl { font-size: 12.5px; color: var(--ink-2); margin-top: 4px; max-width: 20ch; line-height: 1.4; }
-.stop::after { content: ""; position: absolute; left: 12%; right: 12%; bottom: 0; height: 3px; background: var(--ink); transform: scaleX(0); transition: transform .25s var(--ease); }
-.stop[aria-selected="true"]::after { transform: scaleX(1); }
-.stop[aria-selected="true"] .nm { text-decoration: none; }
-.stop:hover .nm { color: var(--signal); }
-.stop.light .n { animation: light .5s var(--ease) both; }
-@keyframes light { from { transform: scale(.4); opacity: 0; } }
-.rail.loading .stop .n { animation: blink 1.2s ease-in-out infinite; }
-.rail.loading .stop:nth-of-type(2) .n { animation-delay: .15s; } .rail.loading .stop:nth-of-type(3) .n { animation-delay: .3s; }
-.rail.loading .stop:nth-of-type(4) .n { animation-delay: .45s; } .rail.loading .stop:nth-of-type(5) .n { animation-delay: .6s; } .rail.loading .stop:nth-of-type(6) .n { animation-delay: .75s; }
-
-/* vertical line on narrow screens */
-@media (max-width: 760px) {
-  .rail { grid-template-columns: 1fr; margin-top: var(--s6); }
-  .rail::before, .rail .fill { top: 22px; bottom: 22px; left: 10px; width: 3px; height: auto; right: auto; }
-  .rail::before { background: repeating-linear-gradient(180deg, var(--faint) 0 6px, transparent 6px 12px); }
-  .rail .fill { height: calc(var(--k) * (100% / 6)); width: 3px; bottom: auto; }
-  .rail .carriage { display: none; }
-  .stop { flex-direction: row; align-items: flex-start; text-align: left; gap: 16px; padding: 10px 0; }
-  .stop .no { margin-top: 0; }
-  .stop .txtwrap { align-items: flex-start; }
-  .stop .hl { max-width: none; }
-  .stop::after { left: auto; right: 0; top: 10px; bottom: 10px; width: 3px; height: auto; transform: scaleY(0); }
-  .stop[aria-selected="true"]::after { transform: scaleY(1); }
-}
-
-.desk { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--s6); margin-top: var(--s5); align-items: start; }
-@media (max-width: 1040px) { .desk { grid-template-columns: 1fr; } }
-.station { border-top: 1.5px solid var(--ink); padding-top: var(--s5); animation: rise .35s var(--ease) both; }
-.station .sh { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
-.station .sh h3 { font: 800 26px var(--display); font-stretch: 115%; margin: 0; letter-spacing: -.01em; }
-.station .means { color: var(--ink-2); margin: 6px 0 var(--s4); font-size: 14.5px; max-width: 64ch; }
-.items { list-style: none; margin: 0; padding: 0; }
-.item { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 4px 14px; padding: 16px 0; border-bottom: 1px solid var(--rule); align-items: start; }
-.item .n { margin-top: 4px; }
-.item > div { min-width: 0; }
-.item .it { font-weight: 650; font-size: 15.5px; overflow-wrap: anywhere; }
-.station, .desk > *, .t-head > * { min-width: 0; }
-.item .id { color: var(--ink-2); font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
-.item .repo { font: 500 11.5px var(--mono); color: var(--steel); letter-spacing: .04em; }
-.item .go { align-self: center; }
-@media (max-width: 620px) { .item { grid-template-columns: 22px 1fr; } .item .go { grid-column: 2; justify-self: start; } }
-.legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: var(--s4); font-size: 12.5px; color: var(--steel); }
-.legend span { display: inline-flex; gap: 7px; align-items: center; }
-.legend .n { --node: 10px; }
-
-.aside { display: flex; flex-direction: column; gap: var(--s5); position: sticky; top: 88px; }
-.panel { border: 1.5px solid var(--ink); padding: 18px; background: var(--sheet); }
-.panel h4 { margin: 0 0 12px; }
-.counts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; }
-.counts .v { font: 750 24px/1 var(--display); font-stretch: 112%; font-variant-numeric: tabular-nums; }
-.counts .l { font-size: 12px; color: var(--steel); margin-top: 3px; }
-.mini-tickets { list-style: none; margin: 0; padding: 0; }
-.mini-tickets li { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; padding: 9px 0; border-top: 1px solid var(--rule); font-size: 13.5px; }
-.mini-tickets li:first-child { border-top: 0; padding-top: 0; }
-.mini-tickets .s { grid-column: 2; color: var(--steel); font-size: 12.5px; }
-.panel .more { display: flex; flex-direction: column; gap: 8px; }
-.panel .more .btn { justify-content: space-between; }
-
-.evidence { margin-top: var(--s8); border-top: 1.5px solid var(--ink); }
-.evidence > summary { list-style: none; cursor: pointer; padding: var(--s5) 0; display: flex; align-items: baseline; gap: 14px; }
-.evidence > summary::-webkit-details-marker { display: none; }
-.evidence > summary .plus { font: 600 18px var(--mono); width: 18px; transition: transform .2s var(--ease); }
-.evidence[open] > summary .plus { transform: rotate(45deg); }
-.evidence > summary h2 { font: 800 24px var(--display); font-stretch: 115%; margin: 0; }
-.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); overflow-x: auto; }
-.tabs button { padding: 10px 16px; font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--steel); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
-.tabs button[aria-selected="true"] { color: var(--ink); border-color: var(--ink); }
-.tabs button:hover { color: var(--ink); }
-.tabpane { padding: var(--s5) 0; }
-.tool { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: var(--s4); }
-.tool input, .tool select { height: 36px; border: 1.5px solid var(--rule); background: var(--sheet); padding: 0 12px; min-width: 260px; }
-.tool input:focus, .tool select:focus { outline: none; border-color: var(--ink); }
-table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.t th { text-align: left; font: 600 10.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); padding: 0 16px 10px 0; border-bottom: 1.5px solid var(--ink); }
-table.t td { padding: 12px 16px 12px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-top: 32px; }
+.tabs button { height: 34px; padding: 0 10px; font-size: 13px; color: var(--text-3); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--t); }
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected="true"] { color: var(--text); border-color: var(--text); }
+.tabs .n { color: var(--text-4); margin-left: 4px; font-size: 12px; }
+.pane { padding-top: 14px; }
+.tool { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.tool .input { width: 280px; height: 30px; }
+select.input { width: auto; min-width: 240px; height: 30px; }
+table.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.grid th { text-align: left; font-weight: 500; color: var(--text-3); padding: 0 14px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.grid td { padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.grid tr:hover td { background: color-mix(in srgb, var(--hover) 50%, transparent); }
+table.grid a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .scroll-x { overflow-x: auto; }
-.files { list-style: none; margin: 0 0 var(--s4); padding: 0; columns: 2 420px; column-gap: var(--s6); }
-.files li { font: 12.5px/1.75 var(--mono); color: var(--ink-2); break-inside: avoid; display: flex; gap: 10px; overflow-wrap: anywhere; }
-.files .op { width: 12px; flex: none; color: var(--steel); font-weight: 700; }
-.files .op.A { color: var(--ink); } .files .op.D { color: var(--signal); }
-.repo-h { font: 700 15px var(--display); font-stretch: 108%; margin: var(--s5) 0 var(--s2); }
+.files { list-style: none; margin: 0 0 14px; padding: 0; }
+.files li { display: flex; gap: 10px; font: 12px/1.8 var(--mono); color: var(--text-2); overflow-wrap: anywhere; }
+.files .op { width: 10px; flex: none; color: var(--text-4); }
+.files .op.A { color: var(--ok); } .files .op.D { color: var(--danger); } .files .op.M { color: var(--confirm); }
+.repo-h { font-size: 12.5px; font-weight: 600; margin: 16px 0 6px; color: var(--text-2); }
 .repo-h:first-child { margin-top: 0; }
-.commit { display: grid; grid-template-columns: 84px 1fr; gap: 2px 14px; padding: 10px 0; border-bottom: 1px solid var(--rule-2); font-size: 14px; }
-.commit .m { grid-column: 2; font-size: 12.5px; color: var(--steel); }
-.commit .note { grid-column: 2; font-size: 12.5px; color: var(--signal); }
+.commit { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 1px 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.commit .m { grid-column: 2; font-size: 11.5px; color: var(--text-3); }
+.commit .n { grid-column: 2; font-size: 11.5px; color: var(--action); }
+.commit a.key:hover { color: var(--text); }
 
-.boom { border: 1.5px solid var(--signal); padding: var(--s5); margin-top: var(--s6); }
-.boom h2 { font: 800 24px var(--display); font-stretch: 115%; margin: 0 0 6px; }
-.boom p { margin: 0 0 var(--s4); color: var(--ink-2); }
-.spin { width: 14px; height: 14px; border: 2px solid var(--rule); border-top-color: var(--signal); border-radius: 50%; display: inline-block; animation: turn .7s linear infinite; vertical-align: -2px; }
+.blank { height: 100%; display: grid; place-items: center; padding: 32px; }
+.blank-in { max-width: 420px; text-align: center; color: var(--text-3); }
+.blank-in h2 { font-size: 15px; font-weight: 600; color: var(--text); margin: 14px 0 6px; }
+.blank-in p { margin: 0 0 16px; font-size: 13px; }
+.blank-in .keys { display: flex; gap: 16px; justify-content: center; font-size: 12px; flex-wrap: wrap; }
+.blank-in .glyph { width: 40px; height: 40px; margin: 0 auto; border-radius: 10px; border: 1px solid var(--line-strong); display: grid; place-items: center; color: var(--text-3); }
+.setup { text-align: left; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--pane); margin-top: 18px; }
+.setup .s { display: grid; grid-template-columns: 22px 1fr; gap: 2px 12px; padding: 14px 16px; }
+.setup .s + .s { border-top: 1px solid var(--line); }
+.setup .num { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 11px; color: var(--text-2); }
+.setup .num.ok { background: var(--ok); border-color: var(--ok); color: #08130d; }
+.setup b { color: var(--text); font-weight: 600; font-size: 13px; }
+.setup p { margin: 2px 0 10px; font-size: 12.5px; text-align: left; }
+.skel-d { padding: 22px 28px; }
+.skel-d .sk { margin: 10px 0; }
+.alert { border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-dim); border-radius: var(--r-lg); padding: 14px 16px; color: var(--text); font-size: 13px; margin-top: 18px; }
+.alert b { color: var(--danger); }
+
+/* ── dialogs ── */
+dialog { border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); color: var(--text); padding: 0; box-shadow: 0 24px 64px rgba(0,0,0,.55); }
+dialog::backdrop { background: rgba(5, 6, 8, .6); }
+dialog[open] { animation: appear 140ms ease-out; }
+@keyframes appear { from { opacity: 0; transform: translateY(4px) scale(.99); } }
+.dlg { width: min(460px, calc(100vw - 32px)); }
+.dlg-h { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.dlg-h h2 { font-size: 14px; font-weight: 600; margin: 0; flex: 1; }
+.dlg-b { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.dlg-b p { margin: 0; font-size: 12.5px; color: var(--text-3); }
+.dlg-f { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.dlg-f .say { margin-right: auto; font-size: 12.5px; color: var(--text-3); }
+.dlg-f .say.bad { color: var(--danger); }
+.who-card { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg); }
+.who-card .avatar { width: 34px; height: 34px; font-size: 12px; }
+.who-card small { color: var(--text-3); display: block; }
+.divider { height: 1px; background: var(--line); margin: 2px 0; }
+
+.palette { width: min(600px, calc(100vw - 32px)); margin-top: 12vh; }
+.palette .in { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.palette .in input { flex: 1; height: 48px; background: none; border: 0; font-size: 14.5px; }
+.palette .in input:focus { outline: none; }
+.palette .res { max-height: 56vh; overflow-y: auto; padding: 6px; }
+.palette .res button { display: grid; grid-template-columns: 14px 78px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; text-align: left; height: 38px; padding: 0 10px; border-radius: var(--r); }
+.palette .res button[aria-selected="true"] { background: var(--select); }
+.palette .res .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.palette .res .st { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.palette .hint { padding: 12px 16px; font-size: 12.5px; color: var(--text-3); }
+.palette .foot { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--text-3); }
+
+.toast { position: fixed; right: 16px; bottom: 16px; z-index: 50; background: var(--raised); border: 1px solid var(--line-strong); border-radius: var(--r-lg); padding: 10px 14px; font-size: 13px; box-shadow: 0 12px 32px rgba(0,0,0,.45);
+  display: flex; gap: 10px; align-items: center; max-width: min(460px, calc(100vw - 32px)); transform: translateY(8px); opacity: 0; pointer-events: none; transition: opacity var(--t), transform var(--t); }
+.toast.show { opacity: 1; transform: none; pointer-events: auto; }
+.toast a { text-decoration: underline; text-underline-offset: 3px; }
+.spin { width: 12px; height: 12px; border: 1.5px solid var(--line-strong); border-top-color: var(--text-2); border-radius: 50%; display: inline-block; animation: turn .7s linear infinite; flex: none; }
 @keyframes turn { to { transform: rotate(360deg); } }
 
-/* ═══════════════ account sheet ═══════════════ */
-dialog.sheet { position: fixed; inset: 0 0 0 auto; margin: 0; height: 100%; max-height: none; width: min(460px, 100vw); border: 0; border-left: 1.5px solid var(--ink); background: var(--paper); color: var(--ink); padding: 0; }
-dialog.sheet[open] { animation: slide .35s var(--ease); }
-@keyframes slide { from { transform: translateX(40px); opacity: 0; } }
-dialog.sheet::backdrop { background: color-mix(in srgb, var(--ink) 35%, transparent); }
-.sheet-in { padding: var(--s6) var(--s6) var(--s7); display: flex; flex-direction: column; gap: var(--s4); min-height: 100%; }
-.sheet-in .close { align-self: flex-end; font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--steel); }
-.sheet-in .close:hover { color: var(--ink); }
-.sheet-in h2 { font: 800 30px/1.05 var(--display); font-stretch: 118%; letter-spacing: -.02em; margin: 0; }
-.sheet-in p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
-.sheet-in hr { border: 0; border-top: 1.5px solid var(--ink); margin: var(--s4) 0; width: 100%; }
-.fld { display: flex; flex-direction: column; gap: 6px; }
-.fld .label { color: var(--ink); }
-.fld input { height: 44px; border: 1.5px solid var(--rule); background: var(--sheet); padding: 0 12px; }
-.fld input:focus { outline: none; border-color: var(--ink); }
-.fld small { font-size: 12.5px; color: var(--steel); }
-.say { font-size: 13.5px; min-height: 20px; }
-.say.bad { color: var(--signal); font-weight: 600; }
-.say.good { font-weight: 600; }
-.ident { display: flex; gap: 14px; align-items: center; padding: 16px; border: 1.5px solid var(--ink); background: var(--sheet); }
-.ident .mark { width: 46px; height: 46px; display: grid; place-items: center; background: var(--ink); color: var(--paper); font: 700 15px var(--mono); flex: none; }
-.ident b { display: block; }
-.ident small { color: var(--steel); }
-
-/* ═══════════════ ticker ═══════════════ */
-.ticker { position: fixed; left: 24px; bottom: 24px; z-index: 60; background: var(--ink); color: var(--paper); padding: 12px 16px 12px 14px; font: 500 13px var(--mono); max-width: min(560px, calc(100vw - 48px));
-  display: flex; gap: 12px; align-items: center; transform: translateY(20px); opacity: 0; pointer-events: none; transition: .25s var(--ease); border-left: 4px solid var(--signal); }
-.ticker.show { transform: none; opacity: 1; pointer-events: auto; }
-.ticker a { color: var(--paper); text-decoration-color: var(--signal); }
+/* ── narrow screens: list and detail become two pages ── */
+@media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } .side-stack { position: static; } }
+@media (max-width: 860px) {
+  .split { grid-template-columns: 1fr; }
+  .split.has-detail .list { display: none; }
+  .split:not(.has-detail) .detail { display: none; }
+  .back { display: inline-flex; }
+  .findbtn { width: auto; flex: 1; min-width: 0; } .findbtn kbd, .brand .label, .sep, .me span:last-child, .check-progress { display: none; } .bar { gap: 8px; padding: 0 8px 0 12px; }
+  .detail-in { padding: 16px 16px 48px; }
+  .head { flex-direction: column; }
+  .step-h { grid-template-columns: 14px minmax(0, 1fr) auto 14px; }
+  .step-h .no { display: none; } .step-h .hl { grid-column: 2; grid-row: 2; white-space: normal; }
+  .step-h .name { grid-column: 2; }
+  .step-b .means, .no-items { padding-left: 38px; }
+  .item { padding-left: 14px; grid-template-columns: 14px minmax(0, 1fr); } .item .btn { grid-column: 2; justify-self: start; margin-top: 6px; }
+  .summary { grid-template-columns: 1fr; } .summary .fresh { text-align: left; }
+  .summary .stage-labels { font-size: 10px; }
+}
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="top-in">
-    <a class="brand" href="#" id="brand" aria-label="Your line, home">
-      <svg width="38" height="14" viewBox="0 0 38 14" aria-hidden="true"><path d="M3 7h32" stroke="currentColor" stroke-width="2"/><circle cx="4" cy="7" r="3.5" fill="currentColor"/><circle cx="19" cy="7" r="3.5" fill="currentColor"/><circle cx="34" cy="7" r="4.5" fill="#f2471c"/></svg>
-      <span>THE LINE <small>· feature ledger</small></span>
-    </a>
-    <form class="find" id="find" role="search" autocomplete="off">
-      <svg class="glass" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-      <input id="q" placeholder="Find one of your tickets: key or words" aria-label="Find one of your tickets" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="hits">
-      <kbd aria-hidden="true">/</kbd>
-      <div class="hits" id="hits" role="listbox" hidden></div>
-    </form>
-    <div id="whoSlot"></div>
+<div class="app">
+  <header class="bar">
+    <div class="brand"><span class="logo" aria-hidden="true"><i></i></span><span class="label">Feature Ledger</span></div>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="findbtn" id="findBtn" aria-label="Find a ticket (Ctrl+K)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span>Find a ticket</span><kbd>Ctrl K</kbd>
+    </button>
+    <div class="right">
+      <span class="check-progress" id="checkProgress" aria-live="polite"></span>
+      <button class="btn" id="checkAll" hidden title="Fetch every repository, then check all your tickets">Check all</button>
+      <div id="meSlot"></div>
+    </div>
+  </header>
+
+  <div class="split" id="split">
+    <aside class="list" aria-label="Your tickets">
+      <div class="list-h"><h2>My tickets</h2><span class="count" id="count"></span>
+        <button class="btn ghost icon sm" id="reload" title="Reload from Jira" aria-label="Reload from Jira"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3.5v5h-5"/></svg></button>
+      </div>
+      <div class="filters" id="filters" role="toolbar" aria-label="Filter"></div>
+      <div class="rows" id="rows" role="listbox" aria-label="Tickets" tabindex="0"></div>
+    </aside>
+    <main class="detail" id="detail" tabindex="-1"></main>
   </div>
-</header>
+</div>
 
-<main id="main" tabindex="-1"></main>
-
-<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle"><div class="sheet-in" id="sheetIn"></div></dialog>
-<div class="ticker" id="ticker" role="status" aria-live="polite"></div>
+<dialog id="settings" class="dlg" aria-labelledby="setTitle"></dialog>
+<dialog id="palette" class="palette" aria-label="Find a ticket">
+  <div class="in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--text-3)" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="pq" placeholder="Search your tickets by key or title" aria-label="Search your tickets" role="combobox" aria-controls="pres" aria-expanded="true" spellcheck="false"></div>
+  <div class="res" id="pres" role="listbox"></div>
+  <div class="foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* ═══════════════ basics ═══════════════ */
+/* ── basics ── */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const plural = (k, one, many) => `${k} ${k === 1 ? one : (many || one + "s")}`;
+const pl = (k, one, many) => `${k} ${k === 1 ? one : (many || one + "s")}`;
 const initials = s => (s || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
-const firstName = s => { const f = (s || "").split(/\s+/)[0] || ""; return f.charAt(0).toUpperCase() + f.slice(1); };
+const cap = s => (s || "").replace(/\b\w/g, c => c.toUpperCase());
 const branch = r => (r || "").replace(/^origin\//, "");
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const day = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ""); return m ? `${+m[3]} ${MON[+m[2] - 1]}` : esc(d); };
-function when(stamp) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(stamp || "");
-  if (!m) return esc(stamp);
-  const d = new Date(+m[1], +m[2] - 1, +m[3]), t = new Date(); t.setHours(0, 0, 0, 0);
-  const diff = Math.round((t - d) / 864e5);
-  return diff === 0 ? `today ${m[4] || ""}` : diff === 1 ? `yesterday ${m[4] || ""}` : `${+m[3]} ${MON[+m[2] - 1]}`;
+function ago(stamp) {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(stamp || "");
+  if (!m) return "";
+  const mins = Math.round((Date.now() - new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5])) / 6e4);
+  return mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.round(mins / 60)}h ago` : `${Math.round(mins / 1440)}d ago`;
 }
 
-const STATIONS = [
-  { id: "code",   no: "01", name: "Code",    means: "Every change is merged into the branch the service is built from." },
-  { id: "tag",    no: "02", name: "Tagged",  means: "QA deploys version tags, not branches. The merged code has to be inside a tag." },
-  { id: "db",     no: "03", name: "Database", means: "Scripts are in a release folder of db-migration-scripts, and that release runs on the QA database." },
-  { id: "access", no: "04", name: "Access",  means: "QA users can reach the feature: role grants, scopes and menus exist on QA too." },
-  { id: "config", no: "05", name: "Config",  means: "New settings are added to the QA configuration, which is kept outside git." },
-  { id: "qa",     no: "06", name: "QA",      means: "The ticket is moved in Jira and the handover is posted for the tester." },
+const STEPS = [
+  { id: "code",   name: "Code",     means: "Every change is merged into the branch the service is built from." },
+  { id: "tag",    name: "Tagged",   means: "QA deploys version tags, so the merged code must be inside a tag." },
+  { id: "db",     name: "Database", means: "Scripts are in a release folder of db-migration-scripts, and that release is run on the QA database." },
+  { id: "access", name: "Access",   means: "Role grants, scopes and menus exist on QA, so testers can reach the feature." },
+  { id: "config", name: "Config",   means: "New settings are added to the QA configuration, which lives outside git." },
+  { id: "qa",     name: "Handover", means: "The ticket is moved in Jira and the checklist is posted for the tester." },
 ];
-const WORD = { done: "Clear", todo: "Act here", check: "Confirm", wait: "Waiting", skip: "Not needed", none: "Not checked" };
+const STATE_WORD = { done: "Done", todo: "Needs action", check: "To confirm", wait: "Waiting", skip: "Not needed", none: "Not checked" };
 
-let status = null, mine = null, current = null, sel = null, tab = "repos", commitFilter = "", includeKids = true, checking = false, homeFilter = "all";
+/* status icon: done ✓, needs action (solid), to confirm (half), waiting (dashed), not needed (dash), not checked (ring) */
+function si(state, label = true) {
+  const a = label ? `role="img" aria-label="${STATE_WORD[state] || state}"` : `aria-hidden="true"`;
+  const svg = inner => `<svg class="si" viewBox="0 0 14 14" ${a}>${inner}</svg>`;
+  switch (state) {
+    case "done":  return svg(`<circle cx="7" cy="7" r="6.5" fill="var(--ok)"/><path d="m4.2 7.2 1.9 1.9 3.7-4" fill="none" stroke="#0b130e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`);
+    case "todo":  return svg(`<circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--action)" stroke-width="1.5"/><circle cx="7" cy="7" r="3" fill="var(--action)"/>`);
+    case "check": return svg(`<circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--confirm)" stroke-width="1.5"/><path d="M7 3.5a3.5 3.5 0 0 1 0 7z" fill="var(--confirm)"/>`);
+    case "wait":  return svg(`<circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-dasharray="2.2 2.2"/>`);
+    case "skip":  return svg(`<circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--line-strong)" stroke-width="1.5"/><path d="M4.8 7h4.4" stroke="var(--text-4)" stroke-width="1.5" stroke-linecap="round"/>`);
+    default:      return svg(`<circle cx="7" cy="7" r="5.75" fill="none" stroke="var(--line-strong)" stroke-width="1.5"/>`);
+  }
+}
+const pipe = (states, cls = "") => `<span class="pipe ${cls}" aria-hidden="true">${(states || Array(6).fill("none")).map(s => `<i class="${s}"></i>`).join("")}</span>`;
+const statesOf = b => b?.stations?.length === 6 ? STEPS.map(s => b.stations.find(x => x.id === s.id)?.state || "none") : null;
+function overall(states) {
+  if (!states) return "none";
+  if (states.includes("todo")) return "todo";
+  if (states.includes("wait")) return "wait";
+  if (states[5] === "done") return "done";
+  return "check";
+}
+const OVERALL_WORD = { todo: "Blocked", wait: "Waiting", check: "Ready to hand over", done: "With QA", none: "Not checked" };
 
-function tick(html, ms = 4200) {
-  const t = $("#ticker"); t.innerHTML = html; t.classList.add("show");
-  clearTimeout(tick.t); tick.t = setTimeout(() => t.classList.remove("show"), ms);
+let status = null, tickets = null, selected = null, report = null, filter = "all", openStep = null, tab = "repos", commitFilter = "", includeKids = true, checking = false, loadSeq = 0;
+
+function toast(html, ms = 4000) {
+  const t = $("#toast"); t.innerHTML = html; t.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms);
 }
 async function api(path, opts = {}) {
   if (opts.method && opts.method !== "GET") opts.headers = { "X-Ledger": "1", "Content-Type": "application/json" };
@@ -404,429 +407,406 @@ async function api(path, opts = {}) {
   return body;
 }
 
-/* where a ticket stands on the line: the first station that needs a person, or past the end */
-function position(states) {
-  const i = states.findIndex(s => s === "todo" || s === "wait");
-  return i === -1 ? { k: states.length - 1, clear: true } : { k: i, clear: false };
-}
-function trackHtml(states, cls = "") {
-  const known = states && states.length === 6;
-  const st = known ? states : Array(6).fill("none");
-  const { k, clear } = known ? position(st) : { k: 0, clear: true };
-  return `<div class="track ${cls} ${clear ? "clear" : ""}" style="--k:${known ? k : 0}" aria-hidden="true">
-    <span class="fill"></span><span class="carriage"></span>
-    ${st.map(s => `<span class="cell"><span class="n ${s}"></span></span>`).join("")}</div>`;
-}
-const glyph = s => `<span class="n ${s}" role="img" aria-label="${WORD[s] || s}"></span>`;
-const statesOf = r => r?.stations ? STATIONS.map(s => r.stations.find(x => x.id === s.id)?.state || "none") : null;
-
-/* ═══════════════ account ═══════════════ */
+/* ── account / settings ── */
 async function loadStatus() {
   try { status = await api("/api/status"); }
-  catch { $("#whoSlot").innerHTML = `<span class="label" style="color:var(--signal)">Server stopped</span>`; return; }
+  catch { $("#meSlot").innerHTML = `<span class="badge" style="color:var(--danger)">Server not running</span>`; return; }
   const me = status.account;
-  $("#whoSlot").innerHTML = me
-    ? `<button class="who" id="whoBtn" aria-label="Account and settings"><span class="mark">${esc(initials(me.name))}</span><span>${esc(firstName(me.name))}</span></button>`
-    : `<button class="btn sm go" id="whoBtn">Connect Jira</button>`;
-  $("#whoBtn").onclick = openSheet;
+  $("#meSlot").innerHTML = me
+    ? `<button class="me" id="meBtn" aria-label="Account and settings"><span class="avatar">${esc(initials(me.name))}</span><span>${esc(cap(me.name.split(" ")[0]))}</span></button>`
+    : `<button class="btn primary" id="meBtn">Connect Jira</button>`;
+  $("#meBtn").onclick = openSettings;
+  $("#checkAll").hidden = !me;
 }
 
-function openSheet() {
-  const me = status?.account;
-  $("#sheetIn").innerHTML = `<button class="close" id="shut">Close ✕</button>` + (me ? `
-    <span class="label">Signed in</span>
-    <h2 id="sheetTitle">You're on the line.</h2>
-    <div class="ident"><span class="mark">${esc(initials(me.name))}</span><div><b>${esc(me.name)}</b><small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div></div>
-    <p>Your token is kept in ${esc(me.source)} on this computer. Everything done in Jira happens under your name.</p>
-    <div><button class="btn sm" id="disc">Disconnect</button></div>` : `
-    <span class="label">Step 1</span>
-    <h2 id="sheetTitle">Connect your Jira account</h2>
-    <p>The line reads your tickets and posts handovers as you. The token stays in Windows Credential Manager on this computer.</p>
-    ${status?.credentialsRejected ? `<p class="say bad">Your saved token stopped working. Enter a new one.</p>` : ""}
-    <label class="fld"><span class="label">Jira site</span><input id="jSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"></label>
-    <label class="fld"><span class="label">Email you sign in to Atlassian with</span><input id="jEmail" type="email" autocomplete="username" spellcheck="false"><small>This can differ from the email Jira shows on your profile.</small></label>
-    <label class="fld"><span class="label">API token</span><input id="jToken" type="password" autocomplete="off"><small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create a token</a> while signed in as yourself, then paste it.</small></label>
-    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><button class="btn go" id="conn">Connect <span class="arr">→</span></button><span class="say" id="jSay"></span></div>`) + `
-    <hr>
-    <span class="label">${me ? "Repositories" : "Step 2"}</span>
-    <p>The folder with your local clones${status ? `. Found: <b>${plural(status.repoCount, "repository", "repositories")}</b>` : ""}.</p>
-    <label class="fld"><span class="label">Folder</span><input id="root" value="${esc(status?.reposRoot || "")}" spellcheck="false"></label>
-    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><button class="btn sm" id="saveRoot">Save folder</button><span class="say" id="rSay"></span></div>`;
-  $("#shut").onclick = () => $("#sheet").close();
+function openSettings() {
+  const me = status?.account, d = $("#settings");
+  d.innerHTML = `
+    <div class="dlg-h"><h2 id="setTitle">${me ? "Account" : "Connect your Jira account"}</h2><button class="btn ghost icon sm" id="setClose" aria-label="Close">✕</button></div>
+    <div class="dlg-b">
+      ${me ? `
+        <div class="who-card"><span class="avatar">${esc(initials(me.name))}</span><div style="flex:1;min-width:0"><div>${esc(cap(me.name))}</div><small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div><button class="btn sm" id="disc">Disconnect</button></div>
+        <p>Your API token is stored in ${esc(me.source)} on this computer. Everything posted to Jira appears under your name.</p>` : `
+        <p>The ledger reads the tickets assigned to you and posts handovers as you. The token is stored in Windows Credential Manager on this computer, never in the project.</p>
+        ${status?.credentialsRejected ? `<p style="color:var(--danger)">The saved token was rejected by Jira. Enter a new one.</p>` : ""}
+        <label class="field"><span>Jira site</span><input class="input" id="fSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"><span class="err" id="eSite"></span></label>
+        <label class="field"><span>Atlassian sign-in email</span><input class="input" id="fEmail" type="email" autocomplete="username" spellcheck="false"><small>Can differ from the email shown on your Jira profile.</small><span class="err" id="eEmail"></span></label>
+        <label class="field"><span>API token</span><input class="input" id="fToken" type="password" autocomplete="off"><small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">Create a token</a> while signed in as yourself.</small><span class="err" id="eToken"></span></label>`}
+      <div class="divider"></div>
+      <label class="field"><span>Repositories folder</span><input class="input" id="fRoot" value="${esc(status?.reposRoot || "")}" spellcheck="false"><small>${status ? `${pl(status.repoCount, "repository", "repositories")} found.` : ""} One git repository per subfolder.</small><span class="err" id="eRoot"></span></label>
+    </div>
+    <div class="dlg-f"><span class="say" id="say"></span>
+      <button class="btn" id="saveRoot">Save folder</button>
+      ${me ? "" : `<button class="btn primary" id="connect">Connect</button>`}
+    </div>`;
+  $("#setClose").onclick = () => d.close();
+  const say = (t, bad) => { const s = $("#say"); s.className = "say" + (bad ? " bad" : ""); s.innerHTML = t; };
   $("#saveRoot").onclick = async () => {
-    const say = $("#rSay");
-    try { const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ reposRoot: $("#root").value }) });
-          say.className = "say good"; say.textContent = `Found ${plural(r.repoCount, "repository", "repositories")}.`; loadStatus(); }
-    catch (e) { say.className = "say bad"; say.textContent = e.message; }
+    $("#eRoot").textContent = "";
+    if (!$("#fRoot").value.trim()) { $("#eRoot").textContent = "Enter a folder."; return; }
+    try { const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ reposRoot: $("#fRoot").value.trim() }) });
+          say(`Saved · ${pl(r.repoCount, "repository", "repositories")} found`); await loadStatus(); }
+    catch (e) { $("#eRoot").textContent = e.message; }
   };
   if (me) $("#disc").onclick = async () => {
     await api("/api/account/disconnect", { method: "POST" });
-    mine = null; await loadStatus(); openSheet(); route(); tick("Disconnected. Your token was removed from this computer.");
+    tickets = null; selected = null; report = null; await loadStatus(); d.close(); boot(); toast("Disconnected. The token was removed from this computer.");
   };
-  else $("#conn").onclick = async () => {
-    const say = $("#jSay"), b = $("#conn");
-    b.disabled = true; say.className = "say"; say.innerHTML = `<span class="spin"></span> Asking Jira…`;
+  else $("#connect").onclick = async () => {
+    const site = $("#fSite").value.trim(), email = $("#fEmail").value.trim(), token = $("#fToken").value.trim();
+    const errs = { eSite: !/^https:\/\/[^/]+/.test(site) ? "Enter the full address, starting with https://" : "",
+                   eEmail: !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? "Enter a valid email address." : "",
+                   eToken: !token ? "Paste your API token." : token.length < 40 ? "That's too short for an API token. Make sure it isn't your password." : "" };
+    Object.entries(errs).forEach(([id, m]) => { $("#" + id).textContent = m; $("#" + id).previousElementSibling?.closest?.(".field"); });
+    $("#fSite").classList.toggle("bad", !!errs.eSite); $("#fEmail").classList.toggle("bad", !!errs.eEmail); $("#fToken").classList.toggle("bad", !!errs.eToken);
+    if (Object.values(errs).some(Boolean)) return;
+    const b = $("#connect"); b.disabled = true; say(`<span class="spin"></span> Verifying with Jira…`);
     try {
-      const who = await api("/api/account", { method: "POST", body: JSON.stringify({ baseUrl: $("#jSite").value, email: $("#jEmail").value, token: $("#jToken").value }) });
-      mine = null; await loadStatus(); $("#sheet").close(); tick(`Connected as ${esc(who.name)}.`); route();
-    } catch (e) { say.className = "say bad"; say.textContent = e.message; }
+      const who = await api("/api/account", { method: "POST", body: JSON.stringify({ baseUrl: site, email, token }) });
+      tickets = null; await loadStatus(); d.close(); toast(`Connected as ${esc(cap(who.name))}.`); boot();
+    } catch (e) { say(esc(e.message), true); }
     finally { b.disabled = false; }
   };
-  if (!$("#sheet").open) $("#sheet").showModal();
-  setTimeout(() => ($("#jEmail") || $("#shut")).focus(), 50);
-}
-$("#sheet").addEventListener("click", e => { if (e.target === $("#sheet")) $("#sheet").close(); });
-
-/* ═══════════════ home: your line ═══════════════ */
-async function home() {
-  current = null; document.title = "The Line · Feature Ledger";
-  if (status?.account && !mine) {
-    $("#main").innerHTML = `<div class="empty">${trackHtml(null)}<h2>Loading your tickets from Jira…</h2></div>`;
-    try { mine = await api("/api/my-tickets"); } catch (e) { mine = []; tick(esc(e.message)); }
-  }
-  renderHome();
+  if (!d.open) d.showModal();
+  setTimeout(() => ($("#fEmail") || $("#fRoot")).focus(), 30);
 }
 
-function bucket(t) {
-  const st = statesOf(t.lastBuild);
-  if (!st) return "unchecked";
-  if (st[5] === "done" && !st.includes("todo")) return "handed";
-  return st.includes("todo") || st.includes("wait") ? "stuck" : "ready";
+/* ── list ── */
+async function loadTickets() {
+  $("#rows").innerHTML = Array(7).fill(`<div class="sk"></div>`).join("");
+  try { tickets = await api("/api/my-tickets"); } catch (e) { tickets = []; toast(esc(e.message)); }
+  renderList();
 }
 
-function renderHome() {
+function renderList() {
   const me = status?.account;
-  const list = me ? (mine || []) : (status?.recent || []).map(r => ({ ...r, lastBuild: r }));
-  const groups = { stuck: [], ready: [], handed: [], unchecked: [] };
-  list.forEach(t => groups[bucket(t)].push(t));
-  const order = ["stuck", "ready", "unchecked", "handed"];
-  const sorted = order.flatMap(g => groups[g]);
-  const shown = homeFilter === "all" ? sorted : groups[homeFilter];
-  const tally = [["all", "On your line", list.length], ["stuck", "Stuck", groups.stuck.length], ["ready", "Ready to hand over", groups.ready.length], ["handed", "With QA", groups.handed.length], ["unchecked", "Not checked", groups.unchecked.length]];
-
-  $("#main").innerHTML = `
-    <section class="home-head">
-      <div>
-        <div class="kicker"><span class="label">${me ? `${esc(firstName(me.name))}'s line` : "Feature Ledger"}</span></div>
-        <h1 class="hero">${me ? (groups.stuck.length ? `${plural(groups.stuck.length, "ticket is", "tickets are")} stuck before QA.` : list.length ? "Nothing is stuck. Keep it moving." : "Your line is empty.")
-                              : "Every ticket, on its way to QA."}</h1>
-        ${me ? `<div class="tally" role="tablist" aria-label="Filter tickets">${tally.map(([id, l, v]) => `<button role="tab" aria-selected="${homeFilter === id}" class="${homeFilter === id ? "on" : ""}" data-f="${id}"><span class="v">${v}</span><span class="label">${l}</span></button>`).join("")}</div>`
-             : `<p class="lede">Code, tag, database, access, config, handover: six stations every feature passes before a tester can touch it. Open a ticket to see where it's stuck and what to do.</p>`}
-      </div>
-      ${me && list.length ? `<div class="side">
-        <button class="btn go" id="checkAll" ${checking ? "disabled" : ""}>Check all my tickets <span class="arr">→</span></button>
-        <button class="txt" id="reload">Reload from Jira</button>
-        <span class="progress-line" id="prog">${groups.unchecked.length && !checking ? `${plural(groups.unchecked.length, "ticket")} not checked yet` : ""}</span>
-      </div>` : ""}
-    </section>
-    ${!me ? setupHtml() : ""}
-    ${shown.length ? `
-      <div class="board-head" aria-hidden="true"><span class="label">Ticket</span><div class="stations">${STATIONS.map(s => `<span>${s.no} ${s.name}</span>`).join("")}</div><span class="label" style="text-align:right">Next</span></div>
-      <div id="rows">${shown.map(rowHtml).join("")}</div>`
-      : me ? `<div class="empty"><h2>${list.length ? "Nothing in this view." : "No open tickets are assigned to you."}</h2><p>${list.length ? "Pick another filter above." : "When Jira assigns you something, it shows up here."}</p></div>` : ""}`;
-
-  $$("[data-f]").forEach(b => b.onclick = () => { homeFilter = b.dataset.f; renderHome(); });
-  $("#checkAll")?.addEventListener("click", checkAll);
-  $("#reload")?.addEventListener("click", () => { mine = null; home(); });
-  $("#setupJira")?.addEventListener("click", openSheet);
-  $("#setupRepos")?.addEventListener("click", openSheet);
-  wireRows();
-}
-
-function setupHtml() {
-  const reposOk = status?.repoCount > 0;
-  return `<section class="setup">
-    <div><span class="no">01</span><h3>Connect your Jira account</h3><p>So the line can list the tickets assigned to you and post handovers under your name.</p><button class="btn go" id="setupJira">Connect Jira <span class="arr">→</span></button></div>
-    <div class="${reposOk ? "done" : ""}"><span class="no">02</span><h3>${reposOk ? `${plural(status.repoCount, "repository", "repositories")} found` : "Point to your repositories"}</h3><p>${reposOk ? `Reading git history from <code>${esc(status.reposRoot)}</code>.` : "Choose the folder that holds your local clones."}</p><button class="txt" id="setupRepos">${reposOk ? "Change folder" : "Choose folder"}</button></div>
-  </section>`;
-}
-
-function nextText(t) {
-  const st = statesOf(t.lastBuild);
-  if (!st) return `<b>Not checked</b><span class="dim">open to check</span>`;
-  const { k, clear } = position(st);
-  if (clear) return st[5] === "done" ? `<b>With QA</b><span class="dim">checked ${when(t.lastBuild.generated)}</span>` : `<b>Hand over</b><span class="dim">all stations clear</span>`;
-  return `<b class="status-word ${st[k]}">${STATIONS[k].name}</b><span class="dim">${st[k] === "wait" ? "waiting" : "needs you"} · ${when(t.lastBuild.generated)}</span>`;
-}
-
-function rowHtml(t, i = 0) {
-  return `<div class="row ${checking && !t.lastBuild?.stations ? "" : ""}" role="link" tabindex="0" data-key="${esc(t.key)}" style="animation-delay:${Math.min(i, 12) * 30}ms" aria-label="${esc(t.key)}: ${esc(t.summary || "")}">
-    <div class="who-t">
-      <div class="line1"><span class="key">${esc(t.key)}</span>${t.type ? `<span class="typ">${esc(t.type)}</span>` : ""}${t.status ? `<span class="typ">· ${esc(t.status)}</span>` : ""}</div>
-      <div class="tt">${esc(t.summary || "Untitled")}</div>
-      ${t.parentKey ? `<div class="where">in ${esc(t.parentKey)} · ${esc(t.parentSummary || "")}</div>` : ""}
-    </div>
-    ${trackHtml(statesOf(t.lastBuild))}
-    <div class="act">${nextText(t)}</div>
-  </div>`;
-}
-
-function wireRows() {
-  $$("#rows .row").forEach(r => {
-    r.onclick = () => go(r.dataset.key);
-    r.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(r.dataset.key); } };
-  });
-}
-
-async function checkAll() {
-  if (checking || !mine?.length) return;
-  checking = true;
-  $("#checkAll").disabled = true;
-  for (let k = 0; k < mine.length; k++) {
-    const t = mine[k];
-    const row = document.querySelector(`.row[data-key="${CSS.escape(t.key)}"]`);
-    row?.classList.add("busy");
-    const p = $("#prog"); if (p) p.innerHTML = `<span class="spin"></span> ${k + 1} of ${mine.length} · ${esc(t.key)}${k === 0 ? " · fetching repositories first" : ""}`;
-    try {
-      const r = await api(`/api/manifest?key=${encodeURIComponent(t.key)}&fetch=${k === 0 ? 1 : 0}&children=1&mine=1`);
-      t.lastBuild = { generated: r.generated, stations: r.stations.map(s => ({ id: s.id, state: s.state })) };
-    } catch { /* stays unchecked */ }
-    if (current) continue;
-    const fresh = document.querySelector(`.row[data-key="${CSS.escape(t.key)}"]`);
-    if (fresh) { const tmp = document.createElement("div"); tmp.innerHTML = rowHtml(t); tmp.firstElementChild.style.animation = "none"; fresh.replaceWith(tmp.firstElementChild); wireRows(); }
+  if (!me) {
+    $("#count").textContent = ""; $("#filters").innerHTML = "";
+    $("#rows").innerHTML = `<div class="list-empty"><b>Not connected</b>Connect your Jira account to list the tickets assigned to you.<div style="margin-top:12px"><button class="btn primary" id="lc">Connect Jira</button></div></div>`;
+    $("#lc").onclick = openSettings; return;
   }
-  checking = false;
-  if (!current) renderHome();
-  tick("Your whole line is checked.");
+  const all = tickets || [];
+  const groups = { todo: [], wait: [], check: [], none: [], done: [] };
+  all.forEach(t => groups[overall(statesOf(t.lastBuild))].push(t));
+  const F = [["all", "All", all.length], ["todo", "Blocked", groups.todo.length + groups.wait.length], ["check", "Ready", groups.check.length], ["done", "With QA", groups.done.length], ["none", "Unchecked", groups.none.length]];
+  $("#count").textContent = all.length;
+  $("#filters").innerHTML = F.map(([id, l, n]) => `<button aria-pressed="${filter === id}" data-f="${id}">${l}<span class="n">${n}</span></button>`).join("");
+  $$("#filters [data-f]").forEach(b => b.onclick = () => { filter = b.dataset.f; renderList(); });
+
+  const order = ["todo", "wait", "check", "none", "done"];
+  const pick = filter === "all" ? order : filter === "todo" ? ["todo", "wait"] : [filter];
+  const sections = pick.map(g => [g, groups[g]]).filter(([, l]) => l.length);
+  if (!sections.length) { $("#rows").innerHTML = `<div class="list-empty"><b>${all.length ? "Nothing here" : "No open tickets"}</b>${all.length ? "No tickets match this filter." : "Nothing that isn't done is assigned to you in Jira."}</div>`; return; }
+  $("#rows").innerHTML = sections.map(([g, l]) => `${filter === "all" ? `<div class="group-label">${OVERALL_WORD[g]}</div>` : ""}${l.map(rowHtml).join("")}`).join("");
+  $$("#rows .tk").forEach(b => b.onclick = () => select(b.dataset.key));
 }
 
-/* ═══════════════ ticket ═══════════════ */
-function go(key, fetchFirst = false) {
+function rowHtml(t) {
+  const st = statesOf(t.lastBuild);
+  return `<button class="tk ${checking && t._busy ? "busy" : ""}" role="option" aria-selected="${t.key === selected}" data-key="${esc(t.key)}">
+    ${si(overall(st))}<span class="key">${esc(t.key)}</span><span class="ago">${t.lastBuild?.generated ? esc(ago(t.lastBuild.generated)) : ""}</span>
+    <span class="title">${esc(t.summary)}</span>
+    <span class="meta">${pipe(st)}<span class="js">${esc(t.status)}${t.parentKey ? ` · ${esc(t.parentKey)}` : ""}</span></span>
+  </button>`;
+}
+
+function moveSelection(dir) {
+  const keys = $$("#rows .tk").map(b => b.dataset.key);
+  if (!keys.length) return;
+  const i = keys.indexOf(selected);
+  const next = keys[i === -1 ? 0 : Math.max(0, Math.min(keys.length - 1, i + dir))];
+  select(next);
+  document.querySelector(`#rows .tk[data-key="${CSS.escape(next)}"]`)?.scrollIntoView({ block: "nearest" });
+}
+
+/* ── detail ── */
+function select(key, fetchFirst = false) {
   key = (key || "").trim().toUpperCase();
   if (!key) return;
   if (location.hash.slice(1) !== key) history.pushState(null, "", "#" + key);
-  openTicket(key, fetchFirst);
+  load(key, fetchFirst);
 }
 
-async function openTicket(key, fetchFirst) {
-  commitFilter = ""; tab = "repos";
-  window.scrollTo(0, 0);
-  document.title = `${key} · The Line`;
-  const steps = [includeKids && status?.account ? "Reading the ticket and your sub-tickets from Jira" : "Reading the ticket", fetchFirst ? `Fetching ${plural(status?.repoCount ?? 0, "repository", "repositories")}` : "Reading local git history", "Looking for tags, scripts, settings and grants", "Working out what QA needs"];
-  $("#main").innerHTML = `
-    <div class="crumb"><button id="back">← Your line</button></div>
-    <span class="key">${esc(key)}</span>
-    <h1 class="title" style="margin-top:8px">Checking the line…</h1>
-    <p class="stale" id="loadStep" style="margin-top:12px"><span class="spin"></span> ${steps[0]}</p>
-    <div class="rail loading" style="--k:0">${STATIONS.map(s => `<div class="stop"><span class="n none"></span><span class="txtwrap"><span class="no">${s.no}</span><span class="nm">${s.name}</span></span></div>`).join("")}</div>`;
-  $("#back").onclick = goHome;
-  let si = 0; const timer = setInterval(() => { si = Math.min(si + 1, steps.length - 1); const el = $("#loadStep"); if (el) el.innerHTML = `<span class="spin"></span> ${steps[si]}`; }, fetchFirst ? 6000 : 1800);
+async function load(key, fetchFirst) {
+  selected = key; commitFilter = ""; openStep = null;
+  $("#split").classList.add("has-detail");
+  $$("#rows .tk").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
+  document.title = `${key} · Feature Ledger`;
+  const n = ++loadSeq;
+  $("#detail").innerHTML = `<div class="skel-d"><button class="btn ghost sm back" id="back">← My tickets</button>
+    <div class="crumbs" style="margin-top:8px"><span class="key">${esc(key)}</span></div>
+    <div class="check-progress" style="margin:6px 0 16px"><span class="spin"></span> ${fetchFirst ? `Fetching ${pl(status?.repoCount ?? 0, "repository", "repositories")}, then checking` : "Checking"}…</div>
+    <div class="sk" style="height:76px"></div>${Array(6).fill(`<div class="sk" style="height:42px;margin:6px 0"></div>`).join("")}</div>`;
+  $("#back").onclick = backToList;
   try {
-    current = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=1`);
-    current.fetched = fetchFirst;
-    const m = mine?.find(x => x.key === key); if (m) m.lastBuild = { generated: current.generated, stations: current.stations };
-    const st = current.stations.map(s => s.state);
-    sel = current.stations[st.indexOf("todo") !== -1 ? st.indexOf("todo") : st.indexOf("check") !== -1 ? st.indexOf("check") : st.indexOf("wait") !== -1 ? st.indexOf("wait") : 5].id;
-    renderTicket(true);
+    const r = await api(`/api/manifest?key=${encodeURIComponent(key)}&fetch=${fetchFirst ? 1 : 0}&children=${includeKids ? 1 : 0}&mine=1`);
+    if (n !== loadSeq) return;
+    r.fetched = fetchFirst; report = r;
+    const t = tickets?.find(x => x.key === key);
+    if (t) { t.lastBuild = { generated: r.generated, stations: r.stations }; renderList(); }
+    const st = r.stations.map(s => s.state);
+    openStep = r.stations[["todo", "wait", "check"].map(x => st.indexOf(x)).find(i => i !== -1) ?? 5].id;
+    renderDetail();
   } catch (e) {
-    $("#main").innerHTML = `<div class="crumb"><button id="back">← Your line</button></div>
-      <div class="boom"><span class="label" style="color:var(--signal)">Couldn't check ${esc(key)}</span><h2>The line stopped.</h2><p>${esc(e.message)}</p><button class="btn" id="retry">Try again</button></div>`;
-    $("#back").onclick = goHome; $("#retry").onclick = () => openTicket(key, fetchFirst);
-  } finally { clearInterval(timer); }
-}
-
-function goHome() { history.pushState(null, "", location.pathname); route(); }
-
-function renderTicket(animate = false) {
-  const r = current, i = r.issue, me = status?.account;
-  const st = r.stations.map(s => s.state);
-  const { k, clear } = position(st);
-  const none = r.repos.length === 0;
-  const todo = r.stations.reduce((n, s) => n + s.items.filter(x => x.state === "todo").length, 0);
-  const kids = r.scope.length - 1;
-
-  const verdict = none ? { cls: "", big: "No trace of this ticket in git.", p: `Nothing in your ${plural(status?.repoCount ?? 0, "repository", "repositories")} mentions ${esc(r.key)}${kids ? ` or your ${plural(kids, "sub-ticket")}` : ""}.` }
-    : !clear ? { cls: "todo", big: `Stuck at ${STATIONS[k].no} ${STATIONS[k].name}.`, p: `${plural(todo, "thing")} to do before QA can test this. Start with the station marked in red.` }
-    : st[5] === "done" ? { cls: "", big: "This ticket is with QA.", p: "Every station is clear. Confirm the hatched ones if you haven't already." }
-    : { cls: "", big: "Clear to hand over.", p: "Nothing is blocking QA. Confirm the hatched stations, then post the handover." };
-
-  $("#main").innerHTML = `
-    <div class="crumb"><button id="back">← Your line</button>${r.ancestors.map(a => `<span>/</span><button data-go="${esc(a.key)}">${esc(a.type)} ${esc(a.key)}</button>`).join("")}</div>
-    <div class="t-head">
-      <div>
-        <div class="kicker"><a class="key" href="${esc(r.jiraUrl)}" target="_blank" rel="noopener" title="Open in Jira">${esc(r.key)} ↗</a>${i ? `<span class="label">${esc(i.type)}</span><span class="label">· ${esc(i.status)}</span>` : ""}</div>
-        <h1 class="title">${esc(i?.summary || r.key)}</h1>
-        <div class="facts">
-          ${i ? `<span class="f"><span class="label">Owner</span>${esc(i.assignee)}</span>` : ""}
-          ${i && i.fixVersions !== "none" ? `<span class="f"><span class="label">Fix version</span>${esc(i.fixVersions)}</span>` : ""}
-          ${!i && !me ? `<span class="f"><button class="txt" id="hdConnect">Connect Jira</button> to see title, status and sub-tickets</span>` : ""}
-          ${me ? `<label class="switch"><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}> Include my sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
-        </div>
-      </div>
-      <div class="actions">
-        <button class="btn" data-again title="git fetch every repository, then check again">Fetch &amp; re-check</button>
-        <button class="btn solid" id="post" ${me && !none ? "" : "disabled"} title="${me ? "Posts the checklist to the Jira ticket, or updates the one you posted before" : "Connect Jira first"}">Post handover <span class="arr">→</span></button>
-      </div>
-    </div>
-
-    <div class="verdict ${verdict.cls}">
-      <div class="grow"><div class="big">${verdict.big}</div><p>${verdict.p}</p></div>
-      <div class="stale">${r.fetched ? `fresh from the server · ${when(r.generated)}` : `from local copies · ${when(r.generated)} · <button class="txt" data-again>fetch latest</button>`}</div>
-    </div>
-
-    ${none ? "" : `
-    <div class="rail ${clear ? "clear" : ""}" role="tablist" aria-label="Stations to QA" style="--k:${animate ? 0 : k}">
-      <span class="fill"></span><span class="carriage"></span>
-      ${r.stations.map((s, idx) => `<button class="stop ${animate ? "light" : ""}" role="tab" id="tab-${s.id}" aria-controls="station" aria-selected="${s.id === sel}" tabindex="${s.id === sel ? 0 : -1}" data-st="${s.id}" style="animation-delay:${idx * 90}ms">
-        ${glyph(s.state)}<span class="txtwrap"><span class="no">${STATIONS[idx].no} · ${WORD[s.state]}</span><span class="nm">${esc(s.name)}</span><span class="hl">${esc(s.headline)}</span></span></button>`).join("")}
-    </div>
-
-    <div class="desk">
-      <section class="station" id="station" role="tabpanel"></section>
-      <aside class="aside">
-        <div class="panel">
-          <h4 class="label">The numbers</h4>
-          <div class="counts">
-            <div><div class="v">${r.stats.repos}</div><div class="l">repositories</div></div>
-            <div><div class="v">${r.stats.mergeRequests}</div><div class="l">merge requests</div></div>
-            <div><div class="v">${r.stats.merged}/${r.stats.commits}</div><div class="l">commits merged</div></div>
-            <div><div class="v">${r.stats.dbScripts}</div><div class="l">database scripts</div></div>
-          </div>
-        </div>
-        ${kids ? `<div class="panel"><h4 class="label">Your tickets on this line</h4><ul class="mini-tickets">${r.scope.map(t => `<li><button class="key txt" data-go="${esc(t.key)}">${esc(t.key)}</button><span>${esc(t.summary)}</span><span class="s">${esc(t.status)} · ${t.commits ? `${t.merged}/${t.commits} merged` : "no code of its own"}</span></li>`).join("")}</ul></div>` : ""}
-        <div class="panel"><h4 class="label">Take it with you</h4><div class="more">
-          <button class="btn sm" id="copy">Copy checklist <span class="arr">→</span></button>
-          <a class="btn sm" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">Download .md <span class="arr">↓</span></a>
-        </div></div>
-      </aside>
-    </div>
-
-    <details class="evidence" id="evidence">
-      <summary><span class="plus">+</span><h2>The evidence</h2><span class="dim">every repository, file and commit behind the stations</span></summary>
-      <div class="tabs" role="tablist">${[["repos", `Repositories · ${r.repos.length}`], ["files", `Files · ${r.stats.files}`], ["commits", `Commits · ${r.stats.commits}`], ...(r.foreign.length ? [["foreign", `Other tickets · ${r.foreign.length}`]] : [])]
-        .map(([id, l]) => `<button role="tab" aria-selected="${tab === id}" data-tab="${id}">${l}</button>`).join("")}</div>
-      <div class="tabpane" id="pane"></div>
-    </details>`}`;
-
-  wireTicket();
-  if (!none) {
-    renderStation();
-    renderPane();
-    if (animate) requestAnimationFrame(() => requestAnimationFrame(() => { const rl = $(".rail"); if (rl) rl.style.setProperty("--k", k); }));
+    if (n !== loadSeq) return;
+    $("#detail").innerHTML = `<div class="detail-in"><button class="btn ghost sm back" id="back">← My tickets</button><div class="alert"><b>Couldn't check ${esc(key)}.</b> ${esc(e.message)}<div style="margin-top:10px"><button class="btn sm" id="retry">Try again</button></div></div></div>`;
+    $("#back").onclick = backToList; $("#retry").onclick = () => load(key, fetchFirst);
   }
 }
 
-function renderStation() {
-  const s = current.stations.find(x => x.id === sel), meta = STATIONS.find(x => x.id === sel);
+function backToList() { history.pushState(null, "", location.pathname); selected = null; report = null; $("#split").classList.remove("has-detail"); renderList(); renderBlank(); }
+
+function renderBlank() {
+  const me = status?.account;
+  document.title = "Feature Ledger";
+  $("#detail").innerHTML = `<div class="blank"><div class="blank-in">
+    <div class="glyph"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg></div>
+    ${me ? `<h2>Select a ticket</h2><p>See what's left before QA can test it: code, tags, database, access, config and the handover.</p>
+      <div class="keys"><span><kbd>J</kbd> <kbd>K</kbd> move</span><span><kbd>Ctrl K</kbd> find</span><span><kbd>R</kbd> re-check</span></div>`
+    : `<h2>Set up Feature Ledger</h2><p>Two steps, once per computer.</p>
+      <div class="setup">
+        <div class="s"><span class="num">1</span><div><b>Connect your Jira account</b><p class="t3">Lists your tickets and posts handovers under your name.</p><button class="btn primary sm" id="s1">Connect Jira</button></div></div>
+        <div class="s"><span class="num ${status?.repoCount ? "ok" : ""}">${status?.repoCount ? "✓" : "2"}</span><div><b>Repositories folder</b><p class="t3">${status?.repoCount ? `${pl(status.repoCount, "repository", "repositories")} in <code>${esc(status.reposRoot)}</code>` : "Point to the folder with your local clones."}</p><button class="btn sm" id="s2">${status?.repoCount ? "Change" : "Choose folder"}</button></div></div>
+      </div>`}
+  </div></div>`;
+  $("#s1")?.addEventListener("click", openSettings);
+  $("#s2")?.addEventListener("click", openSettings);
+}
+
+function renderDetail() {
+  const r = report, i = r.issue, me = status?.account;
+  const st = r.stations.map(s => s.state), ov = overall(st), none = r.repos.length === 0;
+  const actions = r.stations.reduce((n, s) => n + s.items.filter(x => x.state === "todo").length, 0);
+  const confirms = r.stations.reduce((n, s) => n + s.items.filter(x => x.state === "check").length, 0);
+  const cur = st.findIndex(s => s === "todo" || s === "wait");
+  const kids = r.scope.length - 1;
+  const verdict = none ? ["none", "No trace in git", `Nothing in your repositories mentions ${esc(r.key)}${kids ? ` or your ${pl(kids, "sub-ticket")}` : ""}.`]
+    : ov === "todo" ? ["todo", `Blocked at ${STEPS[cur].name}`, `${pl(actions, "action")} before QA can test this${confirms ? `, ${pl(confirms, "item")} to confirm` : ""}.`]
+    : ov === "wait" ? ["wait", `Waiting at ${STEPS[cur].name}`, "An earlier step has to finish first."]
+    : ov === "done" ? ["done", "With QA", confirms ? `${pl(confirms, "item")} still worth confirming.` : "Every step is done."]
+    : ["check", "Ready to hand over", `Nothing blocks QA. ${pl(confirms, "item")} to confirm, then post the handover.`];
+
+  $("#detail").innerHTML = `<div class="detail-in">
+    <button class="btn ghost sm back" id="back" style="margin-bottom:8px">← My tickets</button>
+    <div class="crumbs">${r.ancestors.map(a => `<button data-go="${esc(a.key)}">${esc(a.type)} <span class="key">${esc(a.key)}</span></button><span>/</span>`).join("")}<a class="key" href="${esc(r.jiraUrl)}" target="_blank" rel="noopener" title="Open in Jira">${esc(r.key)} ↗</a></div>
+    <div class="head">
+      <div class="grow">
+        <h1>${esc(i?.summary || r.key)}</h1>
+        <div class="facts">
+          ${i ? `<span class="badge">${esc(i.type)}</span><span>Jira: <b>${esc(i.status)}</b></span><span>Owner: <b>${esc(cap(i.assignee))}</b></span>${i.fixVersions !== "none" ? `<span>Fix version: <b>${esc(i.fixVersions)}</b></span>` : ""}`
+              : me ? "" : `<span><button class="textlink" id="hc" style="text-decoration:underline;text-underline-offset:3px">Connect Jira</button> to see title, status and sub-tickets</span>`}
+          ${me ? `<label style="display:inline-flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="kids" ${includeKids ? "checked" : ""}> Include my sub-tickets${kids ? ` (${kids})` : ""}</label>` : ""}
+        </div>
+      </div>
+      <div class="acts">
+        <button class="btn" id="recheck" title="Fetch every repository, then check again (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3.5v5h-5"/></svg>Re-check</button>
+        <button class="btn primary" id="post" ${me && !none ? "" : "disabled"} title="${me ? "Post the checklist to the Jira ticket (replaces your previous one)" : "Connect Jira first"}">Post handover</button>
+        <div class="menu"><button class="btn icon" id="more" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">⋯</button>
+          <div class="menu-pop" id="morePop" role="menu" hidden>
+            <button role="menuitem" id="copy">Copy checklist</button>
+            <a role="menuitem" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">Download as Markdown</a>
+            <hr><a role="menuitem" href="${esc(r.jiraUrl)}" target="_blank" rel="noopener">Open in Jira ↗</a>
+          </div></div>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div><div class="verdict">${si(verdict[0])}${verdict[1]}</div><div class="sub">${verdict[2]}</div></div>
+      <div class="fresh">Checked ${esc(ago(r.generated))} · ${r.fetched ? "latest from server" : `local copies · <button id="fetchNow">fetch latest</button>`}</div>
+      ${none ? "" : `<div class="pipe-row">${pipe(st, "lg")}</div>
+      <div class="stage-labels">${STEPS.map((s, k) => `<span class="${k === cur ? "cur" : ""}">${s.name}</span>`).join("")}</div>`}
+    </div>
+
+    ${none ? "" : `
+    <div class="cols">
+      <section>
+        <div class="section-h"><h3>Steps to QA</h3><span>${pl(actions, "action")} · ${pl(confirms, "to confirm", "to confirm")}</span></div>
+        <div class="steps" id="steps">${r.stations.map((s, k) => stepHtml(s, k)).join("")}</div>
+      </section>
+      <aside class="side-stack">
+        <div class="props"><dl>
+          <dt>Repositories</dt><dd>${r.stats.repos}</dd>
+          <dt>Merge requests</dt><dd>${r.stats.mergeRequests}</dd>
+          <dt>Commits merged</dt><dd>${r.stats.merged} / ${r.stats.commits}</dd>
+          <dt>Files changed</dt><dd>${r.stats.files}</dd>
+          <dt>Database scripts</dt><dd>${r.stats.dbScripts}</dd>
+        </dl></div>
+        ${kids ? `<div class="props"><div class="section-h" style="margin:8px 0 2px"><h3>Your tickets in scope</h3></div><ul class="subtk">${r.scope.map(t => `<li><button data-go="${esc(t.key)}"><span class="key">${esc(t.key)}</span><span class="m">${t.commits ? `${t.merged}/${t.commits} merged` : "no code"}</span><span class="s">${esc(t.summary)}</span></button></li>`).join("")}</ul></div>` : ""}
+      </aside>
+    </div>
+
+    <div class="tabs" role="tablist">${[["repos", "Repositories", r.repos.length], ["files", "Files", r.stats.files], ["commits", "Commits", r.stats.commits], ...(r.foreign.length ? [["foreign", "Other tickets", r.foreign.length]] : [])]
+      .map(([id, l, c]) => `<button role="tab" aria-selected="${tab === id}" data-tab="${id}">${l}<span class="n">${c}</span></button>`).join("")}</div>
+    <div class="pane" id="pane"></div>`}
+  </div>`;
+  wireDetail();
+  if (!none) renderPane();
+}
+
+function stepHtml(s, k) {
+  const open = s.id === openStep;
   const items = [...s.items].sort((a, b) => ["todo", "wait", "check", "done", "skip"].indexOf(a.state) - ["todo", "wait", "check", "done", "skip"].indexOf(b.state));
-  $("#station").setAttribute("aria-labelledby", `tab-${s.id}`);
-  $("#station").innerHTML = `
-    <div class="sh"><span class="label">${meta.no} · ${WORD[s.state]}</span><h3>${esc(s.name)}</h3></div>
-    <p class="means">${esc(meta.means)}</p>
-    ${items.length ? `<ul class="items">${items.map(it => `<li class="item">${glyph(it.state)}
-        <div>${it.repo ? `<div class="repo">${esc(it.repo)}</div>` : ""}<div class="it">${esc(it.title)}</div>${it.detail ? `<div class="id">${esc(it.detail)}</div>` : ""}</div>
-        ${it.actionUrl === "post:" ? `<button class="btn sm go go-btn" data-post>${esc(it.actionLabel)} <span class="arr">→</span></button>`
-          : it.actionUrl ? `<a class="btn sm ${it.state === "todo" ? "go" : ""} go-btn" href="${esc(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")} <span class="arr">↗</span></a>` : ""}
-      </li>`).join("")}</ul>`
-      : `<p class="dim">${esc(s.headline)}.</p>`}
-    <div class="legend">${["done", "todo", "check", "wait", "skip"].map(x => `<span>${glyph(x)} ${WORD[x]}</span>`).join("")}</div>`;
-  $$("[data-post]").forEach(b => b.onclick = post);
+  return `<div class="step" data-open="${open}" data-id="${s.id}">
+    <button class="step-h" aria-expanded="${open}" aria-controls="sb-${s.id}">
+      ${si(s.state)}<span class="no">0${k + 1}</span><span class="name">${esc(STEPS[k].name)}</span><span class="hl">${esc(s.headline)}</span>
+      ${s.state === "todo" ? `<span class="badge action">${pl(s.items.filter(x => x.state === "todo").length, "action")}</span>` : s.state === "check" ? `<span class="badge confirm">To confirm</span>` : s.state === "done" ? `<span class="badge ok">Done</span>` : `<span class="badge">${STATE_WORD[s.state]}</span>`}
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <div class="step-b" id="sb-${s.id}" ${open ? "" : "hidden"}>
+      <div class="means">${esc(STEPS[k].means)}</div>
+      ${items.length ? `<ul class="items">${items.map(it => `<li class="item">${si(it.state)}
+        <div>${it.repo ? `<div class="repo">${esc(it.repo)}</div>` : ""}<div class="what">${esc(it.title)}</div>${it.detail ? `<div class="detail-t">${esc(it.detail)}</div>` : ""}</div>
+        ${it.actionUrl === "post:" ? `<button class="btn sm action" data-post>${esc(it.actionLabel)}</button>`
+          : it.actionUrl ? `<a class="btn sm" href="${esc(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")} ↗</a>` : ""}
+      </li>`).join("")}</ul>` : `<div class="no-items">${esc(s.headline)}.</div>`}
+    </div>
+  </div>`;
 }
 
 function renderPane() {
-  const r = current, pane = $("#pane");
+  const r = report, p = $("#pane");
   if (tab === "repos") {
-    pane.innerHTML = `<div class="scroll-x"><table class="t"><thead><tr><th>Repository</th><th>Merge requests</th><th>Branches</th><th>Commits merged</th></tr></thead><tbody>
-      ${r.repos.map(x => `<tr><td>${x.webUrl ? `<a href="${esc(x.webUrl)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}<div class="dim mono" style="font-size:12px">${esc(branch(x.defaultRef))}</div></td>
-        <td>${x.merges.map(m => m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="dim">${day(m.date)}</span>` : `<span class="dim">direct merge ${day(m.date)}</span>`).join("<br>") || `<span class="dim">none</span>`}</td>
-        <td>${x.branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span style="color:var(--signal)">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="dim">none</span>`}</td>
-        <td class="mono">${x.commits.filter(c => c.inDefault).length}/${x.commits.length}</td></tr>`).join("")}</tbody></table></div>`;
+    p.innerHTML = `<div class="scroll-x"><table class="grid"><thead><tr><th>Repository</th><th>Branch</th><th>Merge requests</th><th>Ticket branches</th><th style="text-align:right">Commits merged</th></tr></thead><tbody>
+      ${r.repos.map(x => `<tr><td>${x.webUrl ? `<a href="${esc(x.webUrl)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}</td><td><code>${esc(branch(x.defaultRef))}</code></td>
+        <td>${x.merges.map(m => m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.label)}</a> <span class="t3">${day(m.date)}</span>` : `<span class="t3">direct merge · ${day(m.date)}</span>`).join("<br>") || `<span class="t3">None</span>`}</td>
+        <td>${x.branches.map(b => `<code>${esc(b.name)}</code>${b.unmerged ? ` <span class="badge action">${b.unmerged} unmerged</span>` : ""}`).join("<br>") || `<span class="t3">None</span>`}</td>
+        <td style="text-align:right" class="mono">${x.commits.filter(c => c.inDefault).length} / ${x.commits.length}</td></tr>`).join("")}</tbody></table></div>`;
   } else if (tab === "files") {
-    pane.innerHTML = `<div class="tool"><input id="ff" placeholder="Filter by path" aria-label="Filter files"></div>
-      <div id="fl">${r.repos.filter(x => x.files.length).map(x => `<h3 class="repo-h">${esc(x.name)}</h3><ul class="files">${x.files.map(f => `<li data-p="${esc((x.name + " " + f.path).toLowerCase())}"><span class="op ${esc(f.status)}" title="${({ A: "added", M: "changed", D: "deleted", R: "renamed" })[f.status] || ""}">${esc(f.status)}</span><span>${esc(f.path)}</span></li>`).join("")}</ul>`).join("")}</div>`;
+    p.innerHTML = `<div class="tool"><input class="input" id="ff" placeholder="Filter by path" aria-label="Filter files"></div>
+      <div id="fl">${r.repos.filter(x => x.files.length).map(x => `<div class="repo-h">${esc(x.name)} <span class="t3" style="font-weight:400">${x.files.length}</span></div><ul class="files">${x.files.map(f => `<li data-p="${esc((x.name + " " + f.path).toLowerCase())}"><span class="op ${esc(f.status)}" title="${({ A: "Added", M: "Modified", D: "Deleted", R: "Renamed" })[f.status] || ""}">${esc(f.status)}</span><span>${esc(f.path)}</span></li>`).join("")}</ul>`).join("")}</div>`;
     $("#ff").oninput = e => { const q = e.target.value.toLowerCase(); $$("#fl li").forEach(li => li.hidden = q && !li.dataset.p.includes(q)); };
   } else if (tab === "commits") {
     const multi = r.scope.length > 1;
     const repos = r.repos.map(x => ({ ...x, commits: x.commits.filter(c => !commitFilter || c.ticket === commitFilter) })).filter(x => x.commits.length);
-    pane.innerHTML = `${multi ? `<div class="tool"><select id="cf" aria-label="Show commits for"><option value="">All your tickets</option>${r.scope.filter(t => t.commits).map(t => `<option value="${esc(t.key)}" ${t.key === commitFilter ? "selected" : ""}>${esc(t.key)} · ${esc(t.summary)}</option>`).join("")}</select></div>` : ""}
-      ${repos.map(x => `<h3 class="repo-h">${esc(x.name)}</h3>${x.commits.map(c => commitHtml(c, x.defaultRef, multi && c.ticket ? `${esc(c.ticket)} · ` : "")).join("")}`).join("") || `<p class="dim">None.</p>`}`;
+    p.innerHTML = `${multi ? `<div class="tool"><select class="input" id="cf" aria-label="Filter by ticket"><option value="">All tickets</option>${r.scope.filter(t => t.commits).map(t => `<option value="${esc(t.key)}" ${t.key === commitFilter ? "selected" : ""}>${esc(t.key)} · ${esc(t.summary)}</option>`).join("")}</select></div>` : ""}
+      ${repos.map(x => `<div class="repo-h">${esc(x.name)}</div>${x.commits.map(c => commitHtml(c, x.defaultRef, multi && c.ticket ? `${esc(c.ticket)} · ` : "")).join("")}`).join("") || `<p class="t3">None.</p>`}`;
     $("#cf")?.addEventListener("change", e => { commitFilter = e.target.value; renderPane(); });
-  } else if (tab === "foreign") {
-    pane.innerHTML = `<p class="dim" style="margin-top:0">Commits from other tickets that sit on these branches, usually because a branch was started from another ticket's branch. They don't count toward any station.</p>
-      ${r.foreign.map(c => commitHtml(c, null, `${esc(c.otherKey)} · ${esc(c.repo)} · `)).join("")}`;
+  } else {
+    p.innerHTML = `<p class="t3" style="margin:0 0 10px;font-size:12.5px">Commits from tickets outside this scope that sit on these branches. Not counted in any step.</p>${r.foreign.map(c => commitHtml(c, null, `${esc(c.otherKey)} · ${esc(c.repo)} · `)).join("")}`;
   }
 }
 
-function commitHtml(c, defaultRef, prefix = "") {
-  return `<div class="commit"><span class="key">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.short)}</a>` : esc(c.short)}</span><span>${esc(c.subject)}</span>
-    <span class="m">${prefix}${esc(c.author)} · ${day(c.date)} · ${c.inDefault ? "merged" : `<span style="color:var(--signal)">not in ${esc(branch(defaultRef) || "main")}</span>`}</span>
-    ${c.note ? `<span class="note">${esc(c.note)}</span>` : ""}</div>`;
+function commitHtml(c, ref, prefix = "") {
+  return `<div class="commit"><a class="key" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
+    <span class="m">${prefix}${esc(c.author)} · ${day(c.date)} · ${c.inDefault ? "merged" : `<span style="color:var(--action)">not in ${esc(branch(ref) || "main")}</span>`}</span>
+    ${c.note ? `<span class="n">${esc(c.note)}</span>` : ""}</div>`;
 }
 
-async function post() {
-  const btns = $$("#post, [data-post]");
-  btns.forEach(b => { b.disabled = true; b.dataset.label = b.innerHTML; b.innerHTML = `<span class="spin"></span> Posting…`; });
-  try {
-    const res = await api(`/api/post?key=${encodeURIComponent(current.key)}`, { method: "POST" });
-    tick(`Handover posted to ${esc(current.key)} as ${esc(status.account.name)}. <a href="${esc(res.url)}" target="_blank" rel="noopener">Open in Jira ↗</a>`, 7000);
-  } catch (e) { tick(`Jira refused: ${esc(e.message)}`, 7000); }
-  finally { btns.forEach(b => { b.disabled = false; b.innerHTML = b.dataset.label; }); }
-}
-
-function wireTicket() {
-  const r = current;
-  $("#back").onclick = goHome;
-  $("#hdConnect")?.addEventListener("click", openSheet);
-  $("#kids")?.addEventListener("change", e => { includeKids = e.target.checked; openTicket(r.key, false); });
-  $$("[data-again]").forEach(b => b.onclick = () => openTicket(r.key, true));
-  $$("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
-  $("#post")?.addEventListener("click", post);
-  $("#copy")?.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); tick("Checklist copied. Paste it anywhere."); }
-    catch (e) { tick(`Couldn't copy: ${esc(e.message)}`); }
-  });
-  const stops = $$(".stop");
-  stops.forEach((b, idx) => {
-    b.onclick = () => { sel = b.dataset.st; stops.forEach(x => { const on = x === b; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; }); renderStation(); };
-    b.onkeydown = e => {
-      const dir = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-      if (!dir) return;
-      e.preventDefault(); const nxt = stops[(idx + dir + stops.length) % stops.length]; nxt.focus(); nxt.click();
-    };
+function wireDetail() {
+  const r = report;
+  $("#back").onclick = backToList;
+  $("#hc")?.addEventListener("click", openSettings);
+  $("#kids")?.addEventListener("change", e => { includeKids = e.target.checked; load(r.key, false); });
+  $("#recheck").onclick = () => load(r.key, true);
+  $("#fetchNow")?.addEventListener("click", () => load(r.key, true));
+  $$("[data-go]").forEach(b => b.onclick = () => select(b.dataset.go));
+  $("#post").onclick = post;
+  $$("[data-post]").forEach(b => b.onclick = post);
+  const more = $("#more"), pop = $("#morePop");
+  more.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; more.setAttribute("aria-expanded", !pop.hidden); };
+  document.addEventListener("click", () => { pop.hidden = true; more.setAttribute("aria-expanded", "false"); }, { once: true });
+  $("#copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Checklist copied to the clipboard."); }
+    catch (e) { toast(`Couldn't copy: ${esc(e.message)}`); }
+  };
+  $$(".step-h").forEach(h => h.onclick = () => {
+    const step = h.closest(".step"), open = step.dataset.open !== "true";
+    step.dataset.open = open; h.setAttribute("aria-expanded", open); step.querySelector(".step-b").hidden = !open;
+    if (open) openStep = step.dataset.id;
   });
   $$(".tabs [data-tab]").forEach(b => b.onclick = () => { tab = b.dataset.tab; $$(".tabs [data-tab]").forEach(x => x.setAttribute("aria-selected", x === b)); renderPane(); });
 }
 
-/* ═══════════════ search: your tickets only ═══════════════ */
-let hits = [], hitIdx = -1, seq = 0, timer;
-const closeHits = () => { $("#hits").hidden = true; $("#q").setAttribute("aria-expanded", "false"); };
-const showHits = html => { $("#hits").innerHTML = html; $("#hits").hidden = false; $("#q").setAttribute("aria-expanded", "true"); };
-function pick(key) { $("#q").value = ""; $("#q").blur(); closeHits(); go(key); }
-function drawHits(q) {
-  if (!hits.length) return showHits(`<div class="msg">None of your tickets match “${esc(q)}”.</div>`);
-  showHits(hits.map((h, k) => `<button type="button" role="option" aria-selected="${k === hitIdx}" class="${k === hitIdx ? "on" : ""}" data-key="${esc(h.key)}"><span class="key">${esc(h.key)}</span><span class="t">${esc(h.summary)}</span><span class="dim">${esc(h.status)}</span></button>`).join(""));
-  $$("#hits [data-key]").forEach(b => b.onmousedown = e => { e.preventDefault(); pick(b.dataset.key); });
+async function post() {
+  const btns = $$("#post, [data-post]");
+  btns.forEach(b => { b.disabled = true; b.dataset.l = b.innerHTML; b.innerHTML = `<span class="spin"></span> Posting`; });
+  try {
+    const res = await api(`/api/post?key=${encodeURIComponent(report.key)}`, { method: "POST" });
+    toast(`Handover posted to ${esc(report.key)}. <a href="${esc(res.url)}" target="_blank" rel="noopener">View in Jira</a>`, 6500);
+  } catch (e) { toast(`<span style="color:var(--danger)">Jira refused:</span> ${esc(e.message)}`, 6500); }
+  finally { btns.forEach(b => { b.disabled = false; b.innerHTML = b.dataset.l; }); }
 }
-$("#q").addEventListener("input", () => {
-  const q = $("#q").value.trim();
-  clearTimeout(timer);
-  if (!status?.account) return showHits(`<div class="msg">Connect Jira to search your tickets.</div>`);
-  if (q.length < 2) { hits = []; return closeHits(); }
-  timer = setTimeout(async () => {
-    const n = ++seq;
-    showHits(`<div class="msg"><span class="spin"></span> Searching your tickets…</div>`);
-    try { const r = await api(`/api/search?q=${encodeURIComponent(q)}`); if (n !== seq) return; hits = r; hitIdx = r.length ? 0 : -1; drawHits(q); }
-    catch (e) { if (n === seq) showHits(`<div class="msg">${esc(e.message)}</div>`); }
-  }, 220);
-});
-$("#q").addEventListener("keydown", e => {
-  if (e.key === "Escape") { closeHits(); $("#q").blur(); return; }
-  if ($("#hits").hidden || !hits.length) return;
-  if (e.key === "ArrowDown") { e.preventDefault(); hitIdx = (hitIdx + 1) % hits.length; drawHits($("#q").value); }
-  if (e.key === "ArrowUp") { e.preventDefault(); hitIdx = (hitIdx - 1 + hits.length) % hits.length; drawHits($("#q").value); }
-});
-$("#q").addEventListener("blur", () => setTimeout(closeHits, 120));
-$("#find").onsubmit = e => { e.preventDefault(); if (hits.length && hitIdx >= 0 && !$("#hits").hidden) pick(hits[hitIdx].key); };
-document.addEventListener("keydown", e => { if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); } });
 
-/* ═══════════════ routing ═══════════════ */
-function route() {
-  const k = decodeURIComponent(location.hash.slice(1)).toUpperCase();
-  if (k) openTicket(k, false); else home();
+/* ── check all ── */
+async function checkAll() {
+  if (checking || !tickets?.length) return;
+  checking = true; $("#checkAll").disabled = true;
+  for (let k = 0; k < tickets.length; k++) {
+    const t = tickets[k]; t._busy = true; renderList();
+    $("#checkProgress").innerHTML = `<span class="spin"></span> ${k === 0 ? "Fetching repositories · " : ""}${k + 1} of ${tickets.length}`;
+    try {
+      const r = await api(`/api/manifest?key=${encodeURIComponent(t.key)}&fetch=${k === 0 ? 1 : 0}&children=1&mine=1`);
+      t.lastBuild = { generated: r.generated, stations: r.stations };
+      if (t.key === selected) { r.fetched = true; report = r; renderDetail(); }
+    } catch { }
+    t._busy = false;
+  }
+  checking = false; $("#checkAll").disabled = false; $("#checkProgress").textContent = "";
+  renderList(); toast(`All ${pl(tickets.length, "ticket")} checked.`);
 }
-window.addEventListener("popstate", route);
-$("#brand").onclick = e => { e.preventDefault(); goHome(); };
-(async () => { await loadStatus(); route(); })();
+
+/* ── find (Ctrl K) ── */
+let hits = [], hitIdx = 0, pseq = 0, ptimer;
+function openPalette() {
+  if (!status?.account) { openSettings(); return; }
+  $("#pq").value = ""; hits = (tickets || []).slice(0, 12); hitIdx = 0; drawHits("");
+  $("#palette").showModal(); $("#pq").focus();
+}
+function drawHits(q) {
+  const res = $("#pres");
+  if (!hits.length) { res.innerHTML = `<div class="hint">${q ? `None of your tickets match “${esc(q)}”.` : "Type a ticket key or words from its title."}</div>`; return; }
+  res.innerHTML = (q ? "" : `<div class="hint" style="padding:6px 10px 4px;font-size:11.5px">Your open tickets</div>`) + hits.map((h, k) => `<button role="option" aria-selected="${k === hitIdx}" data-key="${esc(h.key)}">
+    ${si(overall(statesOf((tickets || []).find(t => t.key === h.key)?.lastBuild)), false)}<span class="key">${esc(h.key)}</span><span class="t">${esc(h.summary)}</span><span class="st">${esc(h.status)}</span></button>`).join("");
+  $$("#pres [data-key]").forEach(b => { b.onclick = () => pickHit(b.dataset.key); b.onmousemove = () => { const i = hits.findIndex(h => h.key === b.dataset.key); if (i !== hitIdx) { hitIdx = i; $$("#pres [data-key]").forEach((x, j) => x.setAttribute("aria-selected", j === i)); } }; });
+}
+function pickHit(key) { $("#palette").close(); select(key); }
+$("#pq").addEventListener("input", () => {
+  const q = $("#pq").value.trim();
+  clearTimeout(ptimer);
+  const local = (tickets || []).filter(t => !q || t.key.toLowerCase().includes(q.toLowerCase()) || (t.summary || "").toLowerCase().includes(q.toLowerCase()));
+  hits = local.slice(0, 12); hitIdx = 0; drawHits(q);
+  if (q.length < 2) return;
+  ptimer = setTimeout(async () => {   // also finds your done and older tickets
+    const n = ++pseq;
+    try {
+      const r = await api(`/api/search?q=${encodeURIComponent(q)}`);
+      if (n !== pseq) return;
+      const seen = new Set(hits.map(h => h.key));
+      hits = [...hits, ...r.filter(x => !seen.has(x.key))].slice(0, 20); drawHits(q);
+    } catch { }
+  }, 250);
+});
+$("#pq").addEventListener("keydown", e => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!hits.length) return; hitIdx = (hitIdx + (e.key === "ArrowDown" ? 1 : -1) + hits.length) % hits.length; drawHits($("#pq").value.trim()); $$("#pres [aria-selected=true]")[0]?.scrollIntoView({ block: "nearest" }); }
+  if (e.key === "Enter" && hits[hitIdx]) { e.preventDefault(); pickHit(hits[hitIdx].key); }
+});
+$("#palette").addEventListener("click", e => { if (e.target === $("#palette")) $("#palette").close(); });
+$("#settings").addEventListener("click", e => { if (e.target === $("#settings")) $("#settings").close(); });
+
+/* ── keyboard ── */
+document.addEventListener("keydown", e => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName) || $("#palette").open || $("#settings").open;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); return; }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "/") { e.preventDefault(); openPalette(); }
+  else if (e.key === "j" || e.key === "ArrowDown" && document.activeElement?.closest?.("#rows")) { e.preventDefault(); moveSelection(1); }
+  else if (e.key === "k" || e.key === "ArrowUp" && document.activeElement?.closest?.("#rows")) { e.preventDefault(); moveSelection(-1); }
+  else if (e.key === "r" && report) { load(report.key, true); }
+});
+
+/* ── boot ── */
+$("#findBtn").onclick = openPalette;
+$("#checkAll").onclick = checkAll;
+$("#reload").onclick = () => status?.account && loadTickets();
+window.addEventListener("popstate", () => { const k = decodeURIComponent(location.hash.slice(1)).toUpperCase(); if (k) load(k, false); else backToList(); });
+
+async function boot() {
+  await loadStatus();
+  if (status?.account) await loadTickets(); else renderList();
+  const k = decodeURIComponent(location.hash.slice(1)).toUpperCase();
+  if (k) load(k, false); else renderBlank();
+}
+boot();
 </script>
 </body>
 </html>
