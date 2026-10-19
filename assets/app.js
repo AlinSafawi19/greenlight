@@ -34,11 +34,11 @@ const WORD = { done: "Done", todo: "Needs you", check: "To confirm", wait: "Wait
 function mark(s, label = true) {
   const a = label ? `role="img" aria-label="${WORD[s] || s}"` : `aria-hidden="true"`;
   const w = inner => `<svg class="mark" viewBox="0 0 16 16" ${a}>${inner}</svg>`;
-  if (s === "done")  return w(`<circle cx="8" cy="8" r="7" fill="var(--green)"/><path d="m5 8.3 2 2 4-4.4" fill="none" stroke="#0e1a13" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`);
-  if (s === "todo")  return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--amber)" stroke-width="1.5"/><circle cx="8" cy="8" r="3" fill="var(--amber)"/>`);
-  if (s === "check") return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M8 4.25a3.75 3.75 0 0 1 0 7.5z" fill="var(--ink-3)"/>`);
-  if (s === "wait")  return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="2.4 2.6"/>`);
-  if (s === "skip")  return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--hair-2)" stroke-width="1.5"/><path d="M5.5 8h5" stroke="var(--ink-4)" stroke-width="1.5" stroke-linecap="round"/>`);
+  if (s === "done")  return w(`<circle cx="8" cy="8" r="7" fill="var(--st-done)"/><path d="m5 8.3 2 2 4-4.4" fill="none" stroke="var(--gl-bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`);
+  if (s === "todo")  return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--st-todo)" stroke-width="1.6"/><circle cx="8" cy="8" r="3" fill="var(--st-todo)"/>`);
+  if (s === "check") return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--st-check)" stroke-width="1.6"/><path d="M8 4.25a3.75 3.75 0 0 1 0 7.5z" fill="var(--st-check)"/>`);
+  if (s === "wait")  return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--st-wait)" stroke-width="1.6" stroke-dasharray="2.4 2.6"/>`);
+  if (s === "skip")  return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--st-skip)" stroke-width="1.5"/><path d="M5.5 8h5" stroke="var(--st-skip)" stroke-width="1.5" stroke-linecap="round"/>`);
   return w(`<circle cx="8" cy="8" r="6.25" fill="none" stroke="var(--hair-2)" stroke-width="1.5"/>`);
 }
 const qbar = st => `<span class="qbar" aria-hidden="true">${(st || Array(6).fill("none")).map(s => `<i class="${s}"></i>`).join("")}</span>`;
@@ -82,10 +82,11 @@ async function loadStatus() {
   catch { $("#whoSlot").innerHTML = `<span class="ink-3" style="padding:0 8px">Server isn't running</span>`; return; }
   const me = status.account;
   $("#whoSlot").innerHTML = me
-    ? `<button class="who" id="whoBtn" aria-label="Account and settings"><span class="face">${esc(initials(me.name))}</span><span class="nm">${esc(cap(me.name.split(" ")[0]))}</span></button>`
-    : `<button class="btn success" id="whoBtn">Connect Jira</button>`;
+    ? `<button class="who" id="whoBtn" aria-label="Account and settings" data-tip="Account and settings"><span class="face">${esc(initials(me.name))}</span><span class="nm">${esc(cap(me.name))}<small>${status.gitlab ? "Jira and GitLab" : "Jira"} · settings</small></span>${icon("cog")}</button>`
+    : `<button class="btn success" id="whoBtn" style="width:100%">Connect Jira</button>`;
   $("#whoBtn").onclick = openSettings;
   $("#checkAll").hidden = !me;
+  renderShell();
 }
 
 function openSettings() {
@@ -200,15 +201,17 @@ function soften(el, delay = 0) {
   el.animate([{ opacity: 0, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 300, delay, easing: "cubic-bezier(.33, .8, .25, 1)", fill: "backwards" });
 }
 
-const emptyNote = (title, text, action = "") => `<div class="rail-empty">${icon("list", "ico big")}<b>${title}</b><span>${text}</span>${action}</div>`;
+const emptyNote = (title, text, action = "", mood = "empty") => `<div class="rail-empty">${glim(mood)}<b>${title}</b><span>${text}</span>${action}</div>`;
+
+let groupBy = (() => { try { return localStorage.getItem("gl-group") || "story"; } catch { return "story"; } })();
 
 function renderList() {
   renderRailMode();
   if (railMode === "review") return renderReviewList();
   $("#railTitle").textContent = "My tickets";
   if (!status?.account) {
-    $("#count").textContent = ""; $("#views").innerHTML = "";
-    $("#list").innerHTML = emptyNote("Not connected", "Connect your Jira account to see the tickets assigned to you.", `<button class="btn success small" id="rc">Connect Jira</button>`);
+    $("#count").textContent = ""; $("#views").innerHTML = ""; $("#railTools").innerHTML = "";
+    $("#list").innerHTML = emptyNote("Not connected", "Connect your Jira account to see the tickets assigned to you.", `<button class="btn success small" id="rc">Connect Jira</button>`, "welcome");
     $("#rc").onclick = openSettings; return;
   }
   const all = tickets || [];
@@ -216,6 +219,11 @@ function renderList() {
   all.forEach(t => g[overall(statesOf(t.lastBuild))].push(t));
   const V = [["all", "All", all.length], ["todo", "Needs you", g.todo.length + g.wait.length], ["check", "Ready", g.check.length], ["done", "With QA", g.done.length], ["none", "New", g.none.length]];
   $("#count").textContent = all.length || "";
+  navCounts();
+  $("#railTools").innerHTML = `<div class="seg" role="radiogroup" aria-label="Group tickets by">
+      <button role="radio" aria-checked="${groupBy === "story"}" data-gb="story">By story</button>
+      <button role="radio" aria-checked="${groupBy === "state"}" data-gb="state">By readiness</button></div>`;
+  $$("#railTools [data-gb]").forEach(b => b.onclick = () => { if (groupBy === b.dataset.gb) return; groupBy = b.dataset.gb; try { localStorage.setItem("gl-group", groupBy); } catch { } renderList(); soften($("#list")); });
   viewsScroll = $("#views").scrollLeft;
   $("#views").innerHTML = V.map(([id, l, n]) => `<button aria-pressed="${view === id}" data-v="${id}">${l}<span class="c">${n}</span></button>`).join("");
   $$("#views [data-v]").forEach(b => {
@@ -230,22 +238,54 @@ function renderList() {
   const order = view === "all" ? ["todo", "wait", "check", "none", "done"] : view === "todo" ? ["todo", "wait"] : [view];
   const secs = order.map(k => [k, g[k]]).filter(([, l]) => l.length);
   if (!secs.length) {
-    const words = { todo: ["Nothing needs you", "No ticket is blocked right now."], check: ["Nothing ready yet", "Tickets with every step clear show up here."], done: ["Nothing with QA", "Tickets you've handed over show up here."], none: ["Everything is checked", "Each of your tickets has been checked at least once."] };
-    const [t, x] = !all.length ? ["All clear", "Nothing open is assigned to you in Jira."] : words[view] || ["Nothing here", "No tickets in this view."];
-    $("#list").innerHTML = emptyNote(t, x, all.length && view !== "all" ? `<button class="btn line small" id="showAll">Show all ${all.length}</button>` : "");
+    const words = { todo: ["Nothing needs you", "No ticket is blocked right now.", "success"], check: ["Nothing ready yet", "Tickets with every step clear show up here."], done: ["Nothing with QA", "Tickets you've handed over show up here."], none: ["Everything is checked", "Each of your tickets has been checked at least once.", "success"] };
+    const [t, x, mood] = !all.length ? ["All clear", "Nothing open is assigned to you in Jira.", "success"] : words[view] || ["Nothing here", "No tickets in this view."];
+    $("#list").innerHTML = emptyNote(t, x, all.length && view !== "all" ? `<button class="btn line small" id="showAll">Show all ${all.length}</button>` : "", mood);
     $("#showAll")?.addEventListener("click", () => $(`#views [data-v="all"]`).click());
+    return;
+  }
+  if (groupBy === "story") {
+    // under their parent story or epic; the header checks the whole story with its sub-tickets
+    const shown = order.flatMap(k => g[k]);
+    const parents = new Map();
+    for (const t of shown) {
+      const k = t.parentKey || "";
+      if (!parents.has(k)) parents.set(k, { key: k, summary: t.parentSummary, type: t.parentType, items: [] });
+      parents.get(k).items.push(t);
+    }
+    const groups = [...parents.values()].sort((a, b) => (a.key === "") - (b.key === "") || b.items.length - a.items.length);
+    paged($("#list"), groups.flatMap(gr => [
+      gr.key ? `<button class="grp-h" data-story="${esc(gr.key)}" title="Check the whole ${esc((gr.type || "story").toLowerCase())} with its sub-tickets">${typeTag(gr.type || "Story")}<span class="t">${esc(gr.summary || gr.key)} <span class="k">${esc(gr.key)}</span></span><span class="go">Check all${icon("chev")}</span></button>`
+             : `<div class="sec-l">No parent</div>`,
+      ...gr.items.map(rowHtml)]), 30);
     return;
   }
   // one flat list of section labels and rows, paged
   paged($("#list"), secs.flatMap(([k, l]) => [...(view === "all" ? [`<div class="sec-l">${GROUP[k]}</div>`] : []), ...l.map(rowHtml)]), 30);
 }
-function rowHtml(t) {
-  const st = statesOf(t.lastBuild);
-  return `<button class="row ${t._busy ? "busy" : ""}" role="option" aria-selected="${t.key === selected}" data-key="${esc(t.key)}">
-    ${mark(overall(st))}<span class="t">${esc(t.summary)}</span>
-    <span class="m">${typeTag(t.type)}<span class="mono">${esc(t.key)}</span><span class="s">${jiraBadge(t.status, t.statusCategory)}</span>${qbar(st)}</span></button>`;
+
+const PRIO_UP = { highest: 2, high: 1 };
+function metaChips(t, small = false) {
+  const out = [];
+  if (t.sprint) out.push(`<span class="chip-m sprint ${t.sprintState === "active" ? "active" : ""} ${small ? "sm" : ""}" title="Sprint (${esc(t.sprintState || "")})">${icon("sprint")}${esc(t.sprint)}</span>`);
+  const p = (t.priority || "").toLowerCase();
+  if (p && (!small || p !== "medium")) out.push(`<span class="chip-m prio ${esc(p.split(" ")[0])} ${small ? "sm" : ""}" title="Priority">${icon("prio")}${esc(t.priority)}</span>`);
+  if (!small) {
+    (t.labels || []).forEach(l => out.push(`<span class="chip-m label" title="Label">${icon("tag")}${esc(l)}</span>`));
+    (t.components || []).forEach(c => out.push(`<span class="chip-m" title="Component">${esc(c)}</span>`));
+    if (t.fixVersions && t.fixVersions !== "none") out.push(`<span class="chip-m" title="Fix version">${icon("flag")}${esc(t.fixVersions)}</span>`);
+  }
+  if (t.due) { const late = t.due < new Date().toISOString().slice(0, 10) && t.statusCategory !== "done"; out.push(`<span class="chip-m due ${late ? "late" : ""} ${small ? "sm" : ""}" title="Due date">${icon("calendar")}${day(t.due)}</span>`); }
+  return out.length ? `<span class="chips">${out.join("")}</span>` : "";
 }
 
+function rowHtml(t) {
+  const st = statesOf(t.lastBuild);
+  const chips = metaChips(t, true);
+  return `<button class="row ${t._busy ? "busy" : ""}" role="option" aria-selected="${t.key === selected}" data-key="${esc(t.key)}">
+    ${mark(overall(st))}<span class="t">${esc(t.summary)}</span>
+    <span class="m">${typeTag(t.type)}<span class="mono">${esc(t.key)}</span><span class="s">${jiraBadge(t.status, t.statusCategory)}</span>${qbar(st)}</span>${chips ? `<span class="tags">${chips}</span>` : ""}</button>`;
+}
 function move(dir) {
   const keys = $$("#list .row").map(b => b.dataset.key);
   if (!keys.length) return;
@@ -257,6 +297,7 @@ function move(dir) {
 function select(key, fetchFirst = false) {
   key = (key || "").trim().toUpperCase();
   if (!key) return;
+  if (section !== "tickets") setSection("tickets");
   if (location.hash.slice(1) !== key) history.pushState(null, "", "#" + key);
   load(key, fetchFirst);
 }
@@ -285,7 +326,8 @@ async function load(key, fetchFirst, inPlace = false, retrying = false) {
   selected = key; commitFilter = ""; openStep = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.key === key));
-  document.title = `${key} · Greenlight`;
+  document.title = `${key} · greenlight.`;
+  crumb(`<a href="#tickets">My tickets</a><span class="sl">/</span><span class="mono">${esc(key)}</span>`);
   const n = ++seq;
   // switching scope keeps the page and dims what is about to change, instead of blanking it;
   // a retry keeps the error on screen with a spinner on its button, so nothing flashes
@@ -299,7 +341,7 @@ async function load(key, fetchFirst, inPlace = false, retrying = false) {
     $("#main").innerHTML = `<div class="loading">
       <button class="btn back" id="back">${icon("back")}My tickets</button>
       <div id="ldHead">${headHtml(key, k)}</div>
-      <div class="ldprog"><div class="note" id="ldNote"><span class="spinner"></span>${fetchFirst ? "Fetching the latest from GitLab" : "Reading Jira"}</div><div class="ldbar"><i id="ldBar"></i></div></div>
+      <div class="ldprog">${glim("scanning")}<div class="note" id="ldNote"><span class="spinner"></span>${fetchFirst ? "Fetching the latest from GitLab" : "Reading Jira"}</div><div class="ldbar"><i id="ldBar"></i></div></div>
       <h3 class="h3" style="margin-top:30px">Steps to QA</h3>
       <ol class="steps ldsteps" id="ldSteps">${STEPS.map((s, k2) => `<li class="stp" data-id="${s.id}"><div class="stp-h">${mark("none")}<span class="nm">${s.name}</span><span class="hl"><span class="line" style="width:${[60, 48, 55, 40, 52, 44][k2]}%;margin:0"></span></span><span class="ct"></span><span></span></div></li>`).join("")}</ol></div>`;
   }
@@ -352,13 +394,20 @@ async function load(key, fetchFirst, inPlace = false, retrying = false) {
     $("#back").onclick = back; $("#retry").onclick = () => load(key, fetchFirst, false, true);
   }
 }
-function back() { history.pushState(null, "", location.pathname); selected = null; report = null; reviewing = null; reviewerMode = false; $("#split").classList.remove("open"); renderList(); blank(); }
+function back() {
+  const toReviews = section === "reviews";
+  history.pushState(null, "", toReviews ? "#reviews" : "#tickets");
+  selected = null; report = null; reviewing = null; reviewerMode = false; diffState = null;
+  $("#split").classList.remove("open"); renderList();
+  toReviews ? reviewsBlank() : blank();
+}
 
 function blank() {
-  document.title = "Greenlight";
+  document.title = "My tickets · greenlight.";
+  crumb(`<b>My tickets</b>`);
   const me = status?.account;
   $("#main").innerHTML = `<div class="blank"><div class="blank-in">
-    ${icon("list", "ico")}
+    ${glim(me ? "welcome" : "welcome")}
     ${me ? `<h2>Pick a ticket</h2><p>Greenlight shows what stands between it and QA: code, tags, database, access, config and the handover.</p>
       <div class="keys"><span><kbd>J</kbd><kbd>K</kbd></span><span>Next and previous ticket</span><span><kbd>Ctrl K</kbd></span><span>Find a ticket</span><span><kbd>R</kbd></span><span>Fetch and check again</span></div>`
     : `<h2>Set up Greenlight</h2><p>Two steps, once on this computer.</p>
@@ -384,6 +433,9 @@ function renderTicket() {
     : ov === "done" ? ["done", "With QA", confirm ? `Handed over. ${pl(confirm, "item")} still worth a look.` : "Handed over, and every step is done."]
     : ["check", "Ready to hand over", `Nothing blocks QA. Confirm ${pl(confirm, "item")}, then post the handover.`];
 
+  crumb(`<a href="#tickets">My tickets</a><span class="sl">/</span><span class="mono">${esc(r.key)}</span>`);
+  document.title = `${r.key} · greenlight.`;
+  const mood = nothing ? "empty" : ov === "todo" ? "warning" : ov === "wait" ? "thinking" : "success";
   $("#main").innerHTML = `<div class="page">
     <button class="btn back" id="back">${icon("back")}My tickets</button>
     <div class="path">${r.ancestors.map(a => `<button class="ln" data-go="${esc(a.key)}">${esc(a.type)} <span class="mono">${esc(a.key)}</span></button><span class="sl">/</span>`).join("")}<a class="mono ln" href="${url(r.jiraUrl)}" target="_blank" rel="noopener" title="Open in Jira">${esc(r.key)}</a></div>
@@ -394,6 +446,7 @@ function renderTicket() {
         <button class="btn solid" id="post" ${me && !nothing ? "" : "disabled"} title="${me ? "Posts the checklist to the Jira ticket, replacing your previous one" : "Connect Jira first"}">Post handover</button>
         <div class="pop-wrap"><button class="btn only" id="more" aria-haspopup="menu" aria-expanded="false" aria-label="More">${icon("more", "ico")}</button>
           <div class="pop" id="pop" role="menu" hidden>
+            ${me ? `<button role="menuitem" id="moveJira">${icon("send")}Move in Jira…</button>` : ""}
             <button role="menuitem" id="copy">${icon("copy")}Copy checklist</button>
             <a role="menuitem" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">${icon("down")}Download as Markdown</a>
             <hr><a role="menuitem" href="${url(r.jiraUrl)}" target="_blank" rel="noopener">${icon("out")}Open in Jira</a>
@@ -404,9 +457,11 @@ function renderTicket() {
       ${i ? `<span class="tag">${typeTag(i.type, true)}</span><span class="tag">${jiraBadge(i.status, i.statusCategory)}</span><span><b>${esc(cap(i.assignee))}</b></span>${i.fixVersions !== "none" ? `<span>Fix version <b>${esc(i.fixVersions)}</b></span>` : ""}`
           : me ? "" : `<span><button id="hc" style="color:var(--ink-2);border-bottom:1px solid var(--hair-2)">Connect Jira</button> for title, status and sub-tickets</span>`}
     </div>
+    ${i ? `<div class="meta-chips">${metaChips(i)}</div>` : ""}
     ${me ? subControl(r) : ""}
 
-    ${nothing ? voidHtml(r, kids) : `<div class="state">
+    ${nothing ? voidHtml(r, kids) : `<div class="state ${ov === "done" || ov === "check" ? "ok" : ""}">
+      ${glim(mood)}
       <div class="say">${mark(v[0])}${v[1]}</div>
       <div class="sub">${v[2]}</div>
       <div class="fresh">Checked ${esc(ago(r.generated))}<br>${r.fetched ? "with the latest from the server" : `from your local copies · <button id="fetchNow">fetch latest</button>`}</div>
@@ -436,9 +491,11 @@ function renderTicket() {
       <div class="tabs" role="tablist" id="evTabs"></div>
       <div class="pane" id="pane"></div>
     </section>`}
+    ${status?.gitlab && !nothing ? `<section class="dep" id="dep"></section>` : ""}
     ${status?.gitlab ? `<section class="crv" id="crv"></section>` : ""}
   </div>`;
   wireTicket();
+  if (status?.gitlab && !nothing) loadDeployments(r.key);
   if (!nothing) initEvidence();
   if (me) loadTicketTime(r.key);
   if (status?.gitlab) loadTicketReviews(r.key);
@@ -489,11 +546,7 @@ function voidHtml(r, kids) {
   const slug = (r.issue?.summary || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").split("-").slice(0, 6).join("-");
   const cmd = `git switch -c ${r.key}${slug ? "-" + slug : ""}`;
   return `<div class="void">
-    <svg class="void-art" viewBox="0 0 120 64" aria-hidden="true">
-      <path d="M8 32h104" stroke="var(--hair-2)" stroke-width="1.5" stroke-dasharray="3 5" stroke-linecap="round"/>
-      ${[16, 36, 56, 76, 96].map(x => `<circle cx="${x}" cy="32" r="5.5" fill="var(--canvas)" stroke="var(--hair-2)" stroke-width="1.5"/>`).join("")}
-      <circle cx="16" cy="32" r="5.5" fill="var(--canvas)" stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="2.4 2.6"/>
-    </svg>
+    ${glim("empty")}
     <h3>No work found for ${esc(r.key)} yet</h3>
     <p>None of your ${pl(status?.repoCount ?? 0, "repository", "repositories")} has a commit, branch or merge request that mentions this ticket${kids ? ` or your ${pl(kids, "sub-ticket")}` : ""}${r.fetched ? "" : ", based on your local copies"}.</p>
     <div class="void-acts">
@@ -518,8 +571,8 @@ function stepHtml(s, k) {
     <div class="stp-b" id="sb-${s.id}" ${open ? "" : "hidden"}>
       <p class="means">${esc(STEPS[k].means)}</p>
       ${items.length ? `<ul class="its">${items.map(it => `<li class="it"><div class="lead"><span class="dot ${it.state}"></span>${it.repo ? `<span class="rp">${repoTag(it.repo)}</span>` : ""}<span class="tx">${esc(it.title)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ""}</div>
-        ${it.actionUrl === "post:" ? `<button class="btn solid small" data-post>${icon("send")}${esc(it.actionLabel)}</button>`
-          : it.actionUrl ? `<a class="btn line small" href="${url(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")}${icon("out")}</a>` : ""}</li>`).join("")}</ul>`
+        <div class="ia">${stepActions(s, it)}${it.actionUrl === "post:" ? `<button class="btn solid small" data-post>${icon("send")}${esc(it.actionLabel)}</button>`
+          : it.actionUrl ? `<a class="btn line small" href="${url(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")}${icon("out")}</a>` : ""}</div></li>`).join("")}</ul>`
         : `<p class="empty-step">${esc(s.headline)}.</p>`}
     </div></li>`;
 }
@@ -872,6 +925,9 @@ function wireTicket() {
   $("#post").onclick = post; $$("[data-post]").forEach(b => b.onclick = post);
   const more = $("#more"), pop = $("#pop");
   more.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; more.setAttribute("aria-expanded", !pop.hidden); if (!pop.hidden) document.addEventListener("click", () => { pop.hidden = true; more.setAttribute("aria-expanded", "false"); }, { once: true }); };
+  $("#moveJira")?.addEventListener("click", () => moveDialog(r.key));
+  $$("[data-mkmr]").forEach(b => b.onclick = () => createMr(b.dataset.repo, b.dataset.mkmr));
+  $$("[data-mktag]").forEach(b => b.onclick = () => createTag(b.dataset.repo, b.dataset.mktag));
   $("#copy").onclick = async () => { try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Checklist copied."); } catch (e) { fail(`Couldn't copy: ${esc(e.message)}`); } };
   $$(".stp-h").forEach(h => h.onclick = () => {
     const s = h.closest(".stp"), open = s.dataset.open !== "true";
@@ -971,24 +1027,30 @@ function renderTimeBox(key, t) {
   soften($("#timeBox"));
 }
 
-function logDialog(key) {
-  const d = $("#settings"), today = new Date().toISOString().slice(0, 10);
+function logDialog(key, pre = {}) {
+  const d = $("#settings"), today = localDay(new Date());
   const left = week?.days.find(x => x.date === week.today);
   const gap = left ? Math.max(0, left.target - left.seconds) : 0;
   d.innerHTML = `<div class="dlg-in">
-    <h2>Log time on ${esc(key)}</h2>
+    <h2>${key ? `Log time on ${esc(key)}` : "Log time"}</h2>
+    ${key ? "" : `<label class="fld"><span>Ticket</span><select id="lgK" aria-label="Ticket">${(tickets || []).map(t => `<option value="${esc(t.key)}">${esc(t.key)} · ${esc(t.summary)}</option>`).join("")}</select></label>`}
     <p class="intro">Added to Jira as a worklog under your name.${gap ? ` You have ${hm(gap)} left to reach today's target.` : ""}</p>
     <div class="fld"><span>How long</span>
       <div class="quick">${[15, 30, 60, 120, 240].map(m => `<button class="chip" data-m="${m}">${hm(m * 60)}</button>`).join("")}${gap ? `<button class="chip" data-m="${Math.round(gap / 60)}">Rest of today (${hm(gap)})</button>` : ""}</div>
       <div class="hm"><input id="lgH" type="number" min="0" max="24" value="1" aria-label="Hours"><span>h</span><input id="lgM" type="number" min="0" max="59" step="5" value="0" aria-label="Minutes"><span>m</span></div>
       <span class="err" id="lgErr"></span></div>
-    <label class="fld"><span>Day</span><input id="lgD" type="date" value="${today}" max="${today}"></label>
-    <label class="fld"><span>What you did <span class="ink-3">(optional)</span></span><textarea id="lgC" rows="3"></textarea></label>
+    <label class="fld"><span>Day</span><input id="lgD" class="date" value="${esc(pre.date || today)}" readonly></label>
+    <label class="fld"><span>What you did <span class="ink-3">(optional)</span></span><textarea id="lgC" rows="3">${esc(pre.comment || "")}</textarea></label>
   </div>
   <div class="dlg-f"><span class="msg" id="lgMsg"></span><button class="btn" id="lgCancel">Cancel</button><button class="btn success" id="lgSave">Log time</button></div>`;
   $$("#settings .quick [data-m]").forEach(b => b.onclick = () => { const m = +b.dataset.m; $("#lgH").value = Math.floor(m / 60); $("#lgM").value = m % 60; $$("#settings .chip").forEach(x => x.classList.toggle("on", x === b)); });
+  if (pre.minutes) { $("#lgH").value = Math.floor(pre.minutes / 60); $("#lgM").value = pre.minutes % 60; }
+  datePicker($("#lgD"), { maxDate: today });
+  if ($("#lgK")) { if (pre.key) $("#lgK").value = pre.key; jq("#lgK").select2({ width: "100%", dropdownParent: jq("#settings") }); }
   $("#lgCancel").onclick = () => d.close();
   $("#lgSave").onclick = async () => {
+    key = key || $("#lgK")?.value;
+    if (!key) { $("#lgErr").textContent = "Pick a ticket."; return; }
     const minutes = (+$("#lgH").value || 0) * 60 + (+$("#lgM").value || 0);
     if (minutes < 1) { $("#lgErr").textContent = "Enter how long you worked."; return; }
     if (minutes > 24 * 60) { $("#lgErr").textContent = "That's more than a day."; return; }
@@ -996,7 +1058,8 @@ function logDialog(key) {
     try {
       await api("/api/time/log", { method: "POST", body: JSON.stringify({ key, minutes, date: $("#lgD").value, comment: $("#lgC").value }) });
       d.close(); toast(`Logged ${hm(minutes * 60)} on ${esc(key)}.`);
-      loadTicketTime(key); loadWeek();
+      if (report?.key === key) loadTicketTime(key);
+      loadWeek().then(() => { if (section === "worklogs") renderWorklogs(wlWeek, wlDay); });
     } catch (e) { $("#lgMsg").className = "msg bad"; $("#lgMsg").textContent = e.message; $("#lgSave").disabled = false; }
   };
   d.showModal();
@@ -1030,20 +1093,8 @@ async function loadTicketReviews(key) {
 /* ── code review (GitLab) ── */
 let railMode = "mine", reviews = null, reviewing = null, reviewView = "all";
 
-function renderRailMode() {
-  const box = $("#railMode");
-  if (!status?.gitlab) { box.hidden = true; railMode = "mine"; return; }
-  box.hidden = false;
-  const n = reviews?.filter(r => !r.approvedByMe).length;
-  box.innerHTML = `<div class="seg" role="tablist" aria-label="List">
-    <button role="tab" aria-selected="${railMode === "mine"}" data-rm="mine">My tickets</button>
-    <button role="tab" aria-selected="${railMode === "review"}" data-rm="review">To review${n ? `<span class="c">${n}</span>` : ""}</button></div>`;
-  $$("#railMode [data-rm]").forEach(b => b.onclick = () => {
-    if (railMode === b.dataset.rm) return;
-    railMode = b.dataset.rm;
-    if (railMode === "review" && !reviews) loadReviews(); else { renderList(); soften($("#list")); }
-  });
-}
+// the sidebar switches between tickets and reviews now; the list no longer carries its own switch
+function renderRailMode() { $("#railMode").hidden = true; }
 
 async function loadReviews() {
   railMode = "review";
@@ -1107,7 +1158,8 @@ async function loadReview(project, iid, retrying = false) {
     if (retrying) await settle(500);
     if (!reviewing || reviewing.iid !== iid || reviewing.project !== project) return;
     reviewing = { ...r, project, iid, fileQuery: "" };
-    document.title = `!${iid} · ${r.repo} · Greenlight`;
+    document.title = `!${iid} · ${r.repo} · greenlight.`;
+    crumb(`<a href="#reviews">Reviews</a><span class="sl">/</span>${repoTag(r.repo)}<span class="mono">!${iid}</span>`);
     renderReview();
   } catch (e) {
     if (retrying) await settle(600);
@@ -1156,7 +1208,8 @@ function renderReview() {
     <div class="body">
       <section>
         <h3 class="h3">Review checklist<span>${todo ? pl(todo, "action") : "No actions"}</span></h3>
-        <ul class="its review-list">${r.checklist.map(c => `<li class="it"><div class="lead"><span class="dot ${c.state}"></span><span class="tx">${esc(c.title)}</span>${c.detail ? `<span class="dt">${esc(c.detail)}</span>` : ""}</div>${c.url ? `<a class="btn line small" href="${url(c.url)}" target="_blank" rel="noopener">Open${icon("out")}</a>` : ""}</li>`).join("")}</ul>
+        ${checkGroups(r.checklist).map(([name, list]) => `<div class="ck-grp"><h4>${esc(name)}${list.some(c => c.state === "todo") ? `<span class="n">${pl(list.filter(c => c.state === "todo").length, "action")}</span>` : ""}</h4>
+          <ul class="its review-list">${list.map(c => `<li class="it"><div class="lead"><span class="dot ${c.state}"></span><span class="tx">${esc(c.title)}</span>${c.detail ? `<span class="dt">${esc(c.detail)}</span>` : ""}</div>${c.url ? `<a class="btn line small" href="${url(c.url)}" target="_blank" rel="noopener">Open${icon("out")}</a>` : ""}</li>`).join("")}</ul></div>`).join("")}
       </section>
       <aside class="side">
         <div><h3 class="h3">Reviewers</h3><ul class="people">${r.reviewers.map(x => { const s = RS[x.state] || ["wait", esc(x.state)]; return `<li>${mark(s[0], false)}<span>${esc(x.user.name)}${x.user.username === r.me ? " (you)" : ""}</span><span class="ink-3">${s[1]}</span></li>`; }).join("") || `<li class="ink-3">No reviewers assigned</li>`}</ul></div>
@@ -1175,8 +1228,8 @@ function renderReview() {
   </div>`;
   $("#back").onclick = back;
   $("#rvTicket")?.addEventListener("click", () => openAsReviewer(r.key));
-  $("#rvApprove")?.addEventListener("click", () => reviewAct("approve"));
-  $("#rvUnapprove")?.addEventListener("click", () => reviewAct("unapprove"));
+  $("#rvApprove")?.addEventListener("click", async () => { if (await confirmDialog(`Approve !${r.iid}?`, `Adds your approval in GitLab${r.key ? ` and notes it on ${esc(r.key)} in Jira` : ""}.${todoCount(r) ? ` ${pl(todoCount(r), "checklist item")} still says it needs attention.` : ""}`, "Approve", "success")) reviewAct("approve"); });
+  $("#rvUnapprove")?.addEventListener("click", async () => { if (await confirmDialog(`Revoke your approval of !${r.iid}?`, "Removes your approval in GitLab.", "Revoke approval", "danger")) reviewAct("unapprove"); });
   $("#rvChanges").onclick = () => reviewDialog(true);
   $("#rvComment").onclick = () => reviewDialog(false);
   const more = $("#more"), pop = $("#pop");
@@ -1324,35 +1377,634 @@ function initFinder() {
   el.on("select2:select", e => { const k = e.params.data.id; el.val(null).trigger("change.select2"); select(k); });
 }
 const openFind = () => jq("#finderSel").select2("open");
-$("#settings").addEventListener("click", e => { if (e.target === $("#settings")) $("#settings").close(); });
-document.addEventListener("keydown", e => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openFind(); return; }
-  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector(".select2-container--open") || $("#settings").open || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === "/") { e.preventDefault(); openFind(); }
-  else if (e.key === "j") move(1);
-  else if (e.key === "k") move(-1);
-  else if (e.key === "r" && report) load(report.key, true);
-  else if (e.key === "Escape" && selected && innerWidth <= 900) back();
-});
 
-$("#checkAll").onclick = checkAll;
-$("#reload").onclick = () => status?.account && loadTickets();
+/* ─────────────────────────── Glim ───────────────────────────
+   The mascot, drawn as a small vector so it stays crisp and themed at every size. Same character as the
+   reference: lime helmet, white visor rim, dark screen face, ear pods and antennae. Moods change only the face. */
+function glim(mood = "welcome", label = "") {
+  const a = label ? `role="img" aria-label="${esc(label)}"` : `aria-hidden="true"`;
+  const eye = (x, y) => `<circle cx="${x}" cy="${y}" r="3.7" fill="#0E0E0E" stroke="#B9C0BA" stroke-width="1.2"/><circle cx="${x - 1.1}" cy="${y - 1.1}" r="1" fill="#fff" opacity=".85"/>`;
+  const faces = {
+    welcome:  `<g class="blink">${eye(25, 29)}${eye(39, 29)}</g><path d="M28.5 36.5q3.5 2.6 7 0" fill="none" stroke="#EDE6DA" stroke-width="2" stroke-linecap="round"/>`,
+    success:  `<path d="M21.5 30.5q3.5-4.2 7 0M35.5 30.5q3.5-4.2 7 0" fill="none" stroke="#EDE6DA" stroke-width="2.2" stroke-linecap="round"/><path d="M27 35.5q5 5 10 0z" fill="#EDE6DA"/>`,
+    thinking: `${eye(27, 27)}${eye(41, 27)}<circle cx="33" cy="37" r="1.7" fill="none" stroke="#EDE6DA" stroke-width="1.6"/>`,
+    scanning: `<g class="scan">${eye(25, 29)}${eye(39, 29)}</g><path d="M29.5 37h5" stroke="#EDE6DA" stroke-width="2" stroke-linecap="round"/>`,
+    warning:  `${eye(25, 30)}${eye(39, 30)}<path d="M21.5 24.5l6 1.6M42.5 24.5l-6 1.6" stroke="#EDE6DA" stroke-width="1.8" stroke-linecap="round"/><path d="M28 38q2-1.6 4 0t4 0" fill="none" stroke="#EDE6DA" stroke-width="1.8" stroke-linecap="round"/>`,
+    empty:    `<path d="M22 30h6.5M35.5 30h6.5" stroke="#EDE6DA" stroke-width="2.2" stroke-linecap="round"/><path d="M29.5 37h5" stroke="#EDE6DA" stroke-width="2" stroke-linecap="round"/>`,
+  };
+  const cheeks = mood === "welcome" || mood === "success" ? `<ellipse cx="20.5" cy="35" rx="2.6" ry="1.6" fill="#E2553E" opacity=".45"/><ellipse cx="43.5" cy="35" rx="2.6" ry="1.6" fill="#E2553E" opacity=".45"/>` : "";
+  return `<svg class="glim" viewBox="0 0 64 64" ${a}>
+    <path d="M16 12 12.5 4.5M48 12l3.5-7.5" stroke="#DCE1D8" stroke-width="2" stroke-linecap="round"/>
+    <rect x="4" y="22" width="9" height="20" rx="4.5" fill="#EEF1EA"/><rect x="51" y="22" width="9" height="20" rx="4.5" fill="#EEF1EA"/>
+    <rect x="8" y="8" width="48" height="45" rx="18" fill="#9ACD3C"/>
+    <path d="M14 14q18-7 36 0" fill="none" stroke="#C7EB7C" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>
+    <rect x="12.5" y="12.5" width="39" height="36" rx="13.5" fill="#F4F6F0"/>
+    <rect x="15.5" y="15.5" width="33" height="30" rx="10.5" fill="#2A1B15"/>
+    <path d="M18 19.5q14-4 28 0" fill="none" stroke="#fff" stroke-width="1.4" opacity=".1" stroke-linecap="round"/>
+    ${cheeks}${faces[mood] || faces.welcome}
+  </svg>`;
+}
+
+/* ─────────────────────────── shell: theme, sidebar, crumb, counts ─────────────────────────── */
+let section = "overview";
+const crumb = html => { $("#crumb").innerHTML = html; };
+const localDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+function applyTheme(pref) {
+  const dark = pref === "dark" || (pref === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.documentElement.dataset.themePref = pref;
+  $$("#themes [data-theme-set]").forEach(b => b.setAttribute("aria-checked", b.dataset.themeSet === pref));
+}
+$$("#themes [data-theme-set]").forEach(b => b.onclick = () => { try { localStorage.setItem("gl-theme", b.dataset.themeSet); } catch { } applyTheme(b.dataset.themeSet); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (document.documentElement.dataset.themePref === "system") applyTheme("system"); });
+applyTheme(document.documentElement.dataset.themePref || "dark");
+
+$("#brandGlim").innerHTML = glim("welcome");
+if (document.documentElement.dataset.sb === "mini") $("#app").classList.add("sb-mini");
+$("#sbToggle").onclick = () => {
+  const mini = $("#app").classList.toggle("sb-mini");
+  $("#sbToggle").setAttribute("aria-pressed", mini);
+  try { localStorage.setItem("gl-sb", mini ? "mini" : "full"); } catch { }
+};
+$("#menuBtn").onclick = e => { e.stopPropagation(); $("#app").classList.toggle("sb-open"); };
+document.addEventListener("click", e => { if ($("#app").classList.contains("sb-open") && !e.target.closest(".sb") && !e.target.closest("#menuBtn")) $("#app").classList.remove("sb-open"); });
+$$(".nav-i").forEach(a => a.addEventListener("click", () => $("#app").classList.remove("sb-open")));
+$("#brandHome").onclick = e => { e.preventDefault(); history.pushState(null, "", "#overview"); route(); };
+$("#cmdBtn").onclick = () => openCmd();
+
+function renderShell() {
+  // recent checks, newest first
+  const rec = (status?.recent || []).slice(0, 6);
+  $("#recentCap").hidden = !rec.length;
+  $("#recent").innerHTML = rec.map(r => `<button data-k="${esc(r.key)}" title="${esc(r.summary || r.key)}">${mark(overall(statesOf(r)), false)}<span><span class="t">${esc(r.summary || r.key)}</span><span class="k">${esc(r.key)} · ${esc(ago(r.generated))}</span></span></button>`).join("");
+  $$("#recent [data-k]").forEach(b => b.onclick = () => select(b.dataset.k));
+  // low disk space: say so, everywhere, because checks start failing
+  const free = status?.diskFree ?? -1;
+  $("#diskBar").hidden = !(free >= 0 && free < 1024 ** 3);
+  if (!$("#diskBar").hidden) $("#diskBar").innerHTML = `${icon("alert", "ico")}<span><b>Drive C: is almost full (${(free / 1024 ** 3).toFixed(2)} GB free).</b> Checks can fail to save. Free some space with Disk Cleanup or Settings › Storage.</span>`;
+  navCounts();
+}
+
+function navCounts() {
+  const need = (tickets || []).filter(t => ["todo", "wait"].includes(overall(statesOf(t.lastBuild)))).length;
+  const nt = $("#nTickets"); nt.textContent = need || (tickets?.length ?? ""); nt.className = `cnt ${need ? "hot" : ""}`; nt.title = need ? `${need} need you` : "";
+  const waiting = (reviews || []).filter(r => !r.approvedByMe).length;
+  const nr = $("#nReviews"); nr.textContent = waiting || ""; nr.className = `cnt ${waiting ? "hot" : ""}`; nr.hidden = !waiting;
+  const today = week?.days.find(d => d.date === week.today);
+  const left = today?.workday ? Math.max(0, today.target - today.seconds) : 0;
+  const ntm = $("#nTime"); ntm.textContent = left ? hm(left) : ""; ntm.hidden = !left; ntm.className = "cnt"; ntm.title = left ? `${hm(left)} left to log today` : "";
+}
+
+function setSection(s) {
+  section = s;
+  $$(".nav-i").forEach(a => { if (a.dataset.nav === s) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  const listy = s === "tickets" || s === "reviews";
+  $("#split").classList.toggle("solo", !listy);
+  if (!listy) $("#split").classList.remove("open");
+  if (listy) {
+    const want = s === "reviews" ? "review" : "mine";
+    if (railMode !== want) { railMode = want; if (want === "review" && !reviews && status?.gitlab) loadReviews(); else renderList(); }
+  }
+  $("#main").scrollTop = 0;
+}
+
+/* ─────────────────────────── routing ───────────────────────────
+   #overview · #tickets · #MM-1 · #MM-1/diff · #reviews · #review/<project>/<iid> · #worklogs[/<monday>] · #sprint[/<name>] · #team */
+function route() {
+  const raw = decodeURIComponent(location.hash.slice(1)), low = raw.toLowerCase();
+  if (raw.startsWith("review/")) { setSection("reviews"); reviewRoute(); return; }
+  if (low === "" || low === "overview") { setSection("overview"); return renderOverview(); }
+  if (low === "tickets") { setSection("tickets"); selected = null; report = null; diffState = null; $("#split").classList.remove("open"); renderList(); return blank(); }
+  if (low === "reviews") { setSection("reviews"); reviewing = null; $("#split").classList.remove("open"); return reviewsBlank(); }
+  if (low.startsWith("worklogs")) { setSection("worklogs"); return renderWorklogs(raw.split("/")[1] || null); }
+  if (low.startsWith("sprint")) { setSection("sprint"); return renderSprint(raw.slice(7) || null); }
+  if (low === "team") { setSection("team"); return renderTeam(); }
+  const [k, sub] = raw.toUpperCase().split("/");
+  setSection("tickets");
+  if (sub === "DIFF" && diffState && report?.key === k) return renderDiffPage();
+  if (k && report?.key === k && !sub) { diffState = null; $("#split").classList.add("open"); renderTicket(); return; }
+  if (k) load(k, false); else blank();
+}
 // #review/<group/project>/<iid> opens a merge request; project paths are case-sensitive, so they are not upper-cased
 function reviewRoute() {
   const raw = decodeURIComponent(location.hash.slice(1));
   if (!raw.startsWith("review/")) return false;
   const rest = raw.slice(7), cut = rest.lastIndexOf("/");
-  if (cut > 0 && +rest.slice(cut + 1) > 0) { railMode = status?.gitlab ? "review" : railMode; loadReview(rest.slice(0, cut), +rest.slice(cut + 1)); return true; }
+  if (cut > 0 && +rest.slice(cut + 1) > 0) { loadReview(rest.slice(0, cut), +rest.slice(cut + 1)); return true; }
   return false;
 }
+window.addEventListener("popstate", route);
 
-window.addEventListener("popstate", () => {
-  if (reviewRoute()) return;
-  const h = decodeURIComponent(location.hash.slice(1)).toUpperCase(), [k, sub] = h.split("/");
-  if (sub === "DIFF" && diffState && report?.key === k) return renderDiffPage();
-  if (k && report?.key === k && !sub) { diffState = null; renderTicket(); return; }   // back from a diff: no re-check
-  if (k) load(k, false); else back();
+function reviewsBlank() {
+  document.title = "Reviews · greenlight.";
+  crumb(`<b>Reviews</b>`);
+  if (!status?.gitlab) {
+    $("#main").innerHTML = `<div class="blank"><div class="blank-in">${glim("thinking")}<h2>Connect GitLab for reviews</h2>
+      <p>Merge requests waiting for your review, and the reviews on yours, appear here once GitLab is connected.</p>
+      <div class="void-acts" style="justify-content:flex-start"><button class="btn primary" id="glGo">${icon("review")}Connect GitLab</button></div></div></div>`;
+    $("#glGo").onclick = openSettings; return;
+  }
+  const waiting = (reviews || []).filter(r => !r.approvedByMe).length;
+  $("#main").innerHTML = `<div class="blank"><div class="blank-in">${glim(waiting ? "welcome" : "success")}<h2>${waiting ? `${pl(waiting, "merge request")} waiting for you` : "Nothing waiting for your review"}</h2>
+    <p>${waiting ? "Pick one from the list. Each review shows a checklist, the changes side by side, discussions and the tags." : "When someone asks you to review a merge request, it shows up in the list."}</p></div></div>`;
+}
+
+/* ─────────────────────────── overview ─────────────────────────── */
+async function renderOverview() {
+  document.title = "Overview · greenlight.";
+  crumb(`<b>Overview</b>`);
+  const me = status?.account;
+  if (!me) {
+    $("#main").innerHTML = `<div class="page"><div class="hello"><div><h1>Welcome to greenlight.</h1><p>From commit to QA. Greenlight checks what a Jira ticket touched across your repositories, and whether all of it is really ready for QA.</p>
+      <div class="acts"><button class="btn primary" id="ovConnect">Connect Jira</button></div></div><div class="portrait"><img src="/assets/glim.jpg" alt="Glim, the Greenlight helper robot"></div></div>
+      <ol class="setup card" style="margin-top:18px">
+        <li><b>Connect your Jira account</b><div><p>Lists your tickets and posts handovers under your name.</p></div></li>
+        <li class="${status?.repoCount ? "ok" : ""}"><b>Repositories folder</b><div><p>${status?.repoCount ? `${pl(status.repoCount, "repository", "repositories")} found in <code>${esc(status.reposRoot)}</code>` : "Point to the folder with your local clones."}</p></div></li>
+        <li><b>GitLab (optional)</b><div><p>For reviews, deployments, and creating merge requests and tags.</p></div></li>
+      </ol></div>`;
+    $("#ovConnect").onclick = openSettings; return;
+  }
+  const all = tickets || [];
+  const by = s => all.filter(t => overall(statesOf(t.lastBuild)) === s);
+  const need = [...by("todo"), ...by("wait")], ready = by("check"), unchecked = by("none");
+  const waiting = (reviews || []).filter(r => !r.approvedByMe);
+  const today = week?.days.find(d => d.date === week.today);
+  const left = today?.workday ? Math.max(0, today.target - today.seconds) : 0;
+  const hour = new Date().getHours(), first = cap((me.name || "").split(" ")[0]);
+  const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const bits = [];
+  if (need.length) bits.push(`${pl(need.length, "ticket needs", "tickets need")} you`);
+  if (ready.length) bits.push(`${pl(ready.length, "is", "are")} ready to hand over`.replace(/^1 is/, "1 is").replace(/^(\d+) are/, "$1 are"));
+  if (waiting.length) bits.push(`${pl(waiting.length, "review is", "reviews are")} waiting`);
+  if (left) bits.push(`${hm(left)} left to log today`);
+  const say = bits.length ? bits.join(", ").replace(/, ([^,]*)$/, " and $1") + "." : unchecked.length ? `${pl(unchecked.length, "ticket hasn't", "tickets haven't")} been checked yet.` : "Nothing is blocked. Nice and calm.";
+  const reason = t => { const s = t.lastBuild?.stations?.find(x => x.state === "todo" || x.state === "wait"); return s ? `${STEPS.find(x => x.id === s.id)?.name}: ${s.headline || WORD[s.state]}` : WORD[overall(statesOf(t.lastBuild))]; };
+  const miniRow = t => `<button class="mini" data-k="${esc(t.key)}">${mark(overall(statesOf(t.lastBuild)))}<span class="t">${esc(t.summary)}</span><span class="r mono">${esc(t.key)}</span><span class="s">${typeTag(t.type)}${jiraBadge(t.status, t.statusCategory)}<span class="why">${esc(reason(t))}</span></span></button>`;
+
+  $("#main").innerHTML = `<div class="page wide-page">
+    <div class="hello">
+      <div><h1>${greet}, ${esc(first)}.</h1><p>${esc(say)}</p>
+        <div class="acts">
+          <button class="btn primary" id="ovCheck">${icon("checkall")}Check all my tickets</button>
+          ${status.gitlab ? `<a class="btn line" href="#reviews">${icon("review")}Open reviews</a>` : ""}
+          <button class="btn line" id="ovLog">${icon("clock")}Log time</button>
+        </div></div>
+      <div class="portrait"><img src="/assets/glim.jpg" alt="Glim, the Greenlight helper robot"></div>
+    </div>
+    <div class="kpis">
+      <button class="kpi" data-goto="tickets" data-v="all"><span class="v">${all.length}</span><span class="l">Open tickets</span></button>
+      <button class="kpi" data-goto="tickets" data-v="todo"><span class="v">${need.length ? mark("todo") : ""}${need.length}</span><span class="l">Need you</span></button>
+      <button class="kpi" data-goto="tickets" data-v="check"><span class="v">${ready.length ? mark("check") : ""}${ready.length}</span><span class="l">Ready to hand over</span></button>
+      ${status.gitlab ? `<button class="kpi" data-goto="reviews"><span class="v">${waiting.length}</span><span class="l">Reviews waiting</span></button>`
+        : `<button class="kpi" data-goto="tickets" data-v="none"><span class="v">${unchecked.length}</span><span class="l">Not checked yet</span></button>`}
+    </div>
+    <div class="grid2">
+      <div class="stack">
+        <section class="card"><h2>Needs attention<span class="c">${need.length || ""}</span>${need.length > 6 ? `<a class="more-l" href="#tickets">See all</a>` : ""}</h2>
+          ${need.length ? `<div class="mini-list">${need.slice(0, 6).map(miniRow).join("")}</div>`
+            : `<div class="pane-empty" style="padding:22px 0">${glim(unchecked.length ? "thinking" : "success")}<b>${unchecked.length ? "Nothing known to be blocked" : "Nothing is blocked"}</b><span>${unchecked.length ? `${pl(unchecked.length, "ticket hasn't", "tickets haven't")} been checked yet.` : "Every checked ticket is clear or with QA."}</span></div>`}
+        </section>
+        ${ready.length ? `<section class="card"><h2>Ready to hand over<span class="c">${ready.length}</span></h2><div class="mini-list">${ready.slice(0, 5).map(miniRow).join("")}</div></section>` : ""}
+        ${unchecked.length ? `<section class="card"><h2>Not checked yet<span class="c">${unchecked.length}</span><button class="more-l" id="ovCheck2">Check them</button></h2><div class="mini-list">${unchecked.slice(0, 5).map(miniRow).join("")}</div></section>` : ""}
+      </div>
+      <div class="stack">
+        <section class="card"><h2>Review inbox<span class="c">${status.gitlab ? waiting.length : ""}</span>${status.gitlab ? `<a class="more-l" href="#reviews">Open</a>` : ""}</h2>
+          ${!status.gitlab ? `<p class="ink-3" style="margin:0 0 12px">Connect GitLab to see merge requests waiting for you.</p><button class="btn line small" id="ovGl">Connect GitLab</button>`
+            : waiting.length ? `<div class="mini-list">${waiting.slice(0, 5).map(r => `<button class="mini" data-mr="${esc(r.project)}" data-iid="${r.iid}">${mark(r.conflicts || r.draft ? "wait" : "todo")}<span class="t">${esc(r.title)}</span><span class="r mono">!${r.iid}</span><span class="s">${repoTag(r.repo)}<span class="why">${esc(r.author?.name || "")}${r.key ? ` · ${esc(r.key)}` : ""}</span></span></button>`).join("")}</div>`
+            : `<p class="ink-3" style="margin:0">Nothing waiting for your review.</p>`}
+        </section>
+        <section class="card"><h2>Today${today?.workday ? `<span class="c">${hm(today.seconds)} of ${hm(today.target)}</span>` : ""}<a class="more-l" href="#worklogs">Worklogs</a></h2>
+          ${today?.workday ? `<div class="timebox"><div class="tbar"><i class="mine" style="width:${Math.min(100, today.seconds / Math.max(1, today.target) * 100)}%"></i></div></div>
+            <p class="ink-3" style="margin:10px 0 0">${left ? `${hm(left)} still to log.` : "Today's target is met."} <a href="#worklogs" style="color:var(--gl-accent)">See suggestions from your commits</a></p>` : `<p class="ink-3" style="margin:0">Not a working day.</p>`}
+        </section>
+        <section class="card"><h2>Standup<span class="c" id="suDay"></span><button class="more-l" id="suCopy" hidden>Copy</button></h2><pre class="standup" id="suText"><span class="s2-msg"><span class="spinner"></span>Gathering yesterday's work</span></pre></section>
+        <section class="card"><h2>Quick actions</h2><div class="quick-acts">
+          <button class="qa" id="qaFind">${icon("search")}Check a ticket</button>
+          <a class="qa" href="#sprint">${icon("sprint")}Sprint release</a>
+          <a class="qa" href="#worklogs">${icon("clock")}Worklogs</a>
+          <a class="qa" href="#team">${icon("team")}Team</a>
+        </div></section>
+      </div>
+    </div></div>`;
+  soften($(".hello")); soften($(".kpis"), 60); soften($(".grid2"), 120);
+  $("#ovCheck").onclick = () => { history.pushState(null, "", "#tickets"); route(); checkAll(); };
+  $("#ovCheck2")?.addEventListener("click", () => $("#ovCheck").click());
+  $("#ovLog").onclick = () => logDialog(null);
+  $("#ovGl")?.addEventListener("click", openSettings);
+  $("#qaFind").onclick = openCmd;
+  $$(".kpi[data-goto]").forEach(b => b.onclick = () => { if (b.dataset.v) view = b.dataset.v; history.pushState(null, "", "#" + b.dataset.goto); route(); });
+  $$("#main .mini[data-k]").forEach(b => b.onclick = () => select(b.dataset.k));
+  $$("#main .mini[data-mr]").forEach(b => b.onclick = () => { setSection("reviews"); openReview(b.dataset.mr, +b.dataset.iid); });
+  loadStandup($("#suText"), null, $("#suDay"), $("#suCopy"));
+}
+
+/* standup text for a day: what I worked on, merged, reviewed and logged */
+async function loadStandup(box, date, dayEl, copyBtn) {
+  try {
+    const s = await api(`/api/standup${date ? `?date=${date}` : ""}`);
+    if (!box.isConnected) return;
+    if (dayEl) dayEl.textContent = day(s.date);
+    const lines = [];
+    for (const w of s.work) {
+      const parts = [];
+      if (w.commits.length) parts.push(`${pl(w.commits.length, "commit")}${[...new Set(w.commits.map(c => c.repo))].length ? ` in ${[...new Set(w.commits.map(c => c.repo))].join(", ")}` : ""}`);
+      if (w.merged.length) parts.push(`merged ${w.merged.length > 1 ? pl(w.merged.length, "branch", "branches") : "the branch"}`);
+      if (w.logged) parts.push(`${hm(w.logged)} logged`);
+      lines.push(`• ${w.key} ${w.summary || ""}${w.status ? ` (${w.status})` : ""}\n    ${parts.join(", ") || "worked on it"}`);
+    }
+    if (s.reviews.length) lines.push(`• Code review: ${s.reviews.map(r => `${r.action} "${r.title}"`).slice(0, 4).join("; ")}`);
+    if (s.otherCommits.length) lines.push(`• ${pl(s.otherCommits.length, "commit")} without a ticket key`);
+    const text = lines.length ? `${day(s.date)}:\n${lines.join("\n")}` : `Nothing recorded on ${day(s.date)}: no commits, worklogs or reviews.`;
+    box.textContent = text;
+    if (copyBtn) { copyBtn.hidden = !lines.length; copyBtn.onclick = async () => { try { await navigator.clipboard.writeText(text); toast("Standup copied."); } catch { fail("Couldn't copy."); } }; }
+  } catch (e) { if (box.isConnected) box.textContent = `Couldn't gather the standup: ${e.message}`; }
+}
+
+/* ─────────────────────────── worklogs ─────────────────────────── */
+let wlWeek = null, wlDay = null;
+const mondayOf = d => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return localDay(x); };
+const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return localDay(d); };
+
+async function renderWorklogs(from, pickDay) {
+  document.title = "Worklogs · greenlight.";
+  crumb(`<b>Worklogs</b>`);
+  if (!status?.account) { $("#main").innerHTML = `<div class="page">${emptyNote("Connect Jira", "Worklogs come from Jira.", `<button class="btn success small" id="wlc">Connect Jira</button>`, "welcome")}</div>`; $("#wlc").onclick = openSettings; return; }
+  const today = localDay(new Date());
+  wlWeek = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? mondayOf(from + "T12:00:00") : mondayOf(new Date());
+  wlDay = pickDay || (wlWeek === mondayOf(new Date()) ? today : wlWeek);
+  $("#main").innerHTML = `<div class="page wide-page">
+    <div class="ph"><div><h1>Worklogs</h1><p>Your time in Jira against the ${hm((status.dailyTargetHours || 5) * 3600)} daily target.</p></div>
+      <div class="acts">
+        <div class="seg"><button id="wlPrev" aria-label="Previous week">${icon("back")}</button><button id="wlPick" aria-label="Pick a week">${icon("calendar")}<span id="wlLabel"></span></button><button id="wlNext" aria-label="Next week" style="transform:scaleX(-1)">${icon("back")}</button></div>
+        <input id="wlDate" class="sr" aria-hidden="true" tabindex="-1">
+        <button class="btn line" id="wlRemind" hidden>${icon("bell")}Desktop reminders</button>
+        <button class="btn primary" id="wlLog">${icon("plus")}Log time</button>
+      </div></div>
+    <div id="wlBody" style="margin-top:20px"><div class="wl-week">${Array(7).fill(`<div class="wl-day"><div class="line" style="height:14px;width:60%"></div></div>`).join("")}</div></div></div>`;
+  $("#wlLabel").textContent = `${day(wlWeek)} – ${day(addDays(wlWeek, 6))}`;
+  $("#wlPrev").onclick = () => { history.pushState(null, "", `#worklogs/${addDays(wlWeek, -7)}`); route(); };
+  $("#wlNext").onclick = () => { history.pushState(null, "", `#worklogs/${addDays(wlWeek, 7)}`); route(); };
+  const fp = datePicker($("#wlDate"), { maxDate: today, onChange: d => { if (d[0]) { history.pushState(null, "", `#worklogs/${mondayOf(d[0])}`); route(); } }, positionElement: $("#wlPick") });
+  $("#wlPick").onclick = () => fp?.open();
+  $("#wlLog").onclick = () => logDialog(null, { date: wlDay });
+  if ("Notification" in window && Notification.permission === "default") { $("#wlRemind").hidden = false; $("#wlRemind").onclick = async () => { await Notification.requestPermission(); $("#wlRemind").hidden = true; toast(Notification.permission === "granted" ? `You'll get a reminder at ${esc(status.reminderAt || "17:00")} if today is short.` : "Reminders stay inside Greenlight."); }; }
+  let wk;
+  try { wk = await api(`/api/time/week?from=${wlWeek}`); } catch (e) { $("#wlBody").innerHTML = errBox("Couldn't read your worklogs", e.message, () => renderWorklogs(from)); return; }
+  if (section !== "worklogs") return;
+  const goal = wk.days.filter(d => d.workday).reduce((n, d) => n + d.target, 0), done = wk.days.reduce((n, d) => n + d.seconds, 0);
+  $("#wlBody").innerHTML = `
+    <div class="wl-week" role="listbox" aria-label="Days">${wk.days.map(d => `<button class="wl-day ${d.workday ? "" : "off"} ${d.date === today ? "today" : ""}" aria-pressed="${d.date === wlDay}" data-day="${d.date}" ${d.date > today ? "disabled" : ""}>
+      <span class="d">${d.weekday}<span>${day(d.date)}</span></span>
+      <span class="tot">${d.seconds ? hm(d.seconds) : "–"}${d.workday ? `<small> / ${hm(d.target)}</small>` : ""}</span>
+      ${d.workday ? `<span class="bar"><i class="${d.seconds >= d.target ? "met" : ""}" style="width:${Math.min(100, d.seconds / Math.max(1, d.target) * 100)}%"></i></span>` : ""}
+      ${d.tickets.slice(0, 3).map(t => `<span class="tk"><span class="mono">${esc(t.key)}</span><span>${hm(t.seconds)}</span></span>`).join("")}${d.tickets.length > 3 ? `<span class="tk ink-3">+${d.tickets.length - 3} more</span>` : ""}
+    </button>`).join("")}</div>
+    <p class="ink-3" style="margin:12px 0 0">This week: <b style="color:var(--gl-text)">${hm(done)}</b> of ${hm(goal)}.${wk.days.filter(d => d.workday && d.date < today && d.seconds < d.target).length ? ` ${pl(wk.days.filter(d => d.workday && d.date < today && d.seconds < d.target).length, "day is", "days are")} short.` : ""}</p>
+    <div class="grid2">
+      <section class="card"><h2>Suggested for ${esc(day(wlDay))}<span class="c" id="sgSub"></span></h2><div id="sgList"><span class="s2-msg"><span class="spinner"></span>Reading your commits</span></div></section>
+      <div class="stack">
+        <section class="card"><h2>Logged on ${esc(day(wlDay))}</h2>${(() => { const d = wk.days.find(x => x.date === wlDay); return d?.tickets.length ? `<div class="mini-list">${d.tickets.map(t => `<button class="mini" data-k="${esc(t.key)}"><span></span><span class="t">${esc(t.summary || t.key)}</span><span class="r"><b>${hm(t.seconds)}</b></span><span class="s"><span class="mono">${esc(t.key)}</span></span></button>`).join("")}</div>` : `<p class="ink-3" style="margin:0">Nothing logged that day.</p>`; })()}</section>
+        <section class="card"><h2>Standup<button class="more-l" id="wlSuCopy" hidden>Copy</button></h2><pre class="standup" id="wlSu"><span class="s2-msg"><span class="spinner"></span>Gathering</span></pre></section>
+      </div>
+    </div>`;
+  soften($("#wlBody"));
+  $$("#wlBody [data-day]").forEach(b => b.onclick = () => renderWorklogs(wlWeek, b.dataset.day));
+  $$("#wlBody .mini[data-k]").forEach(b => b.onclick = () => select(b.dataset.k));
+  loadStandup($("#wlSu"), wlDay, null, $("#wlSuCopy"));
+  try {
+    const sg = await api(`/api/time/suggest?date=${wlDay}`);
+    if (!$("#sgList")) return;
+    $("#sgSub").textContent = sg.target ? `${hm(sg.logged)} of ${hm(sg.target)} logged` : "";
+    $("#sgList").innerHTML = !sg.tickets.length
+      ? `<div class="pane-empty" style="padding:18px 0">${glim("empty")}<b>No commits that day</b><span>Suggestions come from the commits you made on each ticket.</span></div>`
+      : `${sg.left ? `<p class="ink-3" style="margin:0 0 6px">${hm(sg.left)} still to log, shared by where you committed.</p>` : `<p class="ink-3" style="margin:0 0 6px">The day's target is met. These are the tickets you committed on.</p>`}
+        ${sg.tickets.map(t => `<div class="sug"><span class="t">${esc(t.key)} · ${esc(t.summary || "")}</span><span class="h">${t.suggested ? hm(t.suggested) : ""}</span>
+          <button class="btn ${t.suggested ? "primary" : "line"} small" data-log="${esc(t.key)}" data-min="${Math.max(15, Math.round(t.suggested / 60))}" data-c="${esc(t.subjects.join("; "))}">${icon("plus")}Log</button>
+          <span class="s">${pl(t.commits, "commit")} ${esc(t.from)}–${esc(t.to)} in ${esc(t.repos.join(", "))}${t.logged ? ` · ${hm(t.logged)} already logged` : ""}</span></div>`).join("")}`;
+    $$("#sgList [data-log]").forEach(b => b.onclick = () => logDialog(b.dataset.log, { minutes: +b.dataset.min, date: wlDay, comment: b.dataset.c }));
+  } catch (e) { if ($("#sgList")) $("#sgList").innerHTML = `<p class="ink-3" style="margin:0">${esc(e.message)}</p>`; }
+}
+
+/* ─────────────────────────── sprint release ─────────────────────────── */
+let sprints = null, spWho = "me", spData = new Map();
+async function renderSprint(name) {
+  document.title = "Sprint release · greenlight.";
+  crumb(`<b>Sprint release</b>`);
+  if (!status?.account) { $("#main").innerHTML = `<div class="page">${emptyNote("Connect Jira", "Sprints come from Jira.", `<button class="btn success small" id="spc">Connect Jira</button>`, "welcome")}</div>`; $("#spc").onclick = openSettings; return; }
+  $("#main").innerHTML = `<div class="page wide-page"><div class="ph"><div><h1>Sprint release</h1><p>Everything a sprint needs to go live: tags per service, database releases, settings, access and blockers.</p></div></div>
+    <div id="spBody" style="margin-top:20px"><span class="s2-msg"><span class="spinner"></span>Reading sprints from Jira</span></div></div>`;
+  try { sprints ??= await api("/api/sprints"); } catch (e) { $("#spBody").innerHTML = errBox("Couldn't read sprints", e.message, () => renderSprint(name)); return; }
+  if (section !== "sprint") return;
+  if (!sprints.length) { $("#spBody").innerHTML = emptyNote("No sprints", "None of your tickets is in a sprint.", "", "empty"); return; }
+  const sp = sprints.find(s => s.name === name) || sprints.find(s => s.state === "active") || sprints[0];
+  $(".ph").insertAdjacentHTML("beforeend", `<div class="acts">
+      <select id="spSel" aria-label="Sprint">${sprints.map(s => `<option value="${esc(s.name)}" ${s.name === sp.name ? "selected" : ""}>${esc(s.name)} · ${esc(s.state)}</option>`).join("")}</select>
+      <div class="seg" role="radiogroup" aria-label="Whose tickets"><button role="radio" aria-checked="${spWho === "me"}" data-who="me">Mine</button><button role="radio" aria-checked="${spWho === "all"}" data-who="all">Everyone's</button></div>
+      <button class="btn primary" id="spCheck">${icon("checkall")}Check all</button></div>`);
+  jq("#spSel").select2({ width: "240px", minimumResultsForSearch: 10 }).on("change", e => { history.pushState(null, "", `#sprint/${encodeURIComponent(e.target.value)}`); route(); });
+  $$(".ph [data-who]").forEach(b => b.onclick = () => { spWho = b.dataset.who; renderSprint(sp.name); });
+  $("#spBody").innerHTML = `<span class="s2-msg"><span class="spinner"></span>Reading ${esc(sp.name)}</span>`;
+  // every page of the sprint (sprints are small; still read page by page)
+  const items = [];
+  try {
+    let next = "";
+    for (let i = 0; i < 10; i++) {
+      const r = await api(`/api/sprint?name=${encodeURIComponent(sp.name)}&who=${spWho}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+      items.push(...r.items); next = r.next; if (!next) break;
+    }
+  } catch (e) { $("#spBody").innerHTML = errBox("Couldn't read the sprint", e.message, () => renderSprint(sp.name)); return; }
+  if (section !== "sprint") return;
+  const draw = () => {
+    const checked = items.filter(t => spData.has(t.key));
+    $("#spBody").innerHTML = `
+      <section class="card"><h2>Tickets<span class="c">${items.length}${checked.length < items.length ? ` · ${checked.length} checked` : ""}</span></h2>
+        <div class="wide"><table class="tb"><thead><tr><th></th><th>Ticket</th><th>Assignee</th><th>Jira</th><th>Readiness</th><th class="r"><span class="sr">Open</span></th></tr></thead><tbody id="spRows"></tbody></table></div></section>
+      <div id="spRel"></div>`;
+    paged($("#spRows"), items.map(t => { const st = statesOf(spData.get(t.key) ? { stations: spData.get(t.key).stations } : t.lastBuild); return `<tr>
+      <td style="width:20px">${mark(overall(st))}</td>
+      <td><button class="fpath" data-k="${esc(t.key)}" style="font-family:var(--sans)"><span class="mono">${esc(t.key)}</span> ${esc(t.summary)}</button></td>
+      <td class="nw ink-2">${esc(t.assignee)}</td><td class="nw">${jiraBadge(t.status, t.statusCategory)}</td><td class="nw">${qbar(st)}</td>
+      <td class="r"><button class="btn small" data-chk="${esc(t.key)}">${spData.has(t.key) ? "Recheck" : "Check"}</button></td></tr>`; }), 40);
+    $$("#spRows [data-k]").forEach(b => b.onclick = () => select(b.dataset.k));
+    $$("#spRows [data-chk]").forEach(b => b.onclick = async () => { b.innerHTML = `<span class="spinner"></span>`; await checkOne(b.dataset.chk); draw(); });
+    if (checked.length) $("#spRel").innerHTML = releaseHtml(sp, checked);
+    $("#relCopy")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText($("#relNotes").textContent); toast("Release notes copied."); } catch { fail("Couldn't copy."); } });
+    $$("#spRel [data-k]").forEach(b => b.onclick = () => select(b.dataset.k));
+  };
+  const checkOne = async k => { try { const r = await api(`/api/manifest?key=${encodeURIComponent(k)}&fetch=0&children=1&mine=${spWho === "me" ? 1 : 0}`); spData.set(k, r); } catch (e) { fail(`${esc(k)}: ${esc(e.message)}`); } };
+  $("#spCheck").onclick = async () => {
+    const b = $("#spCheck"); b.disabled = true;
+    for (let i = 0; i < items.length; i++) {
+      if (section !== "sprint") break;
+      b.innerHTML = `<span class="spinner"></span>Checking ${i + 1} of ${items.length}`;
+      await checkOne(items[i].key);
+      if (i % 3 === 2 || i === items.length - 1) draw();
+    }
+    if ($("#spCheck")) { $("#spCheck").disabled = false; $("#spCheck").innerHTML = `${icon("checkall")}Check all`; }
+  };
+  draw();
+}
+
+// what the checked tickets of a sprint need to go live, gathered from their checks
+function releaseHtml(sp, checked) {
+  const reps = checked.map(t => ({ t, r: spData.get(t.key) }));
+  const svc = new Map(), blockers = [], db = new Set(), cfg = new Map(), access = [];
+  const vnum = n => (n || "").replace(/^[^\d]*/, "").split(".").map(x => +x || 0);
+  const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+  for (const { t, r } of reps) {
+    for (const x of r.repos) {
+      if (!x.commits.length) continue;
+      const s = svc.get(x.name) || { tag: null, untagged: [], unmerged: [], next: null, tickets: new Set() };
+      s.tickets.add(t.key);
+      if (x.commits.some(c => !c.inDefault)) s.unmerged.push(t.key);
+      const first = x.tags?.containing?.[0]?.name;
+      if (first) { if (!s.tag || newer(first, s.tag)) s.tag = first; } else if (x.tags) { s.untagged.push(t.key); s.next = x.tags.next || s.next; }
+      svc.set(x.name, s);
+    }
+    for (const st of r.stations) for (const it of st.items) {
+      if (it.state === "todo") blockers.push({ key: t.key, step: STEPS.find(z => z.id === st.id)?.name, title: it.title, repo: it.repo });
+      if (st.id === "db" && /^Run /.test(it.title)) db.add(it.title.replace(/^Run /, "").replace(/ on QA$/, ""));
+      if (st.id === "config" && it.state !== "skip") { const k = `${it.repo || ""}`; cfg.set(k, [...(cfg.get(k) || []), `${it.title}${it.detail ? `: ${it.detail}` : ""}`]); }
+      if (st.id === "access" && it.state !== "skip" && it.state !== "done") access.push(`${it.repo ? it.repo + ": " : ""}${it.title}`);
+    }
+  }
+  const lines = [`${sp.name} release`, "", "Tickets:", ...reps.map(({ t }) => `- ${t.key} ${t.summary} (${t.status})`), "", "Deploy:"];
+  for (const [n, s] of svc) lines.push(`- ${n}: ${s.tag ? s.tag : "no tag yet"}${s.untagged.length ? ` (needs a new tag${s.next ? `, next ${s.next}` : ""} for ${s.untagged.join(", ")})` : ""}${s.unmerged.length ? ` (unmerged work: ${s.unmerged.join(", ")})` : ""}`);
+  if (db.size) lines.push("", "Database releases to run on QA:", ...[...db].map(d => `- ${d}`));
+  if (cfg.size) lines.push("", "Settings:", ...[...cfg].flatMap(([k, v]) => v.map(x => `- ${k ? k + ": " : ""}${x}`)));
+  if (access.length) lines.push("", "Access:", ...access.map(a => `- ${a}`));
+  if (blockers.length) lines.push("", "Blockers:", ...blockers.map(b => `- ${b.key} ${b.step}: ${b.title}${b.repo ? ` (${b.repo})` : ""}`));
+  return `<div class="grid2">
+    <div class="stack">
+      <section class="card"><h2>Blockers<span class="c">${blockers.length}</span></h2>${blockers.length ? `<div class="mini-list">${blockers.slice(0, 40).map(b => `<button class="mini" data-k="${esc(b.key)}">${mark("todo")}<span class="t">${esc(b.title)}</span><span class="r mono">${esc(b.key)}</span><span class="s">${esc(b.step || "")}${b.repo ? repoTag(b.repo) : ""}</span></button>`).join("")}</div>` : `<div class="pane-empty" style="padding:16px 0">${glim("success")}<b>Nothing blocks the checked tickets</b></div>`}</section>
+      <section class="card"><h2>Services to deploy<span class="c">${svc.size}</span></h2>${[...svc].map(([n, s]) => `<div class="rel-svc">${repoTag(n)}<div class="x">${s.tag ? `<span class="tagpill">${esc(s.tag)}</span>` : ""}${s.untagged.length ? `<span class="tagpill next">needs a tag${s.next ? ` · ${esc(s.next)}` : ""}</span>` : ""}${s.unmerged.length ? `${mark("todo")}<span>unmerged: ${esc(s.unmerged.join(", "))}</span>` : ""}<span class="ink-3">${esc([...s.tickets].join(", "))}</span></div></div>`).join("") || `<p class="ink-3" style="margin:0">No service code in the checked tickets.</p>`}</section>
+    </div>
+    <div class="stack">
+      <section class="card"><h2>Database and settings</h2>
+        ${db.size ? `<p style="margin:0 0 6px"><b>Run on QA</b></p>${[...db].map(d => `<div class="tk">${icon("db")} ${esc(d)}</div>`).join("")}` : `<p class="ink-3" style="margin:0">No database releases.</p>`}
+        ${cfg.size ? `<p style="margin:14px 0 6px"><b>Settings</b></p>${[...cfg].map(([k, v]) => `<div style="margin-bottom:6px">${k ? repoTag(k) : ""}<div class="ink-2" style="font-size:13px">${v.map(esc).join("<br>")}</div></div>`).join("")}` : ""}
+      </section>
+      <section class="card"><h2>Release notes<button class="more-l" id="relCopy">Copy</button></h2><pre class="notes" id="relNotes">${esc(lines.join("\n"))}</pre></section>
+    </div></div>`;
+}
+
+/* ─────────────────────────── team ─────────────────────────── */
+async function renderTeam() {
+  document.title = "Team · greenlight.";
+  crumb(`<b>Team</b>`);
+  if (!status?.account) { $("#main").innerHTML = `<div class="page">${emptyNote("Connect Jira", "The team view comes from Jira.", `<button class="btn success small" id="tmc">Connect Jira</button>`, "welcome")}</div>`; $("#tmc").onclick = openSettings; return; }
+  $("#main").innerHTML = `<div class="page wide-page"><div class="ph"><div><h1>Team</h1><p>Open work in the current sprint${status.project ? ` of ${esc(status.project)}` : ""}, by person. Set <code>team.jql</code> in greenlight.json to change who is shown.</p></div></div>
+    <div id="tmBody"><span class="s2-msg" style="margin-top:20px"><span class="spinner"></span>Reading the sprint from Jira</span></div></div>`;
+  const items = [];
+  try { let next = ""; for (let i = 0; i < 10; i++) { const r = await api(`/api/team${next ? `?next=${encodeURIComponent(next)}` : ""}`); items.push(...r.items); next = r.next; if (!next) break; } }
+  catch (e) { $("#tmBody").innerHTML = errBox("Couldn't read the team's tickets", e.message, renderTeam); return; }
+  if (section !== "team") return;
+  if (!items.length) { $("#tmBody").innerHTML = emptyNote("No open work", "Nothing open in the current sprint.", "", "success"); return; }
+  const people = new Map();
+  items.forEach(t => { const k = t.assignee || "Unassigned"; if (!people.has(k)) people.set(k, []); people.get(k).push(t); });
+  $("#tmBody").innerHTML = `<div class="team">${[...people].sort((a, b) => b[1].length - a[1].length).map(([who, list]) => `<section class="card person">
+    <h2><span class="face">${esc(initials(who))}</span>${esc(cap(who))}<span class="c">${list.length}</span></h2>
+    <div class="mini-list">${list.map(t => `<button class="mini" data-k="${esc(t.key)}">${mark(overall(statesOf(t.lastBuild)))}<span class="t">${esc(t.summary)}</span><span class="r mono">${esc(t.key)}</span><span class="s">${typeTag(t.type)}${jiraBadge(t.status, t.statusCategory)}${metaChips(t, true)}</span></button>`).join("")}</div></section>`).join("")}</div>`;
+  soften($("#tmBody"));
+  $$("#tmBody [data-k]").forEach(b => b.onclick = () => select(b.dataset.k));
+}
+
+/* ─────────────────────────── ticket extras: deployments and actions ─────────────────────────── */
+async function loadDeployments(key) {
+  const box = $("#dep"); if (!box) return;
+  box.innerHTML = `<h3 class="h3">Where it's deployed</h3><div class="s2-msg"><span class="spinner"></span>Reading environments from GitLab</div>`;
+  try {
+    const list = await api(`/api/deployments?key=${encodeURIComponent(key)}`);
+    if (report?.key !== key || !$("#dep")) return;
+    if (!list.length) { box.innerHTML = `<h3 class="h3">Where it's deployed<span>no GitLab environments for these services</span></h3>`; return; }
+    box.innerHTML = `<h3 class="h3">Where it's deployed<span>last deployment to each environment</span></h3>
+      ${list.map(r => `<div class="grp">${repoTag(r.repo)}</div><div class="envs">${r.environments.map(e => `<div class="env">
+        <div class="en">${mark(e.contains === true ? "done" : e.contains === false ? "todo" : "check", false)}<a class="ln" href="${url(e.web)}" target="_blank" rel="noopener">${esc(e.name)}</a><span class="tier">${esc(e.tier || "")}</span></div>
+        <div class="er"><code>${esc(e.ref || "")}</code><span>${esc(e.sha || "")}</span><span>${day(e.date)}</span>${e.status && e.status !== "success" ? `<span>${esc(e.status)}</span>` : ""}</div>
+        <div class="has">${e.contains === true ? "Includes this work" : e.contains === false ? "Doesn't include all of it yet" : "Can't tell: fetch first"}</div></div>`).join("")}</div>`).join("")}`;
+    soften(box);
+  } catch (e) { box.innerHTML = `<h3 class="h3">Where it's deployed</h3><p class="ink-3" style="margin:0">${esc(e.message)}</p>`; }
+}
+
+// in-app actions for step items, shown only where Greenlight can really do them
+function stepActions(s, it) {
+  if (!status?.gitlab || it.state !== "todo" || !it.repo) return "";
+  if (s.id === "code") { const m = /^Merge (\S+) into /.exec(it.title || ""); if (m) return `<button class="btn primary small" data-mkmr="${esc(m[1])}" data-repo="${esc(it.repo)}">${icon("branch")}Create merge request</button>`; }
+  if (s.id === "tag") { const next = report?.repos.find(x => x.name === it.repo)?.tags?.next; if (next) return `<button class="btn primary small" data-mktag="${esc(next)}" data-repo="${esc(it.repo)}">${icon("tag")}Create tag ${esc(next)}</button>`; }
+  return "";
+}
+
+async function createMr(repo, branch) {
+  if (!await confirmDialog("Create a merge request?", `From <code>${esc(branch)}</code> into the default branch of ${repoTag(repo)}, titled with the ticket key and summary.`, "Create merge request", "primary")) return;
+  try { const r = await api("/api/gitlab/create-mr", { method: "POST", body: JSON.stringify({ repo, branch }) }); toast(`Merge request !${esc(r.iid)} created.<a href="${url(r.url)}" target="_blank" rel="noopener">Open in GitLab</a>`, 8000); if (report) loadTicketReviews(report.key); }
+  catch (e) { fail(esc(e.message)); }
+}
+
+async function createTag(repo, tag) {
+  if (!await confirmDialog(`Create tag ${esc(tag)}?`, `Tags the default branch of ${repoTag(repo)} in GitLab. QA deploys tags, so this starts a release.`, `Create ${esc(tag)}`, "primary")) return;
+  try { const r = await api("/api/gitlab/create-tag", { method: "POST", body: JSON.stringify({ repo, tag }) }); toast(`Tag ${esc(tag)} created.<a href="${url(r.url)}" target="_blank" rel="noopener">Open in GitLab</a>`, 8000); if (report) setTimeout(() => load(report.key, false, true), 4000); }
+  catch (e) { fail(esc(e.message)); }
+}
+
+async function moveDialog(key) {
+  const d = $("#settings");
+  d.innerHTML = `<div class="dlg-in"><h2>Move ${esc(key)} in Jira</h2><div id="mvList"><span class="s2-msg"><span class="spinner"></span>Reading what's possible</span></div></div>
+    <div class="dlg-f"><span class="msg" id="mvMsg"></span><button class="btn" id="mvCancel">Cancel</button><button class="btn primary" id="mvGo" disabled>Move</button></div>`;
+  d.showModal();
+  $("#mvCancel").onclick = () => d.close();
+  try {
+    const ts = await api(`/api/jira/transitions?key=${encodeURIComponent(key)}`);
+    $("#mvList").innerHTML = ts.length ? `<div class="radio-list">${ts.map(t => `<label><input type="radio" name="mv" value="${esc(t.id)}">${jiraBadge(t.to, t.category)}<span class="ink-2">${esc(t.name)}</span></label>`).join("")}</div>` : `<p class="ink-3">This ticket can't be moved from its current status.</p>`;
+    $$("#mvList input").forEach(i => i.onchange = () => { $("#mvGo").disabled = false; });
+    $("#mvGo").onclick = async () => {
+      const id = $("#mvList input:checked")?.value; if (!id) return;
+      $("#mvGo").disabled = true; $("#mvMsg").innerHTML = `<span class="spinner"></span>Moving`;
+      try { await api("/api/jira/transition", { method: "POST", body: JSON.stringify({ key, id }) }); d.close(); toast(`${esc(key)} moved.`); tickets && loadTickets(); if (report?.key === key) load(key, false, true); }
+      catch (e) { $("#mvMsg").className = "msg bad"; $("#mvMsg").textContent = e.message; $("#mvGo").disabled = false; }
+    };
+  } catch (e) { $("#mvList").innerHTML = `<p class="ink-3">${esc(e.message)}</p>`; }
+}
+
+// a yes/no question before anything that changes Jira or GitLab
+function confirmDialog(title, html, yes, kind = "primary") {
+  return new Promise(ok => {
+    const d = $("#settings");
+    d.innerHTML = `<div class="dlg-in"><h2>${title}</h2><p class="intro" style="margin:0">${html}</p></div>
+      <div class="dlg-f"><span class="msg"></span><button class="btn" id="cfNo">Cancel</button><button class="btn ${kind}" id="cfYes">${yes}</button></div>`;
+    const done = v => { d.removeEventListener("close", onClose); d.close(); ok(v); };
+    const onClose = () => ok(false);
+    d.addEventListener("close", onClose, { once: true });
+    $("#cfNo").onclick = () => done(false); $("#cfYes").onclick = () => done(true);
+    d.showModal(); setTimeout(() => $("#cfYes").focus(), 30);
+  });
+}
+
+// review checklist, sorted into what a reviewer thinks about
+function checkGroups(list) {
+  const cat = c => { const t = (c.title + " " + (c.detail || "")).toLowerCase();
+    if (/pipeline|test/.test(t)) return "CI and testing";
+    if (/database|script|sql|pipeline files/.test(t)) return "Database and deployment";
+    if (/setting|endpoint|grant|scope|role|menu/.test(t)) return "Configuration and access";
+    if (/discussion/.test(t)) return "Review discussions";
+    if (/large|ticket key|no test/.test(t)) return "Change size and quality";
+    return "Merge readiness"; };
+  const order = ["Merge readiness", "CI and testing", "Database and deployment", "Configuration and access", "Review discussions", "Change size and quality"];
+  const m = new Map(order.map(o => [o, []]));
+  list.forEach(c => m.get(cat(c)).push(c));
+  return [...m].filter(([, v]) => v.length);
+}
+const todoCount = r => r.checklist.filter(c => c.state === "todo").length;
+
+function errBox(title, msg, retry) {
+  setTimeout(() => { const b = $("#errRetry"); if (b) b.onclick = () => { b.disabled = true; b.innerHTML = `<span class="spinner"></span>Trying again`; retry(); }; });
+  return `<div class="void fail-c">${icon("alert", "ico big")}<h3>${esc(title)}</h3><p>Greenlight couldn't finish this. The rest of the app still works.</p>
+    <div class="void-acts"><button class="btn solid" id="errRetry">${icon("refresh")}Try again</button></div>
+    <details class="why"><summary>Technical details</summary><code>${esc(msg)}</code></details></div>`;
+}
+
+// date picker (flatpickr), themed; the field keeps yyyy-mm-dd while showing a friendly date
+function datePicker(el, opts = {}) {
+  if (!el || !window.flatpickr) return null;
+  return flatpickr(el, { dateFormat: "Y-m-d", altInput: !el.classList.contains("sr"), altFormat: "D j M Y", disableMobile: true, locale: { firstDayOfWeek: 1 }, ...opts });
+}
+
+/* ─────────────────────────── command palette (Ctrl K) ─────────────────────────── */
+function openCmd() {
+  const d = $("#cmdk");
+  const cmds = [
+    ["home", "Overview", () => go("#overview")], ["ticket", "My tickets", () => go("#tickets")], ["review", "Reviews", () => go("#reviews")],
+    ["clock", "Worklogs", () => go("#worklogs")], ["sprint", "Sprint release", () => go("#sprint")], ["team", "Team", () => go("#team")],
+    ["checkall", "Check all my tickets", () => { go("#tickets"); checkAll(); }], ["plus", "Log time", () => logDialog(null)],
+    ...(report ? [["refresh", `Fetch and check ${report.key} again`, () => load(report.key, true)]] : []),
+    ["sun", "Light theme", () => $(`[data-theme-set="light"]`).click()], ["moon", "Dark theme", () => $(`[data-theme-set="dark"]`).click()],
+    ["cog", "Account and settings", openSettings],
+  ];
+  d.innerHTML = `<div class="bar">${icon("search", "ico")}<input id="cmdQ" placeholder="Ticket key, words from a title, or a command" aria-label="Search" autocomplete="off"></div>
+    <div class="res" id="cmdRes" role="listbox"></div><div class="foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>`;
+  let items = [], at = 0, jiraT = 0, jiraQ = "";
+  const draw = (q, jira = null) => {
+    const ql = q.trim().toLowerCase();
+    const cm = cmds.filter(c => !ql || c[1].toLowerCase().includes(ql)).slice(0, ql ? 6 : 12).map(c => ({ ico: c[0], t: c[1], k: "", run: c[2] }));
+    const tk = (tickets || []).filter(t => ql && (t.key.toLowerCase().includes(ql) || (t.summary || "").toLowerCase().includes(ql))).slice(0, 8).map(t => ({ mark: overall(statesOf(t.lastBuild)), t: t.summary, k: t.key, run: () => select(t.key) }));
+    const rc = !ql ? (status?.recent || []).slice(0, 5).map(r => ({ mark: overall(statesOf(r)), t: r.summary || r.key, k: r.key, run: () => select(r.key) })) : [];
+    const jr = (jira || []).filter(x => !tk.some(t => t.k === x.key)).map(t => ({ mark: "none", t: t.summary, k: t.key, run: () => select(t.key) }));
+    items = [...tk, ...jr, ...rc, ...cm];
+    if (at >= items.length) at = 0;
+    const sec = (cap, list, off) => list.length ? `<div class="cap">${cap}</div>${list.map((x, i) => `<button role="option" aria-selected="${off + i === at}" data-i="${off + i}">${x.mark ? mark(x.mark, false) : icon(x.ico, "ico")}<span class="t">${esc(x.t)}</span><span class="k mono">${esc(x.k)}</span></button>`).join("")}` : "";
+    $("#cmdRes").innerHTML = (sec("Your tickets", tk, 0) + sec("From Jira", jr, tk.length) + sec("Recent", rc, tk.length + jr.length) + sec("Go to", cm, tk.length + jr.length + rc.length))
+      || `<div class="none">${ql.length >= 2 ? `<span class="s2-msg"><span class="spinner"></span>Searching Jira</span>` : "Nothing matches."}</div>`;
+    $$("#cmdRes [data-i]").forEach(b => { b.onclick = () => run(+b.dataset.i); b.onmousemove = () => { if (at !== +b.dataset.i) { at = +b.dataset.i; mark2(); } }; });
+  };
+  const mark2 = () => $$("#cmdRes [data-i]").forEach(b => b.setAttribute("aria-selected", +b.dataset.i === at));
+  const run = i => { const x = items[i]; if (!x) return; d.close(); x.run(); };
+  const go = h => { history.pushState(null, "", h); route(); };
+  $("#cmdQ").oninput = e => {
+    const q = e.target.value; at = 0; draw(q);
+    clearTimeout(jiraT);
+    if (q.trim().length >= 2 && status?.account) jiraT = setTimeout(async () => { jiraQ = q; try { const r = await api(`/api/search?q=${encodeURIComponent(q.trim())}`); if (jiraQ === $("#cmdQ")?.value) draw(q, r.items); } catch { } }, 250);
+  };
+  $("#cmdQ").onkeydown = e => {
+    if (e.key === "ArrowDown") { e.preventDefault(); at = Math.min(items.length - 1, at + 1); mark2(); $(`#cmdRes [data-i="${at}"]`)?.scrollIntoView({ block: "nearest" }); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); at = Math.max(0, at - 1); mark2(); $(`#cmdRes [data-i="${at}"]`)?.scrollIntoView({ block: "nearest" }); }
+    else if (e.key === "Enter") { e.preventDefault(); run(at); }
+  };
+  d.onclick = e => { if (e.target === d) d.close(); };
+  draw("");
+  d.showModal(); $("#cmdQ").focus();
+}
+
+/* ─────────────────────────── notifications and the end-of-day reminder ─────────────────────────── */
+function notify(title, body, onClick) {
+  toast(`<b>${esc(title)}</b> ${esc(body)}`, 8000);
+  try { if ("Notification" in window && Notification.permission === "granted" && document.hidden) { const n = new Notification(title, { body, icon: $("link[rel=icon]").href }); n.onclick = () => { window.focus(); onClick?.(); n.close(); }; } } catch { }
+}
+async function pollGitlab() {
+  if (!status?.gitlab) return;
+  let now;
+  try { now = await api("/api/notifications"); } catch { return; }
+  let was = null; try { was = JSON.parse(localStorage.getItem("gl-notes") || "null"); } catch { }
+  try { localStorage.setItem("gl-notes", JSON.stringify(now)); } catch { }
+  const n = now.reviews.length;
+  if (reviews && reviews.length !== n) api("/api/reviews").then(r => { reviews = r; navCounts(); if (railMode === "review") renderList(); }).catch(() => {});
+  if (!was) return;   // first look: nothing to compare with
+  const old = new Map(was.mine.map(m => [m.id, m]));
+  for (const r of now.reviews) if (!was.reviews.some(x => x.id === r.id)) notify("New review request", `${r.author}: ${r.title}`, () => { setSection("reviews"); openReview(r.project, r.iid); });
+  for (const m of now.mine) {
+    const o = old.get(m.id); if (!o) continue;
+    if (m.notes > o.notes) notify(`New comments on !${m.iid}`, m.title, () => window.open(m.url, "_blank", "noopener"));
+    if (m.pipeline === "failed" && o.pipeline !== "failed") notify(`Pipeline failed on !${m.iid}`, m.title, () => window.open(m.url, "_blank", "noopener"));
+    for (const who of m.changesRequested) if (!o.changesRequested.includes(who)) notify(`${who} requested changes`, `!${m.iid} ${m.title}`, () => window.open(m.url, "_blank", "noopener"));
+    for (const who of m.approved) if (!o.approved.includes(who)) notify(`${who} approved !${m.iid}`, m.title, () => window.open(m.url, "_blank", "noopener"));
+  }
+}
+function remindTick() {
+  if (!week || !status?.account) return;
+  const t = week.days.find(d => d.date === week.today);
+  if (!t?.workday || t.seconds >= t.target) return;
+  const [h, m] = (status.reminderAt || "17:00").split(":").map(Number), now = new Date();
+  if (now.getHours() * 60 + now.getMinutes() < h * 60 + m) return;
+  let last = ""; try { last = localStorage.getItem("gl-reminded") || ""; } catch { }
+  if (last === week.today) return;
+  try { localStorage.setItem("gl-reminded", week.today); } catch { }
+  notify("Time to log your day", `${hm(t.target - t.seconds)} still to log today.`, () => go2("#worklogs"));
+}
+const go2 = h => { history.pushState(null, "", h); route(); };
+
+/* ─────────────────────────── keys and start ─────────────────────────── */
+$("#settings").addEventListener("click", e => { if (e.target === $("#settings")) $("#settings").close(); });
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (!$("#cmdk").open) openCmd(); return; }
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName) || document.querySelector(".select2-container--open") || $("#settings").open || $("#cmdk").open || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "/") { e.preventDefault(); openFind(); }
+  else if (e.key === "j" && section === "tickets") move(1);
+  else if (e.key === "k" && section === "tickets") move(-1);
+  else if (e.key === "r" && report && section === "tickets") load(report.key, true);
+  else if (e.key === "Escape" && selected && innerWidth <= 900) back();
 });
+
+$("#checkAll").onclick = checkAll;
+$("#reload").onclick = () => railMode === "review" ? loadReviews() : status?.account && loadTickets();
 
 // the app frame never scrolls as a whole; only its panes do. If focus ever nudges the document, put it back.
 addEventListener("scroll", () => { if (scrollX || scrollY) scrollTo(0, 0); }, { passive: true });
@@ -1361,6 +2013,8 @@ $("#main").addEventListener("click", mainClicks);
 // opened comment threads ease in like everything else that unfolds
 $("#main").addEventListener("toggle", e => { if (e.target.matches?.("details.talks, details.why") && e.target.open) [...e.target.children].slice(1).forEach((c, i) => soften(c, i * 30)); }, true);
 $("#list").addEventListener("click", e => {
+  const g = e.target.closest(".grp-h");
+  if (g) { includeKids = true; reviewing = null; select(g.dataset.story); return; }
   const r = e.target.closest(".row"); if (!r) return;
   if (r.dataset.project) openReview(r.dataset.project, +r.dataset.iid); else { reviewing = null; if (reviewerMode) { reviewerMode = false; evMine = true; } select(r.dataset.key); }
 });
@@ -1368,12 +2022,16 @@ $("#list").addEventListener("click", e => {
 async function boot() {
   await loadStatus();
   initFinder();
+  route();   // the page appears at once; data fills in as it arrives
   if (status?.account) await loadTickets(); else renderList();
-  // reviews load quietly, so the "To review" count is ready when the switch appears
-  if (status?.gitlab) api("/api/reviews").then(r => { reviews = r; if (railMode === "review") renderList(); else renderRailMode(); }).catch(() => {});
-  loadWeek();
-  if (reviewRoute()) return;
-  const k = decodeURIComponent(location.hash.slice(1)).toUpperCase().split("/")[0];
-  if (k) load(k, false); else blank();
+  await loadWeek();
+  navCounts();
+  // reviews load quietly, so the counts are ready when you look
+  if (status?.gitlab) {
+    api("/api/reviews").then(r => { reviews = r; navCounts(); if (railMode === "review") renderList(); else renderRailMode(); if (section === "overview") renderOverview(); else if (section === "reviews" && !reviewing) reviewsBlank(); }).catch(() => {});
+    pollGitlab(); setInterval(pollGitlab, 3 * 60 * 1000);
+  }
+  if (section === "overview") renderOverview();
+  remindTick(); setInterval(remindTick, 60 * 1000);
 }
 boot();
