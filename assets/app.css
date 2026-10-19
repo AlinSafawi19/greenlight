@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    greenlight — design system
-   Two themes share one language: neutral black (dark, default) and Warm Electric
+   Two themes share one language: neutral black (dark, default) and neutral white
    Lime (light). Colours are tokens; components never hard-code a hex value.
    Lime is the brand and the primary action. It never means "verified": readiness
    has its own status colours, and always an icon and a word as well.
@@ -10,57 +10,56 @@
 @font-face { font-family: "JBMono"; src: url(/assets/JetBrainsMono.ttf) format("truetype"); font-weight: 100 800; font-display: swap; }
 @font-face { font-family: "Jakarta"; src: url(/assets/PlusJakartaSans.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
 
-/* ── tokens: light ── */
+/* ── tokens: light (neutral white and grey) ── */
 :root, :root[data-theme="light"] {
   color-scheme: light;
-  --gl-bg: #F8F8F0;
-  --gl-sidebar: #F1F4E9;
+  --gl-bg: #F6F7F9;
+  --gl-sidebar: #FFFFFF;
   --gl-surface: #FFFFFF;
-  --gl-surface-raised: #F1F4E9;
-  --gl-text: #202B20;
-  --gl-text-2: #3E4A3C;
-  --gl-text-muted: #66705F;
-  --gl-text-faint: #8E9686;
-  --gl-border: #E0E3D7;
-  --gl-border-soft: #EBEDE3;
-  --gl-border-strong: #C9CEBD;
+  --gl-surface-raised: #F1F2F4;
+  --gl-text: #17191C;
+  --gl-text-2: #3A3E44;
+  --gl-text-muted: #646A72;
+  --gl-text-faint: #969BA3;
+  --gl-border: #E2E4E8;
+  --gl-border-soft: #ECEEF1;
+  --gl-border-strong: #C8CCD2;
   --gl-brand: #C8F75A;
   --gl-brand-hover: #B6E747;
   --gl-on-brand: #1B2A0B;
-  --gl-soft-green: #EAF9CE;
+  --gl-soft-green: #EEF0F3;
   --gl-accent: #6658D9;
   --gl-accent-hover: #5546C8;
   --gl-accent-soft: rgba(102, 88, 217, .10);
-  --gl-fill-1: rgba(32, 43, 32, .035);
-  --gl-fill-2: rgba(32, 43, 32, .06);
-  --gl-fill-3: rgba(32, 43, 32, .10);
+  --gl-fill-1: rgba(23, 25, 28, .03);
+  --gl-fill-2: rgba(23, 25, 28, .055);
+  --gl-fill-3: rgba(23, 25, 28, .09);
 
   /* status: each has a foreground (icons, text) and a soft background */
-  --st-done: #2B7D47;   --st-done-bg: #E1F3E5;
+  --st-done: #2B7D47;   --st-done-bg: #E3F4E8;
   --st-todo: #A8520C;   --st-todo-bg: #FCEBD8;
   --st-wait: #3A62B8;   --st-wait-bg: #E3EBFA;
-  --st-check: #5A6458;  --st-check-bg: #ECEFE8;
-  --st-skip: #868D80;   --st-skip-bg: #F0F1EC;
+  --st-check: #5B6169;  --st-check-bg: #EDEEF0;
+  --st-skip: #8A8F96;   --st-skip-bg: #F1F2F4;
   --st-fail: #BE3426;   --st-fail-bg: #FBE4E0;
   --st-info: #2A6AA6;   --st-info-bg: #E1EDF8;
-  --st-disabled: #B4B9AD;
+  --st-disabled: #B6BAC0;
 
   --vscode: #0B7BC4; --vs: #7247C6;
   --rt-l: 30%; --rt-s: 52%; --rt-bg: .13;
 
-  --code-bg: #FBFBF5;
-  --code-text: #2B352A;
+  --code-bg: #FAFAFB;
+  --code-text: #24272B;
   --diff-add-bg: rgba(43, 125, 71, .11);  --diff-add-text: #1E5A33; --diff-add-no: #2B7D47;
   --diff-del-bg: rgba(190, 52, 38, .09);  --diff-del-text: #7E2219; --diff-del-no: #BE3426;
   --diff-hunk-bg: rgba(58, 98, 184, .07); --diff-hunk-text: #3A62B8;
-  --diff-gap: rgba(32, 43, 32, .05);
+  --diff-gap: rgba(23, 25, 28, .05);
 
-  --shadow-1: 0 1px 2px rgba(32, 43, 32, .05), 0 0 0 1px var(--gl-border-soft);
-  --shadow-pop: 0 0 0 1px var(--gl-border), 0 14px 36px rgba(32, 43, 32, .14);
-  --backdrop: rgba(32, 43, 32, .32);
-  --selection: #DCF7A2;
+  --shadow-1: 0 1px 2px rgba(23, 25, 28, .05), 0 0 0 1px var(--gl-border-soft);
+  --shadow-pop: 0 0 0 1px var(--gl-border), 0 14px 36px rgba(23, 25, 28, .14);
+  --backdrop: rgba(23, 25, 28, .3);
+  --selection: #DDD9FF;
 }
-
 /* ── tokens: dark (neutral black) ── */
 :root[data-theme="dark"] {
   color-scheme: dark;
