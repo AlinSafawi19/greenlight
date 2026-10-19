@@ -248,7 +248,8 @@ function openAccount() {
     <p>Everything the ledger does in Jira, like listing your tickets and posting comments, happens as you. The token stays in Windows Credential Manager on this computer.</p>
     ${status?.credentialsRejected ? `<p class="bad">The saved token no longer works. Enter a new one.</p>` : ""}
     <label class="f"><span>Jira site</span><input id="jSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"></label>
-    <label class="f"><span>Your Atlassian email</span><input id="jEmail" type="email" autocomplete="username" spellcheck="false"></label>
+    <label class="f"><span>The email you sign in to Atlassian with</span><input id="jEmail" type="email" autocomplete="username" spellcheck="false">
+      <small>This can differ from the address Jira shows on your profile. Use the one you type on the Atlassian login page.</small></label>
     <label class="f"><span>API token</span><input id="jToken" type="password" autocomplete="off">
       <small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create one here</a> while signed in as yourself, then paste it.</small></label>
     <div class="actions"><button class="btn" id="connect">Connect</button><span class="say" id="jSay"></span></div>`;

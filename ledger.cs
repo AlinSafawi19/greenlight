@@ -831,8 +831,8 @@ class Jira
             var said = (await res.Content.ReadAsStringAsync()).Trim();
             if (said.Length > 200) said = said[..200];
             throw new Exception($"Jira didn't accept {Email} with this token{(said.Length > 0 ? $" (Jira says: {said})" : "")}. " +
-                                "The token must be created while you're signed in to id.atlassian.com as this same email. " +
-                                "Check the account in the top-right corner of that page, then create a new token.");
+                                "Use the email you sign in to Atlassian with (it can differ from the one Jira shows on your profile), " +
+                                "and a token created while signed in as that account.");
         }
         if (res.StatusCode == HttpStatusCode.Forbidden)
             throw new Exception("Jira accepted the token but refused access. Your account may not have access to this site.");
