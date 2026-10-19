@@ -1411,13 +1411,13 @@ const crumb = html => { $("#crumb").innerHTML = html; };
 const localDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 function applyTheme(pref) {
-  const dark = pref === "dark" || (pref === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  if (pref !== "light") pref = "dark";
+  const dark = pref === "dark";
   document.documentElement.dataset.theme = dark ? "dark" : "light";
   document.documentElement.dataset.themePref = pref;
   $$("#themes [data-theme-set]").forEach(b => b.setAttribute("aria-checked", b.dataset.themeSet === pref));
 }
 $$("#themes [data-theme-set]").forEach(b => b.onclick = () => { try { localStorage.setItem("gl-theme", b.dataset.themeSet); } catch { } applyTheme(b.dataset.themeSet); });
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (document.documentElement.dataset.themePref === "system") applyTheme("system"); });
 applyTheme(document.documentElement.dataset.themePref || "dark");
 
 $("#brandGlim").innerHTML = glim("welcome");
