@@ -375,6 +375,34 @@ table.diff tr.del td:nth-child(3) { color: #f2cbc7; }
 table.diff tr.del td:nth-child(1) { color: #e08a82; }
 table.diff tr.hunk td { background: rgba(92, 140, 235, .08); color: #8fb2f5; padding-top: 3px; padding-bottom: 3px; }
 
+/* diff page: side by side, like VS Code */
+.dpage { display: flex; flex-direction: column; min-height: 100%; }
+.dp-h { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 24px; background: var(--rail); border-bottom: 1px solid var(--hair); }
+.dp-t { flex: 1; min-width: 240px; }
+.dp-file { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dp-file .mono { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-sub { font-size: 12px; margin-top: 3px; }
+.dp-a { display: flex; align-items: center; gap: 4px; }
+.dp-b { padding: 18px 24px 64px; }
+.dp-note { margin: 0 0 10px; font-size: 12.5px; }
+.sbs-cols { display: grid; grid-template-columns: 1fr 1fr; font-size: 11.5px; font-weight: 500; color: var(--ink-3); padding: 0 0 6px; }
+.sbs-cols span { padding-left: 52px; }
+.sbs { border-radius: 8px; overflow: hidden; background: #0f1012; box-shadow: inset 0 0 0 1px var(--hair); }
+table.sbs-t { width: 100%; border-collapse: collapse; table-layout: fixed; font: 12px/1.65 var(--mono); }
+table.sbs-t col.c-ln { width: 48px; }
+table.sbs-t td { padding: 0 10px; vertical-align: top; }
+table.sbs-t td.ln { text-align: right; color: var(--ink-4); user-select: none; padding: 0 8px 0 0; }
+table.sbs-t td.tx { color: #cfd1d4; white-space: pre-wrap; word-break: break-all; tab-size: 4; }
+table.sbs-t td.tx + td.ln { box-shadow: inset 1px 0 0 var(--hair-2); }
+table.sbs-t td.del { background: rgba(220, 80, 70, .16); color: #f3d0cc; }
+table.sbs-t td.add { background: rgba(70, 160, 100, .16); color: #cdeed8; }
+table.sbs-t tr:has(td.del) td.ln:first-child { background: rgba(220, 80, 70, .1); color: #e08a82; }
+table.sbs-t tr:has(td.add) td.ln:nth-child(3) { background: rgba(70, 160, 100, .1); color: #6fbf8e; }
+table.sbs-t td.gap { background: repeating-linear-gradient(-45deg, transparent 0 5px, rgba(255,255,255,.035) 5px 7px); }
+table.sbs-t tr.hunk td { background: rgba(92, 140, 235, .08); color: #8fb2f5; padding: 4px 12px; font-size: 11.5px; }
+.dd-c + .dd-c { margin-top: 28px; }
+@media (max-width: 900px) { .dp-h { padding: 12px 16px; } .dp-b { padding: 14px 12px 48px; } table.sbs-t col.c-ln { width: 36px; } }
+
 /* centred error */
 .fail-c .ico.big { width: 30px; height: 30px; color: var(--red); margin-bottom: 14px; }
 .fail-c .why { margin-top: 26px; color: var(--ink-3); font-size: 12px; max-width: 100%; }
@@ -526,7 +554,6 @@ dialog[open] { animation: rise .16s var(--ease); }
 </div>
 
 <dialog class="dlg" id="settings" aria-labelledby="dlgTitle"></dialog>
-<dialog class="drawer" id="diffDlg" aria-label="Changes in this file"></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/assets/jquery.min.js"></script>
@@ -1113,35 +1140,87 @@ async function openLocal(repo, app, path) {
   catch (e) { toast(esc(e.message)); }
 }
 
-/* change preview: a read-only diff, coloured like VS Code's */
-async function preview(repo, path, shas) {
-  const d = $("#diffDlg");
-  d.innerHTML = `<div class="dd-h"><div class="dd-t">${repoTag(repo)}<span class="mono">${esc(path)}</span></div>
-    <div class="dd-a"><button class="btn line small" id="ddCode"><span class="i-code">${icon("vscode")}</span>Open diff in VS Code</button>${openBtns(repo, path, null)}<button class="btn only small" id="ddClose" aria-label="Close">${icon("x")}</button></div></div>
-    <div class="dd-b" id="ddBody"><div class="s2-msg" style="padding:20px"><span class="spinner"></span>Loading the changes</div></div>`;
-  d.showModal();
-  $("#ddClose").onclick = () => d.close();
-  $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo, path, shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { toast(esc(e.message)); } };
-  d.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
-  try {
-    const r = await api("/api/diff", { method: "POST", body: JSON.stringify({ repo, path, shas }) });
-    $("#ddBody").innerHTML = r.commits.map(c => `<section class="dd-c"><div class="dd-ch"><span class="mono ink-2">${esc(c.short)}</span><span class="dd-s">${esc(c.subject)}</span><span class="ink-3">${esc(c.author)} · ${day(c.date)}</span></div>${diffHtml(c.patch)}</section>`).join("");
-  } catch (e) { $("#ddBody").innerHTML = `<div class="pane-empty"><b>Couldn't load the changes</b><span>${esc(e.message)}</span></div>`; }
+/* change preview: its own page, side by side like VS Code's diff editor */
+let diffState = null;   // { repo, path, shas, data, mode }
+
+function preview(repo, path, shas) {
+  diffState = { repo, path, shas, data: null, mode: "net", scroll: $("#main").scrollTop };
+  history.pushState(null, "", `#${report.key}/diff`);
+  renderDiffPage();
 }
 
-function diffHtml(patch) {
-  const rows = []; let o = 0, n = 0;
-  for (const line of (patch || "").replace(/\r/g, "").split("\n")) {
-    if (/^(diff --git|index |--- |\+\+\+ |new file mode|deleted file mode|similarity index|rename (from|to)|old mode|new mode)/.test(line)) continue;
-    const h = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(line);
-    if (h) { o = +h[1]; n = +h[2]; rows.push(`<tr class="hunk"><td></td><td></td><td>${esc(h[3].trim() || "…")}</td></tr>`); continue; }
-    if (line.startsWith("\\")) continue;
-    if (line.startsWith("+")) rows.push(`<tr class="add"><td></td><td>${n++}</td><td>${esc(line.slice(1)) || " "}</td></tr>`);
-    else if (line.startsWith("-")) rows.push(`<tr class="del"><td>${o++}</td><td></td><td>${esc(line.slice(1)) || " "}</td></tr>`);
-    else if (line.length || rows.length) rows.push(`<tr><td>${o++}</td><td>${n++}</td><td>${esc(line.slice(1)) || " "}</td></tr>`);
+function leaveDiff() {
+  const y = diffState?.scroll || 0;
+  diffState = null;
+  history.pushState(null, "", `#${report.key}`);
+  renderTicket();
+  $("#main").scrollTop = y;
+}
+
+async function renderDiffPage() {
+  const d = diffState; if (!d) return;
+  const name = d.path.split("/").pop(), dir = d.path.slice(0, d.path.length - name.length);
+  $("#main").innerHTML = `<div class="dpage">
+    <div class="dp-h">
+      <button class="btn" id="dpBack">${icon("back")}${esc(report.key)}</button>
+      <div class="dp-t"><div class="dp-file">${repoTag(d.repo)}<span class="mono"><span class="ink-3">${esc(dir)}</span>${esc(name)}</span></div>
+        <div class="dp-sub ink-3">${pl(d.shas.length, "commit")} of yours changed this file</div></div>
+      <div class="seg" role="radiogroup" aria-label="View">
+        <button role="radio" aria-checked="${d.mode === "net"}" data-mode="net">Combined</button>
+        <button role="radio" aria-checked="${d.mode === "each"}" data-mode="each">By commit</button>
+      </div>
+      <div class="dp-a"><button class="btn line small" id="ddCode"><span class="i-code">${icon("vscode")}</span>Open diff in VS Code</button>${openBtns(d.repo, d.path, null)}</div>
+    </div>
+    <div class="dp-b" id="dpBody">${d.data ? diffBody(d) : `<div class="s2-msg" style="padding:24px"><span class="spinner"></span>Loading the changes</div>`}</div>
+  </div>`;
+  document.title = `${name} · ${report.key} · Ledger`;
+  $("#dpBack").onclick = leaveDiff;
+  $$(".dpage [data-mode]").forEach(b => b.onclick = () => { d.mode = b.dataset.mode; $$(".dpage [data-mode]").forEach(x => x.setAttribute("aria-checked", x === b)); $("#dpBody").innerHTML = diffBody(d); });
+  $("#ddCode").onclick = async () => { try { await api("/api/open-diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); toast("Opening the comparison in VS Code."); } catch (e) { toast(esc(e.message)); } };
+  $$(".dpage [data-open]").forEach(b => b.onclick = () => openLocal(b.dataset.repo, b.dataset.open, b.dataset.path));
+  if (!d.data) {
+    try { d.data = await api("/api/diff", { method: "POST", body: JSON.stringify({ repo: d.repo, path: d.path, shas: d.shas }) }); }
+    catch (e) { $("#dpBody").innerHTML = `<div class="pane-empty"><b>Couldn't load the changes</b><span>${esc(e.message)}</span></div>`; return; }
+    // commits that cancel out (e.g. a change and its revert) have nothing to combine: show them one by one
+    if (!(d.data.net || "").trim() && d.mode === "net") { d.mode = "each"; $$(".dpage [data-mode]").forEach(x => x.setAttribute("aria-checked", x.dataset.mode === "each")); }
+    if (diffState === d) $("#dpBody").innerHTML = diffBody(d);
   }
-  return rows.length ? `<div class="diffwrap"><table class="diff">${rows.join("")}</table></div>` : `<div class="pane-empty" style="padding:16px"><span>No text changes (binary file, or only renamed).</span></div>`;
-}const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono ${c.url ? "ln" : ""}" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
+}
+
+function diffBody(d) {
+  const head = `<div class="sbs-cols"><span>Before</span><span>After</span></div>`;
+  if (d.mode === "net" && !(d.data.net || "").trim())
+    return `<div class="pane-empty">${icon("list", "ico")}<b>No overall change</b><span>Your commits cancel each other out: the file ends exactly as it started. See them under “By commit”.</span></div>`;
+  if (d.mode === "net")
+    return `<p class="dp-note ink-3">From before your first change to after your last${d.shas.length > 1 ? `, across ${d.shas.length} commits` : ""}.</p>${head}${sideBySide(d.data.net)}`;
+  return d.data.commits.map(c => `<section class="dd-c"><div class="dd-ch"><span class="mono ink-2">${esc(c.short)}</span><span class="dd-s">${esc(c.subject)}</span><span class="ink-3">${esc(c.author)} · ${day(c.date)}</span></div>${head}${sideBySide(c.patch)}</section>`).join("");
+}
+
+// unified patch -> rows of [oldNo, oldText, kindLeft, newNo, newText, kindRight]; changed lines are paired on one row
+function sideBySide(patch) {
+  const rows = [];
+  let o = 0, n = 0, dels = [], adds = [];
+  const flush = () => {
+    for (let k = 0; k < Math.max(dels.length, adds.length); k++) {
+      const a = dels[k], b = adds[k];
+      rows.push(`<tr>${a ? `<td class="ln">${a[0]}</td><td class="tx del">${esc(a[1]) || " "}</td>` : `<td class="ln"></td><td class="tx gap"></td>`}${b ? `<td class="ln">${b[0]}</td><td class="tx add">${esc(b[1]) || " "}</td>` : `<td class="ln"></td><td class="tx gap"></td>`}</tr>`);
+    }
+    dels = []; adds = [];
+  };
+  for (const line of (patch || "").replace(/\r/g, "").split("\n")) {
+    if (/^(diff --git|index |--- |\+\+\+ |new file mode|deleted file mode|similarity index|rename (from|to)|old mode|new mode|Binary files)/.test(line)) continue;
+    const h = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(line);
+    if (h) { flush(); o = +h[1]; n = +h[2]; rows.push(`<tr class="hunk"><td colspan="4">${esc(h[3].trim() ? `@@ ${h[3].trim()}` : `Lines ${o} → ${n}`)}</td></tr>`); continue; }
+    if (line.startsWith("\\")) continue;
+    if (line.startsWith("-")) dels.push([o++, line.slice(1)]);
+    else if (line.startsWith("+")) adds.push([n++, line.slice(1)]);
+    else if (line.startsWith(" ")) { flush(); rows.push(`<tr><td class="ln">${o++}</td><td class="tx">${esc(line.slice(1)) || " "}</td><td class="ln">${n++}</td><td class="tx">${esc(line.slice(1)) || " "}</td></tr>`); }
+  }
+  flush();
+  return rows.length ? `<div class="sbs"><table class="sbs-t"><colgroup><col class="c-ln"><col><col class="c-ln"><col></colgroup>${rows.join("")}</table></div>`
+    : `<div class="pane-empty" style="padding:18px"><span>No text changes (a binary file, or only renamed).</span></div>`;
+}
+const cmHtml = (c, ref, pre = "") => `<div class="cm"><a class="h mono ${c.url ? "ln" : ""}" ${c.url ? `href="${esc(c.url)}" target="_blank" rel="noopener"` : ""}>${esc(c.short)}</a><span>${esc(c.subject)}</span>
   <span class="m">${pre}${esc(c.author)} · ${day(c.date)} · ${c.inDefault ? "merged" : `<span style="color:var(--amber)">not in ${esc(branch(ref) || "main")}</span>`}</span>${c.note ? `<span class="nt">${esc(c.note)}</span>` : ""}</div>`;
 
 function wireTicket() {
@@ -1252,7 +1331,12 @@ document.addEventListener("keydown", e => {
 
 $("#checkAll").onclick = checkAll;
 $("#reload").onclick = () => status?.account && loadTickets();
-window.addEventListener("popstate", () => { const k = decodeURIComponent(location.hash.slice(1)).toUpperCase(); if (k) load(k, false); else back(); });
+window.addEventListener("popstate", () => {
+  const h = decodeURIComponent(location.hash.slice(1)).toUpperCase(), [k, sub] = h.split("/");
+  if (sub === "DIFF" && diffState && report?.key === k) return renderDiffPage();
+  if (k && report?.key === k && !sub) { diffState = null; renderTicket(); return; }   // back from a diff: no re-check
+  if (k) load(k, false); else back();
+});
 
 // the app frame never scrolls as a whole; only its panes do. If focus ever nudges the document, put it back.
 addEventListener("scroll", () => { if (scrollX || scrollY) scrollTo(0, 0); }, { passive: true });
@@ -1261,7 +1345,7 @@ async function boot() {
   await loadStatus();
   initFinder();
   if (status?.account) await loadTickets(); else renderList();
-  const k = decodeURIComponent(location.hash.slice(1)).toUpperCase();
+  const k = decodeURIComponent(location.hash.slice(1)).toUpperCase().split("/")[0];
   if (k) load(k, false); else blank();
 }
 boot();

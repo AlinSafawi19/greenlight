@@ -364,6 +364,9 @@ static class Git
     }
 
     // Stable id of a commit's change, identical for the same patch under any SHA or message.
+    // git's empty tree, to diff a file against "before it existed"
+    public static string EmptyTree(string repo) => RunWithInput(repo, "", "hash-object", "-t", "tree", "--stdin").Trim();
+
     public static string PatchId(string repo, string sha) =>
         RunWithInput(repo, Run(repo, "diff-tree", "-p", "--no-color", sha), "patch-id", "--stable").Split(' ')[0].Trim();
 
@@ -1135,24 +1138,39 @@ static class LocalApps
         }
     }
 
-    // What each of the given commits changed in one file, oldest first.
-    public static JsonArray Diff(string repo, string rel, IEnumerable<string> shas) => new(shas.Select(sha =>
+    // Oldest first by commit time (several commits on one day must not come out in any order).
+    static List<string> Chronological(string repo, IEnumerable<string> shas) =>
+        shas.Select(s => (s, t: long.TryParse(Git.Run(repo, "show", "-s", "--format=%ct", s).Trim(), out var t) ? t : 0))
+            .OrderBy(x => x.t).Select(x => x.s).ToList();
+
+    // The file before a commit; empty when the commit created it.
+    static string Before(string repo, string sha, string rel) =>
+        Git.Run(repo, "rev-parse", "--verify", "--quiet", $"{sha}^") is { Length: > 0 } ? $"{sha}^" : Git.EmptyTree(repo);
+
+    // What each commit changed in one file (oldest first), plus the combined change from before the first to after the last.
+    public static JsonObject Diff(string repo, string rel, IEnumerable<string> shas)
     {
-        var head = Git.Run(repo, "show", "-s", "--date=short", "--format=%h%x1f%an%x1f%ad%x1f%s", sha).Trim().Split('\x1f');
-        var patch = Git.Run(repo, "show", "--format=", "--no-color", "-M", "--unified=3", sha, "--", rel);
-        return (JsonNode)new JsonObject
+        var ordered = Chronological(repo, shas);
+        var commits = new JsonArray(ordered.Select(sha =>
         {
-            ["sha"] = sha, ["short"] = head.ElementAtOrDefault(0), ["author"] = head.ElementAtOrDefault(1),
-            ["date"] = head.ElementAtOrDefault(2), ["subject"] = head.ElementAtOrDefault(3), ["patch"] = patch,
-        };
-    }).ToArray());
+            var head = Git.Run(repo, "show", "-s", "--date=short", "--format=%h%x1f%an%x1f%ad%x1f%s", sha).Trim().Split('\x1f');
+            var patch = Git.Run(repo, "show", "--format=", "--no-color", "-M", "--unified=3", sha, "--", rel);
+            return (JsonNode)new JsonObject
+            {
+                ["sha"] = sha, ["short"] = head.ElementAtOrDefault(0), ["author"] = head.ElementAtOrDefault(1),
+                ["date"] = head.ElementAtOrDefault(2), ["subject"] = head.ElementAtOrDefault(3), ["patch"] = patch,
+            };
+        }).ToArray());
+        var net = Git.Run(repo, "diff", "--no-color", "-M", "--unified=3", Before(repo, ordered[0], rel), ordered[^1], "--", rel);
+        return new JsonObject { ["commits"] = commits, ["net"] = net };
+    }
 
     // Opens the file as it was before the first of these commits next to how it is after the last, in VS Code's diff view.
     public static void OpenDiff(string repo, string rel, List<string> shas)
     {
         var code = VsCode() ?? throw new Exception("VS Code isn't installed on this computer.");
-        // shas arrive oldest first (the page lists commits by date)
-        var first = shas[0]; var last = shas[^1];
+        var ordered = Chronological(repo, shas);
+        var first = ordered[0]; var last = ordered[^1];
         var dir = Path.Combine(Path.GetTempPath(), "feature-ledger", "diff", Path.GetFileName(repo), first[..8] + "-" + last[..8]);
         Directory.CreateDirectory(dir);
         var name = Path.GetFileName(rel);
@@ -1643,7 +1661,7 @@ static class UiServer
                     }
                     var shas = body["shas"]?.AsArray().Select(n => (string?)n).Where(s => LocalApps.IsCommit(repo, s)).Select(s => s!).Distinct().ToList() ?? [];
                     if (rel is null || shas.Count == 0) { await Send(res, 400, Err("Nothing to compare.")); return; }
-                    if (path == "/api/diff") { await Send(res, 200, new JsonObject { ["commits"] = LocalApps.Diff(repo, rel, shas) }); return; }
+                    if (path == "/api/diff") { await Send(res, 200, LocalApps.Diff(repo, rel, shas)); return; }
                     LocalApps.OpenDiff(repo, rel, shas);
                     await Send(res, 200, new JsonObject { ["ok"] = true });
                     return;
