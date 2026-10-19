@@ -769,8 +769,10 @@ record JiraUser(string AccountId, string DisplayName, string Email);
 class Jira
 {
     const string Fields = "summary,status,issuetype,parent,assignee,fixVersions,updated";
-    readonly HttpClient? http;
-    readonly string baseUrl;
+    // Request paths below are relative ("rest/api/..."), so they work against both the site and the API gateway base.
+    HttpClient? http;
+    readonly string baseUrl;   // the Jira site, used for browse links
+    readonly string token = "";
     public bool Configured => http is not null;
     public string Email { get; } = "";
     public JiraUser? Me { get; private set; }
@@ -780,18 +782,47 @@ class Jira
         this.baseUrl = baseUrl.TrimEnd('/');
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(token)) return;
         Email = email.Trim();
-        http = new HttpClient { BaseAddress = new Uri(this.baseUrl), Timeout = TimeSpan.FromSeconds(30) };
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
-            Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Email}:{token.Trim()}")));
-        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        this.token = token.Trim();
+        http = Client(this.baseUrl + "/");
+    }
+
+    HttpClient Client(string apiBase)
+    {
+        var c = new HttpClient { BaseAddress = new Uri(apiBase), Timeout = TimeSpan.FromSeconds(30) };
+        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Email}:{token}")));
+        c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        return c;
+    }
+
+    // Tokens created with "Create API token with scopes" only work through the Atlassian API gateway,
+    // https://api.atlassian.com/ex/jira/<cloudId>/, not through the site URL.
+    async Task<HttpClient?> GatewayClient()
+    {
+        try
+        {
+            using var anon = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            var cloudId = (string?)JsonNode.Parse(await anon.GetStringAsync($"{baseUrl}/_edge/tenant_info"))?["cloudId"];
+            return cloudId is null ? null : Client($"https://api.atlassian.com/ex/jira/{cloudId}/");
+        }
+        catch { return null; }
     }
 
     // Confirms the credentials and remembers whose account this is (comments are only ever replaced if they are ours).
     public async Task<JiraUser> Verify()
     {
-        var res = await http!.GetAsync("/rest/api/3/myself");
-        if (res.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            throw new Exception("Jira rejected the email/API token.");
+        var res = await http!.GetAsync("rest/api/3/myself");
+        if (res.StatusCode == HttpStatusCode.Unauthorized && await GatewayClient() is { } gateway)
+        {
+            var viaGateway = await gateway.GetAsync("rest/api/3/myself");
+            if (viaGateway.IsSuccessStatusCode) { http = gateway; res = viaGateway; }
+            else if (viaGateway.StatusCode == HttpStatusCode.Forbidden)
+                throw new Exception("This is a scoped API token that is missing scopes. Create a new one with read:jira-user, read:jira-work and write:jira-work, or use a classic token (\"Create API token\").");
+        }
+        if (res.StatusCode == HttpStatusCode.Unauthorized)
+            throw new Exception($"Jira didn't accept {Email} with this token. Use the email you sign in to Atlassian with, and paste the whole token (about 190 characters, starting with ATATT).");
+        if (res.StatusCode == HttpStatusCode.Forbidden)
+            throw new Exception("Jira accepted the token but refused access. Your account may not have access to this site.");
         if (!res.IsSuccessStatusCode) throw new Exception($"Jira returned {(int)res.StatusCode}.");
         var j = JsonNode.Parse(await res.Content.ReadAsStringAsync())!;
         Me = new JiraUser((string)j["accountId"]!, (string?)j["displayName"] ?? Email, (string?)j["emailAddress"] ?? Email);
@@ -811,7 +842,7 @@ class Jira
                 ["maxResults"] = Math.Min(100, max - all.Count),
             };
             if (next is not null) body["nextPageToken"] = next;
-            var res = await http!.PostAsync("/rest/api/3/search/jql", new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"));
+            var res = await http!.PostAsync("rest/api/3/search/jql", new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"));
             if (!res.IsSuccessStatusCode) throw new Exception($"Jira search returned {(int)res.StatusCode}: {await res.Content.ReadAsStringAsync()}");
             var page = JsonNode.Parse(await res.Content.ReadAsStringAsync())!;
             all.AddRange(page["issues"]!.AsArray().Select(i => Parse(i!)));
@@ -824,7 +855,7 @@ class Jira
     {
         try
         {
-            var res = await http!.GetAsync($"/rest/api/3/issue/{key}?fields={Fields}");
+            var res = await http!.GetAsync($"rest/api/3/issue/{key}?fields={Fields}");
             if (!res.IsSuccessStatusCode) { Console.Error.WriteLine($"Jira: could not read {key} ({(int)res.StatusCode})."); return null; }
             return Parse(JsonNode.Parse(await res.Content.ReadAsStringAsync())!);
         }
@@ -880,7 +911,7 @@ class Jira
         string? existing = null;
         for (var start = 0; existing is null; start += 100)
         {
-            var page = JsonNode.Parse(await (await http!.GetAsync($"/rest/api/2/issue/{key}/comment?startAt={start}&maxResults=100")).EnsureSuccessStatusCode()
+            var page = JsonNode.Parse(await (await http!.GetAsync($"rest/api/2/issue/{key}/comment?startAt={start}&maxResults=100")).EnsureSuccessStatusCode()
                                           .Content.ReadAsStringAsync())!;
             var comments = page["comments"]!.AsArray();
             existing = comments.FirstOrDefault(c => ((string?)c?["body"])?.Contains(Doc.Marker) == true
@@ -889,8 +920,8 @@ class Jira
         }
         var body = new StringContent(new JsonObject { ["body"] = wiki }.ToJsonString(), Encoding.UTF8, "application/json");
         var res = existing is null
-            ? await http!.PostAsync($"/rest/api/2/issue/{key}/comment", body)
-            : await http!.PutAsync($"/rest/api/2/issue/{key}/comment/{existing}", body);
+            ? await http!.PostAsync($"rest/api/2/issue/{key}/comment", body)
+            : await http!.PutAsync($"rest/api/2/issue/{key}/comment/{existing}", body);
         if (!res.IsSuccessStatusCode)
             throw new Exception($"Jira returned {(int)res.StatusCode}: {await res.Content.ReadAsStringAsync()}");
         var id = JsonNode.Parse(await res.Content.ReadAsStringAsync())!["id"]!.ToString();
