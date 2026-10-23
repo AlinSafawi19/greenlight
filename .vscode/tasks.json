@@ -17,13 +17,6 @@
       "problemMatcher": []
     },
     {
-      "label": "Greenlight: build manifest and post to Jira",
-      "type": "shell",
-      "command": "dotnet run greenlight.cs -- ${input:key} --fetch --post",
-      "options": { "cwd": "${workspaceFolder}" },
-      "problemMatcher": []
-    },
-    {
       "label": "Greenlight: install git hooks in all repos",
       "type": "shell",
       "command": "powershell -NoProfile -ExecutionPolicy Bypass -File install-hooks.ps1",

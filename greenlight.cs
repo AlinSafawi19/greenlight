@@ -37,7 +37,7 @@ if (flags.Contains("--ui"))
 
 if (key is null || !ledger.IsValidKey(key))
 {
-    Console.Error.WriteLine($"Usage: dotnet run greenlight.cs -- <KEY matching {ledger.KeyPattern}> [--fetch] [--post]");
+    Console.Error.WriteLine($"Usage: dotnet run greenlight.cs -- <KEY matching {ledger.KeyPattern}> [--fetch]");
     Console.Error.WriteLine("       dotnet run greenlight.cs -- --ui");
     return 2;
 }
@@ -45,17 +45,6 @@ if (key is null || !ledger.IsValidKey(key))
 var report = await ledger.Build(key, flags.Contains("--fetch"), msg => Console.Error.WriteLine(msg));
 Console.WriteLine(report.Markdown);
 Console.Error.WriteLine($"Written: {report.MarkdownPath}");
-
-if (flags.Contains("--post"))
-{
-    if (!ledger.Jira.Configured)
-    {
-        Console.Error.WriteLine("Jira credentials missing: set the JIRA_EMAIL and JIRA_API_TOKEN user environment variables.");
-        return 1;
-    }
-    var url = await ledger.Jira.UpsertManifestComment(key, report.Doc.JiraWiki());
-    Console.Error.WriteLine($"Jira comment saved: {url}");
-}
 return 0;
 
 // ───────────────────────────── ledger: one build, shared by the CLI and the UI ─────────────────────────────
@@ -355,7 +344,7 @@ class Ledger
         }
 
         Lap("steps");
-        var doc = Manifest.Build(key, issue, scope, results, highlights, dbCfg, (int)cfg["jiraMaxFilesPerRepo"]!);
+        var doc = Manifest.Build(key, issue, scope, results, highlights, dbCfg);
         QaPrep.AddToDoc(doc, stations);
         var setup = AccessScan.Setup(results, name => paths.GetValueOrDefault(name), Repos);
         setup["data"] = LookupScan.Find(results, name => paths.GetValueOrDefault(name), (string?)cfg["lookups"]?["connectionEnv"], dbCfg.Repo);
@@ -974,19 +963,16 @@ record Heading(int Level, string Text) : Block;
 record Para(List<Span> Spans) : Block;
 record Bullets(List<List<Span>> Items) : Block;
 record Table(string[] Headers, List<List<Span>[]> Rows) : Block;
-record FullOnly(Block Inner) : Block;   // shown in the .md file, omitted from the Jira comment
-record JiraOnly(Block Inner) : Block;   // shown in the Jira comment, omitted from the .md file
-
+// The handover checklist: copied from the page (or downloaded) as Markdown, for wherever the tester reads it.
 class Doc
 {
     public const string Marker = "Greenlight handover";
-    public const string OldMarker = "Feature manifest (feature-ledger)";   // comments posted before the rename
     public List<Block> Blocks { get; } = [];
 
     public string Markdown()
     {
         var sb = new StringBuilder();
-        foreach (var b in Blocks) Render(b switch { FullOnly f => f.Inner, JiraOnly => null, _ => b });
+        foreach (var b in Blocks) Render(b);
         return sb.ToString();
 
         void Render(Block? b)
@@ -1007,33 +993,6 @@ class Doc
         static string Md(string s) => s.Replace("|", "\\|");
         static string Spans(List<Span> spans) => string.Concat(spans.Select(s =>
             s.Url is not null ? $"[{Md(s.Text)}]({s.Url})" : s.Code ? $"`{s.Text}`" : Md(s.Text)));
-    }
-
-    public string JiraWiki()
-    {
-        var sb = new StringBuilder();
-        foreach (var b in Blocks) Render(b switch { FullOnly => null, JiraOnly j => j.Inner, _ => b });
-        return sb.ToString();
-
-        void Render(Block? b)
-        {
-            switch (b)
-            {
-                case Heading h: sb.Append($"h{h.Level + 1}. ").AppendLine(W(h.Text)); break;
-                case Para p: sb.AppendLine(Spans(p.Spans)).AppendLine(); break;
-                case Bullets l: foreach (var i in l.Items) sb.Append("* ").AppendLine(Spans(i)); sb.AppendLine(); break;
-                case Table t:
-                    sb.Append("||").Append(string.Join("||", t.Headers.Select(W))).AppendLine("||");
-                    foreach (var r in t.Rows) sb.Append('|').Append(string.Join("|", r.Select(c => Cell(Spans(c))))).AppendLine("|");
-                    sb.AppendLine();
-                    break;
-            }
-        }
-
-        static string Cell(string s) => s.Length == 0 ? " " : s;
-        static string W(string s) => Regex.Replace(s, @"[|\[\]{}*_+^~-]", m => "\\" + m.Value);
-        static string Spans(List<Span> spans) => string.Concat(spans.Select(s =>
-            s.Url is not null ? $"[{W(s.Text)}|{s.Url}]" : s.Code ? "{{" + s.Text.Replace("}", "") + "}}" : W(s.Text)));
     }
 }
 
@@ -1083,13 +1042,13 @@ static class Manifest
     }
 
     public static Doc Build(string key, IssueInfo? issue, List<IssueInfo> scope, List<RepoResult> repos,
-                            List<(string Name, Regex Rx)> highlights, DbConfig dbCfg, int maxFiles)
+                            List<(string Name, Regex Rx)> highlights, DbConfig dbCfg)
     {
         var d = new Doc();
         var b = d.Blocks;
         b.Add(new Heading(2, $"{Doc.Marker}: {key}{(issue is null ? "" : " - " + issue.Summary)}"));
         var meta = issue is null ? "" : $"Status: {issue.Status} · Assignee: {issue.Assignee} · Fix versions: {issue.FixVersions} · ";
-        b.Add(new Para(T($"{meta}Generated {DateTime.Now:yyyy-MM-dd HH:mm} from git across all local repos. Re-run to refresh; this comment is replaced, not duplicated.")));
+        b.Add(new Para(T($"{meta}Generated {DateTime.Now:yyyy-MM-dd HH:mm} from git across all local repos.")));
 
         if (repos.Count == 0)
         {
@@ -1152,9 +1111,7 @@ static class Manifest
         {
             b.Add(new Para(T($"{r.Name} ({r.Files.Count} files)")));
             var items = r.Files.Select(f => new List<Span> { new($"{f.Value} "), new(f.Key, Code: true) }).ToList();
-            b.Add(new FullOnly(new Bullets(items)));
-            b.Add(new JiraOnly(new Bullets(items.Count <= maxFiles ? items
-                : [.. items.Take(maxFiles), T($"... and {items.Count - maxFiles} more (full list in out/{key}.md)")])));
+            b.Add(new Bullets(items));
         }
 
         List<Span> CommitLine(RepoResult r, Commit c) =>
@@ -1165,11 +1122,11 @@ static class Manifest
                 (c.Note is not null ? $"  ({c.Note})" : "")),
         ];
 
-        b.Add(new FullOnly(new Heading(3, "Commits")));
+        b.Add(new Heading(3, "Commits"));
         foreach (var r in repos.Where(r => r.Commits.Any(c => !c.IsForeign)))
         {
-            b.Add(new FullOnly(new Para(T(r.Name))));
-            b.Add(new FullOnly(new Bullets(r.Commits.Where(c => !c.IsForeign).Select(c => CommitLine(r, c)).ToList())));
+            b.Add(new Para(T(r.Name)));
+            b.Add(new Bullets(r.Commits.Where(c => !c.IsForeign).Select(c => CommitLine(r, c)).ToList()));
         }
 
         var foreign = repos.SelectMany(r => r.Commits.Where(c => c.IsForeign).Select(c => (r, c))).ToList();
@@ -2009,7 +1966,7 @@ static class QaPrep
             ? new("qa", "QA", "wait", "Clear the stations before handing over",
                   [new("wait", $"{blocked} station{(blocked == 1 ? "" : "s")} still open", $"Jira status is {issue.Status}.")])
             : new("qa", "QA", "todo", "Ready to hand over",
-                  [new("todo", "Move the ticket to Ready for QA and post the handover", $"Jira status is {issue.Status}.", null, "Post handover to Jira", "post:")]);
+                  [new("todo", "Move the ticket to Ready for QA and give the tester the checklist", $"Jira status is {issue.Status}.")]);
     }
 
     // The handover comment and the .md start with the station checklist.
@@ -3158,31 +3115,6 @@ class Jira
     }
 
 
-    // Replaces our previous manifest comment if there is one, so the ticket always shows a single, current manifest.
-    // Only comments written by the connected account are replaced; someone else's manifest comment is left alone.
-    public async Task<string> UpsertManifestComment(string key, string wiki)
-    {
-        var me = Me ?? await Verify();
-        string? existing = null;
-        for (var start = 0; existing is null; start += 100)
-        {
-            var page = JsonNode.Parse(await (await http!.GetAsync($"rest/api/2/issue/{key}/comment?startAt={start}&maxResults=100")).EnsureSuccessStatusCode()
-                                          .Content.ReadAsStringAsync())!;
-            var comments = page["comments"]!.AsArray();
-            existing = comments.FirstOrDefault(c => (((string?)c?["body"])?.Contains(Doc.Marker) == true || ((string?)c?["body"])?.Contains(Doc.OldMarker) == true)
-                                                     && (string?)c?["author"]?["accountId"] == me.AccountId)?["id"]?.ToString();
-            if (start + comments.Count >= (int)page["total"]!) break;
-        }
-        var body = new StringContent(new JsonObject { ["body"] = wiki }.ToJsonString(), Encoding.UTF8, "application/json");
-        var res = existing is null
-            ? await http!.PostAsync($"rest/api/2/issue/{key}/comment", body)
-            : await http!.PutAsync($"rest/api/2/issue/{key}/comment/{existing}", body);
-        if (!res.IsSuccessStatusCode)
-            throw new Exception($"Jira returned {(int)res.StatusCode}: {await res.Content.ReadAsStringAsync()}");
-        var id = JsonNode.Parse(await res.Content.ReadAsStringAsync())!["id"]!.ToString();
-        return $"{baseUrl}/browse/{key}?focusedCommentId={id}";
-    }
-
     // ── workflow: move a ticket along (e.g. to Ready for QA) ──
     public async Task<JsonArray> Transitions(string key)
     {
@@ -3769,17 +3701,6 @@ static class UiServer
                     if (path == "/api/diff") { await Send(res, 200, LocalApps.Diff(repo, rel, shas)); return; }
                     LocalApps.OpenDiff(repo, rel, shas);
                     await Send(res, 200, new JsonObject { ["ok"] = true });
-                    return;
-                }
-
-                case ("POST", "/api/post"):
-                {
-                    if (!Trusted(req)) { await Send(res, 403, Err("Missing X-Ledger header")); return; }
-                    if (key is null || !ledger.IsValidKey(key)) { await Send(res, 400, Err("Invalid key")); return; }
-                    if (await ledger.CurrentUser() is null) { await Send(res, 400, Err("Connect your Jira account first (Account button, top right).")); return; }
-                    if (!cache.TryGetValue(key, out var rep)) { await Send(res, 400, Err("Build the manifest first")); return; }
-                    var commentUrl = await ledger.Jira.UpsertManifestComment(key, rep.Doc.JiraWiki());
-                    await Send(res, 200, new JsonObject { ["url"] = commentUrl });
                     return;
                 }
 

@@ -27,7 +27,7 @@ const STEPS = [
   { id: "db",     name: "Database", means: "Scripts are in a release folder, and that release has run on the QA database." },
   { id: "access", name: "Access",   means: "Role grants, scopes and menus exist on QA, so testers can reach the feature." },
   { id: "config", name: "Config",   means: "New settings are added to the QA configuration, which lives outside git." },
-  { id: "qa",     name: "Handover", means: "The ticket is moved in Jira and the checklist is posted for the tester." },
+  { id: "qa",     name: "Handover", means: "The ticket is moved in Jira and the tester has the checklist." },
 ];
 const WORD = { done: "Done", todo: "To do", check: "To check", wait: "Waiting", skip: "Not needed", none: "Not checked" };
 
@@ -585,7 +585,7 @@ function progressHtml(r) {
     : ov === "todo" ? ["todo", `Stopped at ${STEPS[at].name.toLowerCase()}`, `${pl(todo, "thing needs", "things need")} doing before QA can test this${confirm ? `, and ${pl(confirm, "item")} to check` : ""}.`]
     : ov === "wait" ? ["wait", `Waiting at ${STEPS[at].name.toLowerCase()}`, at === 0 ? "Merge requests are open and waiting for review." : "An earlier step has to finish first."]
     : ov === "done" ? ["done", "With QA", confirm ? `Handed over. ${pl(confirm, "item")} still worth a look.` : "Handed over, and every step is done."]
-    : ["check", "Ready to hand over", `Nothing blocks QA. Confirm ${pl(confirm, "item")}, then post the handover.`];
+    : ["check", "Ready to hand over", `Nothing blocks QA. Check ${pl(confirm, "item")}, then copy the checklist for the tester.`];
   const mood = nothing ? "empty" : ov === "todo" ? "warning" : ov === "wait" ? "thinking" : "success";
   return {
     state: `<div class="state ${ov === "done" || ov === "check" ? "ok" : ""}" id="tkState">
@@ -629,11 +629,10 @@ function renderTicket() {
       <h2>${esc(i?.summary || r.key)}</h2>
       <div class="acts">
         <button class="btn" id="recheck" title="Fetch every repository, then check again">${icon("refresh")}Check again</button>
-        <button class="btn solid" id="post" ${me && !nothing ? "" : "disabled"} title="${me ? "Posts the checklist to the Jira ticket, replacing your previous one" : "Connect Jira first"}">Post handover</button>
+        <button class="btn solid" data-copychk ${nothing ? "disabled" : ""} title="The QA checklist as Markdown, to paste where the tester will read it">${icon("copy")}Copy checklist</button>
         <div class="pop-wrap"><button class="btn only" id="more" aria-haspopup="menu" aria-expanded="false" aria-label="More">${icon("more", "ico")}</button>
           <div class="pop" id="pop" role="menu" hidden>
             ${me ? `<button role="menuitem" id="moveJira">${icon("send")}Move in Jira…</button>` : ""}
-            <button role="menuitem" id="copy">${icon("copy")}Copy checklist</button>
             <a role="menuitem" href="/api/markdown?key=${encodeURIComponent(r.key)}&download=1">${icon("down")}Download as Markdown</a>
             <hr><a role="menuitem" href="${url(r.jiraUrl)}" target="_blank" rel="noopener">${icon("out")}Open in Jira</a>
           </div></div>
@@ -796,8 +795,7 @@ function stepHtml(s, k) {
     </div></li>`;
 }
 
-const itemLink = it => it.actionUrl === "post:" ? `<button class="btn solid small" data-post>${icon("send")}${esc(it.actionLabel)}</button>`
-  : it.actionUrl ? `<a class="btn line small" href="${url(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")}${icon("out")}</a>` : "";
+const itemLink = it => it.actionUrl ?`<a class="btn line small" href="${url(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")}${icon("out")}</a>` : "";
 function itemHtml(s, it) {
   return `<li class="it"><div class="lead"><span class="dot ${it.state}"></span>${it.repo ? `<span class="rp">${repoTag(it.repo)}</span>` : ""}<span class="tx">${esc(it.title)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ""}${s.id === "qa" ? openStepsHtml(it) : ""}</div>
     <div class="ia">${it.files?.length ? `<button class="btn line small" data-showfiles="${esc(it.repo)}">${icon("list")}Show files</button>` : ""}${detailLinks(s, it)}${stepActions(s, it)}${itemLink(it)}</div></li>`;
@@ -828,7 +826,8 @@ function handoverLinks(it) {
   if (!jira) return "";
   const move = `<button class="btn line small" data-movejira>${icon("send")}Move in Jira…</button>`;
   if (/logged by you$|^No time logged/.test(t)) return `<button class="btn ${it.state === "done" ? "line" : "primary"} small" data-logtime>${icon("checkall")}Log time</button>`;
-  return /still open$|can't have it yet$|^Move the ticket|^Jira status is/.test(t) ? move : "";
+  if (/^Move the ticket/.test(t)) return `<button class="btn primary small" data-copychk>${icon("copy")}Copy checklist</button>${move}`;
+  return /still open$|can't have it yet$|^Jira status is/.test(t) ? move : "";
 }
 // the steps still blocking the handover, named on the item; each one opens that step
 function openStepsHtml(it) {
@@ -1131,6 +1130,7 @@ function mainClicks(e) {
   const su = t.closest("[data-setup]");
   if (su) { showSetup(su.dataset.setup.split("|")); return; }
   if (t.closest("[data-logtime]")) { logDialog(report.key); return; }
+  if (t.closest("[data-copychk]")) { copyChecklist(); return; }
   if (t.closest("[data-movejira]")) { moveDialog(report.key); return; }
   const os = t.closest("[data-openstep]");
   if (os) { goToStep(os.dataset.openstep); return; }
@@ -1311,16 +1311,19 @@ function wireTicket() {
   $("#voidKids")?.addEventListener("click", () => { includeKids = true; load(r.key, false); });
   $("#copyCmd")?.addEventListener("click", async e => { try { await navigator.clipboard.writeText(e.currentTarget.dataset.cmd); toast("Command copied."); } catch { fail("Couldn't copy."); } });
   $$("[data-go]").forEach(b => b.onclick = () => select(b.dataset.go));
-  $("#post").onclick = post; $$("[data-post]").forEach(b => b.onclick = post);
   wirePop($("#more"), $("#pop"));
   $("#moveJira")?.addEventListener("click", () => moveDialog(r.key));
-  $("#copy").onclick = async () => { try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Checklist copied."); } catch (e) { fail(`Couldn't copy: ${esc(e.message)}`); } };
   wireSteps();
+}
+
+// the handover is the checklist, copied as Markdown and pasted where the tester reads it
+async function copyChecklist() {
+  try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(report.key)}`)); toast("Checklist copied."); }
+  catch (e) { fail(`Couldn't copy: ${esc(e.message)}`); }
 }
 
 // the steps list is repainted on its own when the open merge requests arrive, so its wiring stands alone
 function wireSteps() {
-  $$("#tkSteps [data-post]").forEach(b => b.onclick = post);
   $$("[data-mktag]").forEach(b => b.onclick = () => createTag(b.dataset.repo, b.dataset.mktag));
   $$(".stp-h").forEach(h => h.onclick = () => {
     const s = h.closest(".stp"), open = s.dataset.open !== "true";
@@ -1328,14 +1331,6 @@ function wireSteps() {
   });
 }
 
-async function post() {
-  if (!await confirmDialog(`Post the handover to ${esc(report.key)}?`, "Writes the QA checklist as a comment on the Jira ticket, under your name. Your previous Greenlight comment there is replaced, not duplicated.", `${icon("send")}Post handover`, "primary")) return;
-  const bs = $$("#post, [data-post]");
-  bs.forEach(b => { b.disabled = true; b.dataset.l = b.innerHTML; b.innerHTML = `<span class="spinner"></span>Posting`; });
-  try { const res = await api(`/api/post?key=${encodeURIComponent(report.key)}`, { method: "POST" }); toast(`Handover posted to ${esc(report.key)}.<a href="${url(res.url)}" target="_blank" rel="noopener">View in Jira</a>`, 6500); }
-  catch (e) { fail(/^Jira /.test(e.message) ? esc(e.message) : `Couldn't post the handover: ${esc(e.message)}`); }
-  finally { bs.forEach(b => { b.disabled = false; b.innerHTML = b.dataset.l; }); }
-}
 
 // checks every one of your tickets in turn; while it runs the button becomes Stop (the current ticket finishes, the rest are skipped)
 let stopAll = false;

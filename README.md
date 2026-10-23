@@ -15,8 +15,8 @@ No manual notes and no third-party tools: just Git, the Jira REST API and VS Cod
 3. **DB scripts are traced through `db-migration-scripts`.** Every touched `DBMigrations/<Service>/<folder>/...` file is
    reported as *in release tag X*, *graduated from dev/ to tag X* (routine file name or the `-- from dev/...` marker),
    *still staged in dev/*, or *removed from dev/ and not found in any tag*.
-4. **Jira gets one living comment.** `--post` creates the manifest comment on the ticket, or replaces your previous one
-   (someone else's manifest comment is never touched).
+4. **The handover is a checklist you copy.** *Copy checklist* puts it on the clipboard as Markdown, for wherever the
+   tester reads it; `out/MM-1234.md` and *Download as Markdown* hold the same text.
 
 ## Tickets, stories and epics
 
@@ -40,7 +40,6 @@ Untick *Child tickets* to scan a single key only.
 dotnet run greenlight.cs -- --ui               # browser UI on http://localhost:5199 (Ctrl+C to stop)
 dotnet run greenlight.cs -- MM-1234            # build out/MM-1234.md
 dotnet run greenlight.cs -- MM-1234 --fetch    # git fetch every repo first
-dotnet run greenlight.cs -- MM-1234 --post     # also create/update the comment on the Jira ticket
 .\install-hooks.ps1                        # enable the commit-msg hook in every repo (local git config)
 .\install-hooks.ps1 -Uninstall
 ```
@@ -48,7 +47,7 @@ dotnet run greenlight.cs -- MM-1234 --post     # also create/update the comment 
 In VS Code: *Terminal → Run Task → Greenlight: ...*
 
 The UI (`ui.html`, served by `greenlight.cs`) listens on localhost only. It builds the same manifest as the CLI,
-shows readiness for QA, merge requests, DB scripts, changed files and commits, and posts to Jira with one click.
+shows readiness for QA, merge requests, DB scripts, changed files and commits, and copies the QA checklist with one click.
 The sidebar always lists **your open tickets** (assigned to you, status not Done), grouped under their story or epic;
 click the group header to build the whole story. Deep link: `http://localhost:5199/#MM-1234`.
 
@@ -62,7 +61,7 @@ click the group header to build the whole story. Deep link: `http://localhost:51
 3. In the same dialog, set your **repositories folder** if your clones aren't next to this folder.
    Per-user settings live in `%APPDATA%\greenlight\settings.json`.
 
-Everything you do in Jira (reading your tickets, posting comments) runs as your own account.
+Everything you do in Jira (reading your tickets, logging time, moving a ticket) runs as your own account.
 The environment variables `JIRA_EMAIL` / `JIRA_API_TOKEN` still work as a fallback for the CLI.
 
 ## Configuration (`greenlight.json`)
@@ -73,13 +72,12 @@ The environment variables `JIRA_EMAIL` / `JIRA_API_TOKEN` still work as a fallba
 | `keyPattern` | Jira key regex, also used by the hook |
 | `db` | migration repo name, its root folder and its staging folder |
 | `highlights` | path regexes that get their own section (permissions/scopes/menus, config, pipeline) |
-| `jiraMaxFilesPerRepo` | file list cap in the Jira comment (the .md file is always complete) |
 
 ## What's in the app
 
 Greenlight has one job: you and the reviewer know exactly what a feature needs to reach QA, and every feature leaves a clean, lasting record.
 
-- **My tickets**: your tickets, grouped by story (the header checks the whole story with your sub-tickets) or by readiness. A ticket shows the six steps to QA (code, tagged, database, access, config, handover) with what to do next, the evidence behind each step (repositories, files, commits, side-by-side changes, open in VS Code or Visual Studio), where each service is deployed, and the handover you post to Jira. Where Greenlight can do the fix itself, it offers it: create the merge request, cut the tag, move the ticket in Jira.
+- **My tickets**: your tickets, grouped by story (the header checks the whole story with your sub-tickets) or by readiness. A ticket shows the six steps to QA (code, tagged, database, access, config, handover) with what to do next, the evidence behind each step (repositories, files, commits, side-by-side changes, open in VS Code or Visual Studio), where each service is deployed, and the checklist you copy for the tester. Where Greenlight can help directly, it offers it: open the merge request form, cut the tag, log time, move the ticket in Jira.
 - **Reviews** (GitLab): merge requests waiting for your review, with a grouped checklist, the changes, discussions and tags; approve, request changes or comment. On your own ticket, the code review section shows each reviewer's state and comments.
 - **Worklogs**: a feature isn't done until its time is logged. The Handover step says whether you logged time on the ticket; the Worklogs page shows your week against the daily target, suggests entries from your commits, and reminds you at the end of the day.
 
