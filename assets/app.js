@@ -520,12 +520,18 @@ function reviewSay(m) {
   if (who.length) return `Approved by ${who.join(", ")}, waiting to be merged.`;
   return pending.length ? `Waiting for ${pending.join(", ")} to review.` : "Open. No reviewer assigned and nobody has approved it yet.";
 }
-// the ticket's merge request from this branch into this target: an open one first, else one that's already merged
+// the ticket's merge request from this branch into this target: an open one first, else one that's already merged.
+// A merged one only counts when it can hold the branch as it is now: commits written after it was merged
+// (fix-ups pushed to the same branch) still need a merge request of their own.
 const mrFor = (repo, branch, into) => {
   if (ticketMrs.key !== report?.key) return null;
+  const src = branch.replace(/^origin\//, "");
   const hits = (ticketMrs.list || []).filter(m => (m.repo || "").toLowerCase() === (repo || "").toLowerCase()
-    && (m.source || "") === branch.replace(/^origin\//, "") && (m.target || "") === into);
-  return hits.find(m => m.state === "opened") || hits.find(m => m.state === "merged") || null;
+    && (m.source || "") === src && (m.target || "") === into);
+  const tipAt = report.repos.find(x => x.name.toLowerCase() === (repo || "").toLowerCase())?.branches
+    .find(b => b.name.replace(/ \(local only.*$/, "").replace(/^origin\//, "") === src)?.tipAt || 0;
+  const holdsTip = m => !m.mergedAt || !tipAt || tipAt * 1000 <= Date.parse(m.mergedAt) + 60000;
+  return hits.find(m => m.state === "opened") || hits.find(m => m.state === "merged" && holdsTip(m)) || null;
 };
 
 // Each "Merge <branch> into <target>" item is one merge request. A service with a dev branch has two of them, dev first:
@@ -1473,7 +1479,8 @@ async function loadTicketReviews(key) {
     // filter by GitLab state; the counts show what each filter holds, and states with none aren't offered
     const F = [["all", "All", () => true], ["opened", "Open", m => m.state === "opened"], ["merged", "Merged", m => m.state === "merged"], ["closed", "Closed", m => m.state === "closed"]]
       .map(([id, l, f]) => [id, l, f, list.filter(f).length]).filter(([id, , , c]) => id === "all" || c);
-    if (!F.some(([id]) => id === crvFilter)) crvFilter = "all";
+    // the filter the developer chose is kept as is; a ticket that has none of that state just shows All this time
+    let crvFilter = F.some(([id]) => id === crvWant) ? crvWant : "all";
     box.innerHTML = `<h3 class="h3">Code review<span>${list.length ? `${pl(list.length, "merge request")}${open ? ` · ${pl(open, "open comment")}` : ""}` : "no merge requests found"}</span></h3>
       ${F.length > 2 ? `<div class="tabs crv-f" role="tablist" aria-label="Merge request status">${F.map(([id, l, , c]) => `<button role="tab" aria-selected="${crvFilter === id}" data-crvf="${id}">${l}<span class="c">${c}</span></button>`).join("")}</div>` : ""}
       <div id="crvList"></div>`;
@@ -1490,15 +1497,15 @@ async function loadTicketReviews(key) {
     }), 10);
     draw();
     $$("#crv [data-crvf]").forEach(b => b.onclick = () => {
-      crvFilter = b.dataset.crvf;
+      crvFilter = crvWant = b.dataset.crvf;
       $$("#crv [data-crvf]").forEach(x => x.setAttribute("aria-selected", x === b));
       draw(); soften($("#crvList"));
     });
     soften(box);
   } catch (e) { box.innerHTML = `<h3 class="h3">Code review</h3><p class="ink-3" style="margin:0">${esc(e.message)}</p>`; }
 }
-// open merge requests first; a ticket with none falls back to All
-let crvFilter = "opened";
+// open merge requests first, until the developer picks another filter
+let crvWant = "opened";
 
 /* ── code review (GitLab) ── */
 let railMode = "mine", reviews = null, reviewing = null, reviewView = "all";
@@ -2059,13 +2066,15 @@ function setupHtml(r, onPage = false) {
   const dataNote = data.status === "no-connection" ? `<p class="smx-note warn">${icon("alert")}<span>The code names ${pl(data.candidates, "tag")} that may be System Manager data (categories, types, features, criteria...). Set the <code>${esc(data.env || "")}</code> environment variable to the dev database's connection string to look them up.</span></p>`
     : data.status === "error" ? `<p class="smx-note warn">${icon("alert")}<span>Couldn't read the dev database to look up the tags the code names: ${esc(data.error)}</span></p>` : "";
   if (!s.services.length && !s.menus.length && !dataRows.length && !dataNote) return "";
-  const nCards = s.services.length + s.menus.length + new Set(dataRows.map(d => d.schema + "." + d.table)).size;
+  // the cards this ticket shows, by the ids smxCard gives them: only they decide Expand all / Collapse all
+  const cardIds = [...s.services.map(sv => "smx:" + sv.repo), ...s.menus.map(m => "smx:" + m.uri), ...new Set(dataRows.map(d => `smx:data:${d.schema}.${d.table}`))];
+  const nCards = cardIds.length;
   const nScopes = s.services.reduce((n, x) => n + x.added.length, 0);
   const row = (e, removed) => `<tr class="${removed ? "gone" : ""}"><td><div class="sc-cell">${scopeCode(e)}${removed ? `<span class="sc-tag">removed</span>` : copyBtn(fullScope(e.scope, e.repo), "Copy scope")}</div></td>
     <td class="nw">${verbTag(e.verb)} <code class="rt-path">${esc(e.route)}</code></td><td class="ink-3 nw">${esc(e.action)}</td></tr>`;
   return `<section class="smx" id="smx">
     <h3 class="h3">System Manager setup on QA<span>${[nScopes ? pl(nScopes, "scope") : "", s.menus.length ? pl(s.menus.length, "menu") : "", nData ? `${pl(nData, "data row")} to create` : ""].filter(Boolean).join(" · ")}</span>
-      ${nCards > 1 ? `<button class="btn small" id="smxAll">${Object.entries(groupOpen).some(([k, v]) => k.startsWith("smx:") && v === true) ? "Collapse all" : "Expand all"}</button>` : ""}
+      ${nCards > 1 ? `<button class="btn small" id="smxAll">${cardIds.some(id => groupOpen[id] === true) ? "Collapse all" : "Expand all"}</button>` : ""}
       ${onPage ? "" : `<button class="btn line small smx-page" data-setup="">${icon("out")}Open as a page</button>`}</h3>
     <p class="smx-note">Scopes register themselves when each service starts on QA. In the System Manager there: grant the scopes to the QA roles, create each menu with its actions, and link every action to the scopes listed with it. Create the data the code names (categories, types, features, criteria...) with the same tags it has on dev. Each copy button gives the exact text.</p>
     ${dataNote}

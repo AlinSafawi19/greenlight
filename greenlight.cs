@@ -692,6 +692,8 @@ record BranchInfo(string Name, int Unmerged)
 {
     // where the branch stands against main and dev: commits still to merge in, and commits it is missing from them
     public List<BranchVs> Vs { get; init; } = [];
+    // when its newest commit was written (unix seconds): a merge request merged before that didn't take it
+    public long TipAt { get; init; }
 }
 record BranchVs(string Target, int Ahead, int Behind);
 // Path: where the script lives in the repository (the release copy once it graduated), so the UI can open it
@@ -804,6 +806,12 @@ static class Scanner
             }
         }
 
+        // a squash merge lands a whole branch as one new commit, which matches none of its commits' patch ids:
+        // when merging the branch into the default branch changes nothing, its commits are in there too
+        foreach (var b in branchShas)
+            if (b.Tip is not null && b.Unmerged.Any(s => !landed.Contains(s)) && MergeChangesNothing(repo, defaultRef, b.Tip))
+                landed.UnionWith(b.Unmerged);
+
         var commits = new List<Commit>();
         var copies = new List<string>();
         foreach (var (sha, source) in sources)
@@ -853,7 +861,11 @@ static class Scanner
         // nor its merge state count toward this ticket.
         var foreign = commits.Where(c => c.IsForeign).Select(c => c.Sha).ToHashSet();
         var branches = branchShas
-            .Select(b => new BranchInfo(b.Name, b.Unmerged.Count(s => !foreign.Contains(s))) { Vs = Compare(repo, ix, b.Tip, defaultRef) })
+            .Select(b => new BranchInfo(b.Name, b.Unmerged.Count(s => !foreign.Contains(s) && !landed.Contains(s)))
+            {
+                Vs = Compare(repo, ix, b.Tip, defaultRef),
+                TipAt = b.Tip is not null && ix.BySha.TryGetValue(b.Tip, out var tc) ? tc.At : 0,
+            })
             .ToList();
 
         // aggregate file status across the feature: A wins over M, a later D marks it deleted
@@ -872,10 +884,21 @@ static class Scanner
     }
 
 
+    // Merging the branch into the target, without touching the working copy (git merge-tree): the same tree as the
+    // target means the target already holds everything the branch changes. A conflict means it doesn't.
+    internal static bool MergeChangesNothing(string repo, string target, string tip)
+    {
+        var merged = Git.Lines(Git.Cached(repo, null, "merge-tree", "--write-tree", "--no-messages", target, tip)).FirstOrDefault();
+        var tree = Git.Cached(repo, null, "rev-parse", $"{target}^{{tree}}").Trim();
+        return merged is { Length: 40 } && merged == tree;
+    }
+
     // A branch against main (or master) and dev (or develop), whichever exist, walked in the in-memory history:
     // Ahead = its commits not in the target (still to merge), Behind = the target's commits it doesn't have (to bring in).
-    // A commit whose patch the target already has counts as merged: GitLab's rebase and squash merges land the
-    // change under a new commit id, so by ids alone the branch would look unmerged forever.
+    // A branch whose change the target already has counts as merged, whatever the commit ids: GitLab's rebase
+    // merges land each commit again under a new id (matched by patch id), and squash merges land several commits
+    // as one (no single patch id matches, so the branch is merged into the target in memory: if that changes
+    // nothing, the target has it all).
     static List<BranchVs> Compare(string repo, RepoIndex ix, string? tip, string defaultRef)
     {
         var list = new List<BranchVs>();
@@ -888,8 +911,9 @@ static class Scanner
             var theirs = ix.Reachable(target.Sha);
             int Count(IEnumerable<string> shas) => shas.Count(s => ix.BySha.TryGetValue(s, out var c) && c.Parents.Length < 2);
             var ahead = Count(mine.Where(s => !theirs.Contains(s)));
-            if (ahead > 0 && int.TryParse(Git.Run(repo, "rev-list", "--count", "--cherry-pick", "--right-only", "--no-merges", $"{target.Sha}...{tip}").Trim(), out var notLanded))
+            if (ahead > 0 && int.TryParse(Git.Cached(repo, null, "rev-list", "--count", "--cherry-pick", "--right-only", "--no-merges", $"{target.Sha}...{tip}").Trim(), out var notLanded))
                 ahead = Math.Min(ahead, notLanded);
+            if (ahead > 0 && MergeChangesNothing(repo, target.Sha, tip)) ahead = 0;
             list.Add(new BranchVs(name, ahead, Count(theirs.Where(s => !mine.Contains(s)))));
         }
         return list;
@@ -1528,15 +1552,39 @@ static class LookupScan
         res["candidates"] = named.Count;
         if (string.IsNullOrWhiteSpace(cs)) { res["status"] = "no-connection"; res["env"] = connEnv; return res; }
 
+        // the answer for this set of tags is remembered for a while, and an unreachable database too (off VPN every
+        // ticket load would otherwise wait for the connect timeout)
+        var tagSet = named.Keys.Order(StringComparer.Ordinal).ToArray();
+        var memoKey = $"{Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(cs)))}|{string.Join(",", tagSet)}";
+        if (!memo.TryGetValue(memoKey, out var known) || DateTime.UtcNow > known.Until)
+        {
+            known = Query(cs, tagSet);
+            if (memo.Count > 200) memo.Clear();
+            memo[memoKey] = known;
+        }
+        if (known.Error is not null) { res["status"] = "error"; res["error"] = known.Error; return res; }
+        var hits = known.Hits!;
+        if (hits.Count == 0) return res;
+        return Describe(res, rows, hits, named, results, pathOf, dbRepo);
+    }
+
+    static readonly ConcurrentDictionary<string, (DateTime Until, List<(string Schema, string Table, string Tag, DateTime? Created, string? Name, long N)>? Hits, string? Error)> memo = new();
+    // which tables have a tag column barely changes: read once per half hour per database
+    static readonly ConcurrentDictionary<string, (DateTime Until, List<(string S, string T, bool Created, bool Deleted, string? NameSql)> Tables)> catalogs = new();
+
+    static (DateTime Until, List<(string Schema, string Table, string Tag, DateTime? Created, string? Name, long N)>? Hits, string? Error) Query(string cs, string[] tagSet)
+    {
         var hits = new List<(string Schema, string Table, string Tag, DateTime? Created, string? Name, long N)>();
         try
         {
-            var b = new Npgsql.NpgsqlConnectionStringBuilder(cs) { Options = "-c default_transaction_read_only=on", ApplicationName = "greenlight", Timeout = 8, CommandTimeout = 30 };
+            var b = new Npgsql.NpgsqlConnectionStringBuilder(cs) { Options = "-c default_transaction_read_only=on", ApplicationName = "greenlight", Timeout = 5, CommandTimeout = 30 };
             using var conn = new Npgsql.NpgsqlConnection(b.ConnectionString);
             conn.Open();
             static string Q(string id) => "\"" + id.Replace("\"", "\"\"") + "\"";
+            var catKey = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(cs)));
             // every live table with a tag column: whether it has created_date / is_deleted, and where its display name lives
-            var tables = new List<(string S, string T, bool Created, bool Deleted, string? NameSql)>();
+            var tables = catalogs.TryGetValue(catKey, out var cat) && DateTime.UtcNow < cat.Until ? cat.Tables : new List<(string S, string T, bool Created, bool Deleted, string? NameSql)>();
+            if (tables.Count == 0)
             using (var cmd = new Npgsql.NpgsqlCommand("""
                 SELECT c.table_schema, c.table_name,
                        EXISTS (SELECT 1 FROM information_schema.columns x WHERE x.table_schema = c.table_schema AND x.table_name = c.table_name AND x.column_name = 'created_date'),
@@ -1559,13 +1607,14 @@ static class LookupScan
                         : rd.IsDBNull(5) ? null : $"(SELECT d.name::text FROM {Q(s)}.{Q(rd.GetString(5))} d WHERE d.{Q(t + "_id")} = x.id AND d.name IS NOT NULL LIMIT 1)";
                     tables.Add((s, t, rd.GetBoolean(2), rd.GetBoolean(3), nameSql));
                 }
+            catalogs[catKey] = (DateTime.UtcNow.AddMinutes(30), tables);
             if (tables.Count > 0)
             {
                 // one statement over all of them; schema and table names come from the catalog and are passed as values
                 var sql = string.Join("\nUNION ALL\n", tables.Select((t, i) =>
                     $"SELECT @s{i}, @t{i}, x.tag::text, {(t.Created ? "x.created_date::timestamp" : "NULL::timestamp")}, {t.NameSql ?? "NULL::text"} FROM {Q(t.S)}.{Q(t.T)} x WHERE x.tag::text = ANY(@tags){(t.Deleted ? " AND x.is_deleted IS NOT TRUE" : "")}"));
                 using var cmd = new Npgsql.NpgsqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("tags", named.Keys.ToArray());
+                cmd.Parameters.AddWithValue("tags", tagSet);
                 for (var i = 0; i < tables.Count; i++) { cmd.Parameters.AddWithValue($"s{i}", tables[i].S); cmd.Parameters.AddWithValue($"t{i}", tables[i].T); }
                 using var rd = cmd.ExecuteReader();
                 var all = new List<(string S, string T, string Tag, DateTime? Created, string? Name)>();
@@ -1575,9 +1624,13 @@ static class LookupScan
                     .Select(g => (g.Key.S, g.Key.T, g.Key.Tag, g.Min(x => x.Created), g.Select(x => x.Name).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)), (long)g.Count())).ToList();
             }
         }
-        catch (Exception e) { res["status"] = "error"; res["error"] = e.Message; return res; }
-        if (hits.Count == 0) return res;
+        catch (Exception e) { return (DateTime.UtcNow.AddMinutes(2), null, e.Message); }
+        return (DateTime.UtcNow.AddMinutes(10), hits, null);
+    }
 
+    static JsonObject Describe(JsonObject res, JsonArray rows, List<(string Schema, string Table, string Tag, DateTime? Created, string? Name, long N)> hits,
+        Dictionary<string, (string Repo, string File)> named, List<RepoResult> results, Func<string, string?> pathOf, string dbRepo)
+    {
         // tags a SQL script already inserts: in the migration repo's default branch, or on the ticket's own commits there
         var seeded = new Dictionary<string, string>(StringComparer.Ordinal);
         if (pathOf(dbRepo) is { } dbPath)
@@ -1634,6 +1687,9 @@ static class QaPrep
     internal static readonly Regex AccessFile = new(@"(?i)(permission|scope|role|polic|claim|menu|sidebar|navigation)");
     // A file named like one of those only counts when the lines added to it do access work: a name alone also catches
     // UI components such as ExportFormatMenu.tsx (a dropdown), which need nothing in the System Manager.
+    // a new entry in a sidebar, navigation, menu or routes file (a page someone must reach) is access work without naming a role
+    internal static readonly Regex NavFile = new(@"(?i)(sidebar|navigation|nav|menu|rout)[^/]*\.(jsx?|tsx?|json|ya?ml)$");
+    internal static readonly Regex NavEntry = new(@"(?i)\b(path|to|href|url|uri|route|link)\s*[:=]\s*\{?\s*[""'`]/[\w\-/:.]*[""'`]");
     internal static readonly Regex AccessContent = new(@"(?i)(\[Authorize\b|\bAllowAnonymous\b|\bAddPolicy\b|\bpolicy\s*[:=]|\bRequire\w*(Scope|Role|Claim)|\b(has|check|is|can)\w*(Permission|Scope|Role|Action)s?\s*\(|\bpermissions?\s*[:=\[.]|\b(scopes?|roles?|claims?)\s*[:=\[]|\bactions\s*\??\.\s*includes\s*\(|\bmenu_?(uri|actions?)\b)");
     internal static readonly Regex JsonKey = new(@"^\s*""([A-Za-z0-9_.:\-]+)""\s*:");
     internal static readonly Regex JsKey = new(@"^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*:");
@@ -1682,7 +1738,7 @@ static class QaPrep
     internal static string MrDescription(string? path, string branch, string into)
     {
         if (path is null) return "";
-        var commits = Git.Records(Git.Run(path, "log", "--no-merges", "--format=%x1e%s%x1f%b", $"origin/{into}..origin/{branch}"))
+        var commits = Git.Records(Git.Cached(path, null, "log", "--no-merges", "--format=%x1e%s%x1f%b", $"origin/{into}..origin/{branch}"))
             .Select(f => (Subject: f.ElementAtOrDefault(0)?.Trim() ?? "", Body: f.ElementAtOrDefault(1) ?? "")).Where(c => c.Subject != "").ToList();
         var text = commits.Count == 1 ? commits[0].Body : string.Join("\n", commits.AsEnumerable().Reverse().Select(c => $"- {c.Subject}"));
         return Regex.Replace(Attribution.Replace(text, ""), @"\n{3,}", "\n\n").Trim();
@@ -1713,7 +1769,8 @@ static class QaPrep
                     continue;
                 }
                 // a service with a dev branch takes two merge requests from the ticket branch: into dev first, then into the default branch
-                var dev = b.Vs.FirstOrDefault(v => v.Target is "dev" or "develop");
+                // (not when dev is the default branch itself: then there is one merge request, into it)
+                var dev = b.Vs.FirstOrDefault(v => v.Target is "dev" or "develop" && v.Target != target);
                 if (dev is null)
                 {
                     var mr = NewMr(target);
@@ -1804,11 +1861,15 @@ static class QaPrep
 
         // the scripts themselves, so each item can open them: from the working copy, or on GitLab when they aren't checked out here.
         // Scripts still waiting for a release are on the ticket's branch; graduated ones are on the default branch.
-        var branch = dbRepo.Branches.Select(b => b.Name.Replace(" (local only, never pushed)", "")).Select(b => b.StartsWith("origin/") ? b[7..] : b).FirstOrDefault();
+        // with several ticket branches, the one that has the file (pushed ones only: GitLab can't show the others)
+        var pushed = dbRepo.Branches.Where(b => !b.Name.EndsWith(" (local only, never pushed)")).Select(b => b.Name.StartsWith("origin/") ? b.Name[7..] : b.Name).Distinct().ToList();
+        string? BranchWith(string file) => path is null ? pushed.FirstOrDefault()
+            : pushed.FirstOrDefault(b => Git.Cached(path, null, "ls-tree", "--name-only", $"origin/{b}", "--", file).Trim() != "");
         List<ItemFile> Files(IEnumerable<DbItem> ds) => ds.Where(d => d.Path is not null).Select(d => d.Path!).Distinct().Select(p =>
         {
-            var at = (ds.First(d => d.Path == p).Warning ? branch : null) ?? Target(dbRepo);
-            var web = dbRepo.WebUrl == "" ? null : $"{dbRepo.WebUrl}/-/blob/{at}/{string.Join("/", p.Split('/').Select(Uri.EscapeDataString))}";
+            // no branch has a script removed from dev/: no link, rather than one that 404s
+            var at = ds.First(d => d.Path == p).Warning ? BranchWith(p) : Target(dbRepo);
+            var web = dbRepo.WebUrl == "" || at is null ? null : $"{dbRepo.WebUrl}/-/blob/{at}/{string.Join("/", p.Split('/').Select(Uri.EscapeDataString))}";
             return new ItemFile(p, path is not null && LocalApps.SafeFile(path, p) is { } f && File.Exists(f), web);
         }).ToList();
 
@@ -1875,9 +1936,16 @@ static class QaPrep
                 {
                     var line = raw.TrimEnd('\r');
                     if (line.StartsWith("+++ ")) { file = line.StartsWith("+++ b/") ? line[6..] : null; continue; }
-                    if (file is null || !line.StartsWith('+')) continue;
+                    if (file is null) continue;
+                    // a removed permission check matters as much as an added one
+                    if (line.StartsWith('-') && !line.StartsWith("---"))
+                    {
+                        if (AccessFile.IsMatch(file) && !ConfigFile.IsMatch(file) && AccessContent.IsMatch(line[1..])) accessFiles.Add(file);
+                        continue;
+                    }
+                    if (!line.StartsWith('+')) continue;
                     var added = line[1..];
-                    if (AccessFile.IsMatch(file) && !ConfigFile.IsMatch(file) && AccessContent.IsMatch(added)) accessFiles.Add(file);
+                    if (AccessFile.IsMatch(file) && !ConfigFile.IsMatch(file) && (AccessContent.IsMatch(added) || NavFile.IsMatch(file) && NavEntry.IsMatch(added))) accessFiles.Add(file);
                     if (ConfigFile.IsMatch(file))
                     {
                         var m = file.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? JsonKey.Match(added)
@@ -2289,8 +2357,6 @@ class GitLab
     public Task<JsonNode> Environment(string project, long id) => Get($"projects/{P(project)}/environments/{id}");
     public Task<JsonArray> Events(long userId, DateOnly after, DateOnly before) =>
         All($"users/{userId}/events?after={after:yyyy-MM-dd}&before={before:yyyy-MM-dd}");
-    public Task<JsonNode> CreateMergeRequest(string project, string source, string target, string title) =>
-        Post($"projects/{P(project)}/merge_requests", new JsonObject { ["source_branch"] = source, ["target_branch"] = target, ["title"] = title, ["remove_source_branch"] = true });
     public Task<JsonNode> CreateTag(string project, string name, string @ref, string message) =>
         Post($"projects/{P(project)}/repository/tags", new JsonObject { ["tag_name"] = name, ["ref"] = @ref, ["message"] = message });
 
@@ -2328,7 +2394,7 @@ static class Review
             ["title"] = (string?)mr["title"], ["url"] = (string?)mr["web_url"],
             ["source"] = (string?)mr["source_branch"], ["target"] = (string?)mr["target_branch"],
             ["author"] = Person(mr["author"]), ["draft"] = (bool?)mr["draft"] ?? false,
-            ["state"] = (string?)mr["state"], ["mergeStatus"] = (string?)mr["detailed_merge_status"] ?? (string?)mr["merge_status"],
+            ["state"] = (string?)mr["state"], ["mergedAt"] = (string?)mr["merged_at"], ["mergeStatus"] = (string?)mr["detailed_merge_status"] ?? (string?)mr["merge_status"],
             ["conflicts"] = (bool?)mr["has_conflicts"] ?? false, ["updated"] = (string?)mr["updated_at"],
             ["comments"] = (int?)mr["user_notes_count"] ?? 0,
             ["key"] = Key(l, (string?)mr["source_branch"], (string?)mr["title"]),
@@ -2789,20 +2855,6 @@ static class Work
     // ── actions ──
     static string ProjectOf(string repo) => Git.WebUrl(repo) is { Length: > 0 } w ? new Uri(w).AbsolutePath.Trim('/') : throw new Exception("This repository has no GitLab remote.");
 
-    // into the default branch, or into the target asked for (dev, for services that merge there first) when GitLab has it
-    public static async Task<JsonObject> CreateMergeRequest(Ledger l, string repoName, string branch, string? into = null)
-    {
-        var repo = l.RepoPath(repoName) ?? throw new Exception("Unknown repository.");
-        var ix = RepoIndex.For(repo);
-        if (!ix.Refs.Any(r => r.Name == $"refs/remotes/origin/{branch}"))
-            throw new Exception(ix.Refs.Any(r => r.Name == $"refs/heads/{branch}") ? "Push the branch to GitLab first." : "That branch doesn't exist.");
-        if (!string.IsNullOrEmpty(into) && !ix.Refs.Any(r => r.Name == $"refs/remotes/origin/{into}")) throw new Exception($"GitLab has no {into} branch in this repository.");
-        var target = !string.IsNullOrEmpty(into) ? into : ix.DefaultRef.StartsWith("origin/") ? ix.DefaultRef[7..] : ix.DefaultRef;
-        var key = KeyRx(l).Match(branch) is { Success: true } m ? m.Value.ToUpperInvariant() : null;
-        var summary = key is not null && await l.CurrentUser() is not null ? (await l.Jira.GetIssue(key))?.Summary : null;
-        var mr = await l.GitLab.CreateMergeRequest(ProjectOf(repo), branch, target, summary is null ? branch : $"{key} {summary}");
-        return new JsonObject { ["url"] = (string?)mr["web_url"], ["iid"] = (long?)mr["iid"] };
-    }
 
     public static async Task<JsonObject> CreateTag(Ledger l, string repoName, string tag)
     {
@@ -2918,6 +2970,9 @@ static class SelfTest
         Is("authorize attribute", QaPrep.AccessContent.IsMatch("    [Authorize(Policy = \"Admin\")]"), true);
         Is("permission list", QaPrep.AccessContent.IsMatch("  permissions: [\"VIEW\", \"EXPORT\"],"), true);
         Is("roles in a sidebar entry", QaPrep.AccessContent.IsMatch("    roles: [\"Reseller\"],"), true);
+        Is("sidebar entry without roles", QaPrep.NavFile.IsMatch("src/layout/Sidebar.tsx") && QaPrep.NavEntry.IsMatch("  { path: \"/ivr-builder\", label: \"IVR builder\" },"), true);
+        Is("router link in a nav file", QaPrep.NavEntry.IsMatch("        <Link to=\"/inbox/analytics\">Analytics</Link>"), true);
+        Is("dropdown menu item is no page", QaPrep.NavEntry.IsMatch("      <MenuItem onClick={() => onPick(\"xlsx\")}>Excel</MenuItem>"), false);
 
         Console.WriteLine(fails == 0 ? $"All {n} checks passed." : $"{fails} of {n} checks failed.");
         return fails == 0 ? 0 : 1;
@@ -3297,7 +3352,7 @@ static class ReportJson
                 }).ToArray()),
                 ["branches"] = new JsonArray(r.Branches.Select(b => (JsonNode)new JsonObject
                 {
-                    ["name"] = b.Name, ["unmerged"] = b.Unmerged,
+                    ["name"] = b.Name, ["unmerged"] = b.Unmerged, ["tipAt"] = b.TipAt,
                     ["vs"] = new JsonArray(b.Vs.Select(v => (JsonNode)new JsonObject { ["target"] = v.Target, ["ahead"] = v.Ahead, ["behind"] = v.Behind }).ToArray()),
                 }).ToArray()),
                 ["commits"] = new JsonArray(r.Commits.Where(c => !c.IsForeign).Select(c => (JsonNode)CommitJson(r, c)).ToArray()),
@@ -3536,7 +3591,6 @@ static class UiServer
                     return;
 
                 case ("POST", "/api/jira/transition"):
-                case ("POST", "/api/gitlab/create-mr"):
                 case ("POST", "/api/gitlab/create-tag"):
                 {
                     if (!Trusted(req)) { await Send(res, 403, Err("Missing X-Ledger header")); return; }
@@ -3551,9 +3605,7 @@ static class UiServer
                     }
                     if (await ledger.GitLabUser() is null) { await Send(res, 400, Err("Connect your GitLab account first.")); return; }
                     var repoName = (string?)body["repo"] ?? "";
-                    await Send(res, 200, path == "/api/gitlab/create-mr"
-                        ? await Work.CreateMergeRequest(ledger, repoName, (string?)body["branch"] ?? "", (string?)body["target"])
-                        : await Work.CreateTag(ledger, repoName, (string?)body["tag"] ?? ""));
+                    await Send(res, 200, await Work.CreateTag(ledger, repoName, (string?)body["tag"] ?? ""));
                     return;
                 }
 
