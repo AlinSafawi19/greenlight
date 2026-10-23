@@ -188,7 +188,7 @@ function openSettings() {
       <div class="rule"></div>
       ${gitlabSection()}
       <div class="rule"></div>
-      <label class="fld"><span>Repositories folder</span><input id="fRoot" value="${esc(status?.reposRoot || "")}" spellcheck="false"><small>${status ? `${pl(status.repoCount, "repository", "repositories")} found. ` : ""}One git repository per subfolder.</small><span class="err" id="eRoot"></span></label>
+      <label class="fld"><span>Repositories folder</span><div class="pathrow"><input id="fRoot" value="${esc(status?.reposRoot || "")}" spellcheck="false"><button class="btn line" id="browseRoot">${icon("folder")}Browse…</button></div><small>${status ? `${pl(status.repoCount, "repository", "repositories")} found. ` : ""}Type or paste the folder that holds your clones, one repository per subfolder.</small><span class="err" id="eRoot"></span></label>
     </div>
     <div class="dlg-f"><span class="msg" id="msg"></span>
       <button class="btn" id="cancel">Close</button>
@@ -197,20 +197,14 @@ function openSettings() {
     </div>`;
   const msg = (h, bad) => { const m = $("#msg"); m.className = "msg" + (bad ? " bad" : ""); m.innerHTML = h; };
   $("#cancel").onclick = () => d.close();
-  $("#saveRoot").onclick = async () => {
-    $("#eRoot").textContent = "";
-    if (!$("#fRoot").value.trim()) { $("#eRoot").textContent = "Enter a folder."; return; }
-    try { const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ reposRoot: $("#fRoot").value.trim() }) }); msg(`Saved. ${pl(r.repoCount, "repository", "repositories")} found.`); loadStatus(); }
-    catch (e) { $("#eRoot").textContent = e.message; }
-  };
+  $("#saveRoot").onclick = () => saveReposRoot($("#fRoot").value, $("#fRoot"), $("#eRoot"), msg);
+  $("#browseRoot").onclick = async () => { if (await browseFolder($("#fRoot"), $("#eRoot"), msg)) saveReposRoot($("#fRoot").value, $("#fRoot"), $("#eRoot"), msg); };
   if (me) $("#disc").onclick = async () => {
     if (!await confirmDialog("Disconnect Jira?", "Removes your Jira token from this computer. Tickets, worklogs and handovers stop until you connect again.", "Disconnect", "danger")) return openSettings();
     await api("/api/account/disconnect", { method: "POST" }); tickets = null; selected = null; report = null; d.close(); toast("Disconnected. The token was removed from this computer."); boot(); };
   else $("#connect").onclick = async () => {
     const site = $("#fSite").value.trim(), email = $("#fEmail").value.trim(), token = $("#fToken").value.trim();
-    const errs = { Site: /^https:\/\/[^/]+/.test(site) ? "" : "Use the full address, starting with https://",
-                   Email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? "" : "Enter a valid email address.",
-                   Token: !token ? "Paste your API token." : token.length < 40 ? "Too short for an API token. Make sure it isn't your password." : "" };
+    const errs = jiraErrors(site, email, token);
     for (const [k, v] of Object.entries(errs)) { $("#e" + k).textContent = v; $("#f" + k).classList.toggle("bad", !!v); }
     if (Object.values(errs).some(Boolean)) return;
     const b = $("#connect"); b.disabled = true; msg(`<span class="spinner"></span>Checking with Jira`);
@@ -222,6 +216,38 @@ function openSettings() {
   wireFaces(d);
   if (!d.open) d.showModal();
   setTimeout(() => ($("#fEmail") || $("#cancel")).focus(), 30);
+}
+
+const jiraErrors = (site, email, token) => ({
+  Site: /^https:\/\/[^/]+/.test(site) ? "" : "Use the full address, starting with https://",
+  Email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? "" : "Enter a valid email address.",
+  Token: !token ? "Paste your API token." : token.length < 40 ? "Too short for an API token. Make sure it isn't your password." : "" });
+
+// the repositories folder, typed or chosen: the server checks it and keeps the current one if it's wrong
+async function saveReposRoot(value, inp, err, msg) {
+  err.textContent = ""; inp.classList.remove("bad");
+  const v = value.trim().replace(/^["']|["']$/g, "");
+  if (!v) { err.textContent = "Enter a folder."; inp.classList.add("bad"); return null; }
+  msg(`<span class="spinner"></span>Looking for repositories`);
+  try {
+    const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ reposRoot: v }) });
+    inp.value = r.reposRoot;   // the folder actually used (one level up when a single repository was chosen)
+    msg(`Saved. ${pl(r.repoCount, "repository", "repositories")} found.`);
+    await loadStatus();
+    return r;
+  } catch (e) { msg(""); err.textContent = e.message; inp.classList.add("bad"); return null; }
+}
+
+// the Windows folder dialog, opened by the server on this computer; fills the field with the chosen path
+async function browseFolder(inp, err, msg) {
+  err.textContent = "";
+  msg(`<span class="spinner"></span>Choose a folder in the dialog`);
+  try {
+    const r = await api("/api/pick-folder", { method: "POST" });
+    msg("");
+    if (!r.path) return false;   // closed without choosing
+    inp.value = r.path; return true;
+  } catch (e) { msg(""); err.textContent = e.message; return false; }
 }
 
 // low disk space: checks start failing to save, so the account dialog says so while it lasts
@@ -316,7 +342,8 @@ function renderList() {
   if (!status?.account) {
     $("#count").textContent = ""; $("#views").innerHTML = ""; $("#railTools").innerHTML = "";
     $("#list").innerHTML = emptyNote("Not connected", "Connect your Jira account to see the tickets assigned to you.", `<button class="btn success small" id="rc">Connect Jira</button>`, "welcome");
-    $("#rc").onclick = openSettings; return;
+    // on the home page the stepper is already showing: go to its Jira step instead of opening the dialog
+    $("#rc").onclick = () => { if (onboard && section === "tickets") { onboard.step = 0; renderOnboarding(); } else openSettings(); }; return;
   }
   const all = tickets || [];
   const g = { todo: [], wait: [], check: [], none: [], done: [] };
@@ -493,18 +520,157 @@ function back() {
 function blank() {
   document.title = "My tickets · greenlight";
   const me = status?.account;
+  // first run: the setup stepper, until it's finished (it stays open after Jira connects, for the remaining steps)
+  if (!me && !onboard) onboard = { step: OB.findIndex(s => !s.done()) };
+  if (onboard) return renderOnboarding();
   $("#main").innerHTML = `<div class="blank"><div class="blank-in">
-    ${glim(me ? "welcome" : "welcome")}
-    ${me ? `<h2>Pick a ticket</h2><p>Greenlight shows what stands between it and QA: code, tags, database, access, config and the handover.</p>
-      <div class="keys"><span><kbd>J</kbd><kbd>K</kbd></span><span>Next and previous ticket</span><span><kbd>Ctrl K</kbd></span><span>Find a ticket</span><span><kbd>R</kbd></span><span>Fetch and check again</span></div>`
-    : `<h2>Set up Greenlight</h2><p>Two steps, once on this computer.</p>
-      <ol class="setup">
-        <li><b>Connect your Jira account</b><div><p>Lists your tickets and posts handovers under your name.</p><button class="btn success small" id="s1">Connect Jira</button></div></li>
-        <li class="${status?.repoCount ? "ok" : ""}"><b>Repositories folder</b><div><p>${status?.repoCount ? `${pl(status.repoCount, "repository", "repositories")} found in <code>${esc(status.reposRoot)}</code>` : "Point to the folder with your local clones."}</p><button class="btn line small" id="s2">${status?.repoCount ? "Change" : "Choose folder"}</button></div></li>
-      </ol>`}
+    ${glim("welcome")}
+    <h2>Pick a ticket</h2><p>Greenlight shows what stands between it and QA: code, tags, database, access, config and the handover.</p>
+      <div class="keys"><span><kbd>J</kbd><kbd>K</kbd></span><span>Next and previous ticket</span><span><kbd>Ctrl K</kbd></span><span>Find a ticket</span><span><kbd>R</kbd></span><span>Fetch and check again</span></div>
   </div></div>`;
-  $("#s1")?.addEventListener("click", openSettings);
-  $("#s2")?.addEventListener("click", openSettings);
+}
+
+/* ─────────────────────────── first-run setup stepper ─────────────────────────── */
+let onboard = null;   // { step } while the stepper is open
+const OB = [
+  { title: "Jira account", note: "Required", done: () => !!status?.account },
+  { title: "Repositories", note: "Your local clones", done: () => status?.repoCount > 0 },
+  { title: "GitLab", note: "Optional", done: () => !!status?.gitlab },
+];
+
+function renderOnboarding() {
+  document.title = "Set up · greenlight";
+  if (onboard.step < 0) onboard.step = OB.length;   // everything done already
+  const at = onboard.step, last = at >= OB.length;
+  const rail = OB.map((s, i) => {
+    const st = s.done() ? "ok" : i === at ? "now" : "";
+    return `<li class="${st}${i === at ? " cur" : ""}"><button data-ob="${i}" ${i === at ? `aria-current="step"` : ""}>
+      <span class="dot">${s.done() ? "✓" : i + 1}</span><span class="tx"><b>${s.title}</b><small>${s.done() ? "Done" : s.note}</small></span></button></li>`;
+  }).join("");
+  $("#main").innerHTML = `<div class="blank"><div class="blank-in ob">
+    ${glim(last ? "success" : "welcome")}
+    <h2>${last ? "You're set" : "Set up Greenlight"}</h2>
+    <p>${last ? "Everything Greenlight needs is in place on this computer." : "A few steps, once on this computer. Tokens stay in Windows Credential Manager."}</p>
+    <ol class="ob-rail" aria-label="Setup steps">${rail}</ol>
+    <section class="ob-card" aria-live="polite">${last ? obDoneHtml() : [obJiraHtml, obReposHtml, obGitlabHtml][at]()}</section>
+  </div></div>`;
+  $$("[data-ob]").forEach(b => b.onclick = () => { onboard.step = +b.dataset.ob; renderOnboarding(); });
+  last ? wireObDone() : [wireObJira, wireObRepos, wireObGitlab][at]();
+  soften($(".ob-card"));
+}
+
+// Back / Continue under each step; Continue only once the step is done, except where it can be skipped
+function obNav(canGo, skip = "") {
+  const at = onboard.step;
+  return `<div class="ob-nav">${at > 0 ? `<button class="btn" id="obBack">${icon("back")}Back</button>` : "<span></span>"}
+    <span class="msg" id="obMsg"></span>
+    ${skip && !canGo ? `<button class="btn" id="obSkip">${skip}</button>` : ""}
+    <button class="btn primary" id="obNext" ${canGo ? "" : "disabled"}>Continue</button></div>`;
+}
+function wireObNav() {
+  $("#obBack")?.addEventListener("click", () => { onboard.step--; renderOnboarding(); });
+  $("#obNext")?.addEventListener("click", () => { onboard.step++; renderOnboarding(); });
+  $("#obSkip")?.addEventListener("click", () => { onboard.step++; renderOnboarding(); });
+}
+const obMsg = (h, bad) => { const m = $("#obMsg"); if (m) { m.className = "msg" + (bad ? " bad" : ""); m.innerHTML = h; } };
+
+// 1 · Jira
+function obJiraHtml() {
+  const me = status?.account;
+  if (me) return `<h3>Jira account</h3>
+    <div class="acct">${faceHtml(me.name)}<div style="flex:1;min-width:0">${esc(cap(me.name))}<small>${esc(me.email)} · ${esc(status.jiraBaseUrl.replace("https://", ""))}</small></div></div>${obNav(true)}`;
+  return `<h3>Connect your Jira account</h3>
+    <p class="ob-why">Lists the tickets assigned to you, logs time and moves tickets, all as you.</p>
+    ${status?.credentialsRejected ? `<p class="ob-why" style="color:var(--red)">The saved token was rejected. Enter a new one.</p>` : ""}
+    <label class="fld"><span>Jira site</span><input id="obSite" value="${esc(status?.jiraBaseUrl || "")}" spellcheck="false"><span class="err" id="obeSite"></span></label>
+    <label class="fld"><span>Atlassian sign-in email</span><input id="obEmail" type="email" autocomplete="username" spellcheck="false"><small>Can differ from the email on your Jira profile.</small><span class="err" id="obeEmail"></span></label>
+    <label class="fld"><span>API token</span><input id="obToken" type="password" autocomplete="off"><small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Create a token</a> while signed in as yourself, then paste it here.</small><span class="err" id="obeToken"></span></label>
+    <div class="ob-nav"><span></span><span class="msg" id="obMsg"></span><button class="btn success" id="obConnect">Connect Jira</button></div>`;
+}
+function wireObJira() {
+  wireObNav(); wireFaces($(".ob-card"));
+  const b = $("#obConnect"); if (!b) return;
+  setTimeout(() => $("#obEmail")?.focus(), 30);
+  $$(".ob-card input").forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") b.click(); }));
+  b.onclick = async () => {
+    const site = $("#obSite").value.trim(), email = $("#obEmail").value.trim(), token = $("#obToken").value.trim();
+    const errs = jiraErrors(site, email, token);
+    for (const [k, v] of Object.entries(errs)) { $("#obe" + k).textContent = v; $("#ob" + k).classList.toggle("bad", !!v); }
+    if (Object.values(errs).some(Boolean)) return;
+    b.disabled = true; obMsg(`<span class="spinner"></span>Checking with Jira`);
+    try {
+      const who = await api("/api/account", { method: "POST", body: JSON.stringify({ baseUrl: site, email, token }) });
+      toast(`Connected as ${esc(cap(who.name))}.`);
+      onboard.step = 1; tickets = null; boot();
+    } catch (e) { obMsg(esc(e.message), true); b.disabled = false; }
+  };
+}
+
+// 2 · repositories folder: typed or pasted, or chosen in the Windows folder dialog
+function obReposHtml() {
+  const n = status?.repoCount || 0;
+  return `<h3>Where are your repositories?</h3>
+    <p class="ob-why">The folder that holds your local clones, one repository per subfolder. Greenlight reads their git history.</p>
+    <label class="fld"><span>Repositories folder</span>
+      <div class="pathrow"><input id="obRoot" value="${esc(status?.reposRoot || "")}" spellcheck="false" placeholder="C:\\Users\\you\\source\\repos"><button class="btn line" id="obBrowse">${icon("folder")}Browse…</button></div>
+      <small id="obFound">${n ? `${icon("checkall")}${pl(n, "repository", "repositories")} found.` : "Type or paste the path, or browse to it."}</small><span class="err" id="obeRoot"></span></label>
+    ${obNav(n > 0)}`;
+}
+function wireObRepos() {
+  wireObNav();
+  const inp = $("#obRoot");
+  let tried = inp.value.trim();
+  const save = async () => {
+    if (!inp.value.trim() || inp.value.trim() === tried) return;   // Enter and leaving the field both land here
+    tried = inp.value.trim();
+    if (await saveReposRoot(inp.value, inp, $("#obeRoot"), obMsg)) renderOnboarding();
+  };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") save(); });
+  inp.addEventListener("change", save);   // typed or pasted, saved as soon as you leave the field
+  inp.addEventListener("input", () => { tried = ""; });
+  $("#obBrowse").onclick = async () => { if (await browseFolder(inp, $("#obeRoot"), obMsg)) save(); };
+}
+
+// 3 · GitLab
+function obGitlabHtml() {
+  const g = status?.gitlab, base = status?.gitlabBaseUrl || "https://gitlab.com";
+  if (g) return `<h3>GitLab</h3>
+    <div class="acct"><span class="face">${esc(initials(g.name))}</span><div style="flex:1;min-width:0">${esc(g.name)}<small>@${esc(g.username)} · ${esc(base.replace("https://", ""))}</small></div></div>${obNav(true)}`;
+  const create = `${base}/-/user_settings/personal_access_tokens?name=Greenlight&scopes=api`;
+  return `<h3>Connect GitLab <span class="ink-3">(optional)</span></h3>
+    <p class="ob-why">For merge requests: the ones waiting for your review, the reviews on yours, and creating merge requests and tags from Greenlight.</p>
+    <label class="fld"><span>GitLab address</span><input id="obGlBase" value="${esc(base)}" spellcheck="false"></label>
+    <label class="fld"><span>Personal access token</span><input id="obGlToken" type="password" autocomplete="off"><small><a href="${url(create)}" target="_blank" rel="noopener">Create a token</a> with the <b>api</b> scope (needed to approve).</small><span class="err" id="obeGl"></span></label>
+    <div class="ob-nav"><button class="btn" id="obBack">${icon("back")}Back</button><span class="msg" id="obMsg"></span>
+      <button class="btn" id="obSkip">Skip for now</button><button class="btn success" id="obGlConn">Connect GitLab</button></div>`;
+}
+function wireObGitlab() {
+  wireObNav();
+  const b = $("#obGlConn"); if (!b) return;
+  b.onclick = async () => {
+    const base = $("#obGlBase").value.trim(), token = $("#obGlToken").value.trim();
+    $("#obeGl").textContent = !/^https:\/\/[^/]+/.test(base) ? "Use the full address, starting with https://" : token.length < 20 ? "Paste your personal access token." : "";
+    if ($("#obeGl").textContent) return;
+    b.disabled = true; obMsg(`<span class="spinner"></span>Checking with GitLab`);
+    try {
+      const who = await api("/api/gitlab/account", { method: "POST", body: JSON.stringify({ baseUrl: base, token }) });
+      toast(`Connected to GitLab as @${esc(who.username)}.`);
+      await loadStatus(); onboard.step++; renderOnboarding();
+      api("/api/reviews").then(r => { reviews = r; navCounts(); }).catch(() => {});
+    } catch (e) { obMsg(esc(e.message), true); b.disabled = false; }
+  };
+}
+
+// done
+function obDoneHtml() {
+  const n = (tickets || []).length;
+  return `<ul class="ob-sum">${OB.map(s => `<li class="${s.done() ? "ok" : ""}"><span class="dot">${s.done() ? "✓" : "–"}</span>${s.title}<small>${s.done() ? "" : s === OB[0] ? "needed: go back and connect it" : "skipped, add it later from settings"}</small></li>`).join("")}</ul>
+    <div class="ob-nav"><button class="btn" id="obBack">${icon("back")}Back</button><span></span>
+      <button class="btn primary" id="obFinish" ${status?.account ? "" : "disabled"}>${icon("ticket")}${tickets ? `Open my tickets${n ? ` (${n})` : ""}` : "Open my tickets"}</button></div>`;
+}
+function wireObDone() {
+  wireObNav();
+  $("#obFinish").onclick = () => { onboard = null; blank(); };
 }
 
 // git only sees a merge request once it is merged; GitLab knows the open ones, so they're laid over the code step

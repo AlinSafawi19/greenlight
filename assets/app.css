@@ -846,12 +846,38 @@ details.smooth > summary + * { overflow: hidden; }
 .blank-in p { color: var(--gl-text-2); margin: 0; }
 .blank-in .keys { display: grid; grid-template-columns: auto auto; gap: 10px 14px; margin-top: 24px; color: var(--gl-text-muted); align-items: center; justify-content: center; text-align: left; }
 .blank-in .keys span:nth-child(odd) { display: flex; gap: 4px; }
-.setup { list-style: none; margin: 24px 0 0; padding: 0; counter-reset: s; text-align: left; width: 100%; }
-.setup li { display: grid; grid-template-columns: 24px 1fr; gap: 2px 14px; padding: 14px 0; border-top: 1px solid var(--gl-border-soft); counter-increment: s; color: var(--gl-text); }
-.setup li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--gl-border); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--gl-text-2); grid-row: 1 / 3; }
-.setup li.ok::before { content: "✓"; background: var(--st-done); color: var(--gl-bg); box-shadow: none; }
-.setup b { font-weight: 600; }
-.setup p { color: var(--gl-text-muted); margin: 2px 0 10px; font-size: 13px; }
+/* first-run setup stepper: numbered steps joined by a line, the current step's form in a card below */
+.blank-in.ob { width: min(560px, 100%); }
+.ob-rail { list-style: none; margin: 26px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.ob-rail li { position: relative; }
+.ob-rail li + li::before { content: ""; position: absolute; top: 14px; right: calc(50% + 20px); left: calc(-50% + 20px); height: 2px; border-radius: 2px; background: var(--gl-border); transition: background .3s var(--ease); }
+.ob-rail li.ok + li::before { background: var(--st-done); }
+.ob-rail button { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; padding: 0 4px; color: var(--gl-text-2); }
+.ob-rail .dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600; box-shadow: inset 0 0 0 1.5px var(--gl-border); background: var(--gl-bg); color: var(--gl-text-muted); transition: background .24s var(--ease), box-shadow .24s var(--ease), color .24s var(--ease); }
+.ob-rail button:hover .dot { box-shadow: inset 0 0 0 1.5px var(--gl-border-strong); }
+.ob-rail li.ok .dot { background: var(--st-done); color: var(--gl-bg); box-shadow: none; }
+.ob-rail li.cur .dot { box-shadow: inset 0 0 0 2px var(--gl-accent), 0 0 0 4px var(--gl-accent-soft); color: var(--gl-accent); }
+.ob-rail li.ok.cur .dot { color: var(--gl-bg); box-shadow: 0 0 0 4px var(--gl-accent-soft); }
+.ob-rail .tx { display: flex; flex-direction: column; gap: 1px; }
+.ob-rail b { font-weight: 600; font-size: 13.5px; }
+.ob-rail li.cur b { color: var(--gl-text); }
+.ob-rail small { font-size: 12px; color: var(--gl-text-muted); }
+.ob-card { margin-top: 22px; width: 100%; text-align: left; background: var(--gl-surface); border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--gl-border-soft); padding: 22px 24px 18px; display: flex; flex-direction: column; gap: 16px; color: var(--gl-text); }
+.ob-card h3 { margin: 0; font: 700 17px var(--display); letter-spacing: -.02em; }
+.blank-in .ob-card p.ob-why { margin: -10px 0 0; color: var(--gl-text-muted); font-size: 13.5px; }
+.ob-card .fld small svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; color: var(--st-done); }
+.ob-nav { display: flex; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid var(--gl-border-soft); }
+.ob-nav .msg { margin-right: auto; color: var(--gl-text-muted); font-size: 13px; display: flex; gap: 8px; align-items: center; min-width: 0; }
+.ob-nav .msg.bad { color: var(--st-fail); }
+.ob-sum { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ob-sum li { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+.ob-sum .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; box-shadow: inset 0 0 0 1.5px var(--gl-border); color: var(--gl-text-muted); flex: none; }
+.ob-sum li.ok .dot { background: var(--st-done); color: var(--gl-bg); box-shadow: none; }
+.ob-sum small { color: var(--gl-text-muted); font-weight: 400; }
+/* a path you can type, with a Browse button that opens the Windows folder dialog */
+.pathrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.pathrow input { font-family: var(--mono); font-size: 13px; }
+.pathrow .btn { height: 38px; }
 
 /* ── popovers, dialogs, toasts ── */
 .pop-wrap { position: relative; }
@@ -1049,6 +1075,9 @@ dialog[open] { animation: rise .22s cubic-bezier(.2, .8, .2, 1); }
   .dlg-f .msg { flex-basis: 100%; }
   .void { margin-top: 4vh; padding: 0 6px; }
   .blank { padding: 24px 16px; }
+  .ob-card { padding: 18px 16px 14px; }
+  .ob-rail b { font-size: 12.5px; }
+  .ob-nav { flex-wrap: wrap; } .ob-nav .msg { flex-basis: 100%; order: -1; }
   .gbox-b { padding-left: 8px; }
   .dp-b { padding: 12px 8px 48px; }
   .toast { left: 10px; right: 10px; transform: translateY(10px); max-width: none; bottom: 12px; }

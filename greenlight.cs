@@ -198,12 +198,20 @@ class Ledger
 
     public void SetReposRoot(string path)
     {
-        path = Path.GetFullPath(path.Trim());
+        // typed or pasted: Explorer's "Copy as path" wraps it in quotes, and %USERPROFILE% style paths are fine
+        path = Environment.ExpandEnvironmentVariables(path.Trim().Trim('"', '\'').Trim());
+        if (!Path.IsPathFullyQualified(path)) throw new Exception(@"Use the full path, starting with the drive, e.g. C:\Users\you\source\repos");
+        path = Path.GetFullPath(path).TrimEnd('\\', '/');
+        if (path.EndsWith(':')) path += '\\';
         // a network share could hand git a hostile .git/config: local folders only
         if (path.StartsWith(@"\\")) throw new Exception("Use a folder on this computer, not a network share.");
         if (!Directory.Exists(path)) throw new Exception($"Folder not found: {path}");
-        LoadRepos(path);
-        if (Repos.Count == 0) throw new Exception($"No git repositories found in {path}");
+        // one repository picked instead of the folder that holds them: use the folder above it
+        if (Directory.Exists(Path.Combine(path, ".git")) && FindRepos(path).Count == 0 && Path.GetDirectoryName(path) is { } up && FindRepos(up).Count > 0) path = up;
+        // checked before anything changes, so a wrong folder leaves the current one working
+        var found = FindRepos(path);
+        if (found.Count == 0) throw new Exception($"No git repositories in {path}. Choose the folder that contains your repository folders.");
+        ReposRoot = path; Repos = found; myEmails = null;
         RepoIndex.Warm(Repos);
         settings.ReposRoot = path;
         settings.Save();
@@ -211,14 +219,23 @@ class Ledger
 
     void LoadRepos(string root)
     {
-        var exclude = cfg["excludeRepos"]!.AsArray().Select(n => (string)n!).ToHashSet(StringComparer.OrdinalIgnoreCase);
         ReposRoot = root;
-        Repos = !Directory.Exists(root) ? [] : Directory.GetDirectories(root)
-            .Where(d => Directory.Exists(Path.Combine(d, ".git")) && !exclude.Contains(Path.GetFileName(d)))
-            .Where(d => !string.Equals(Path.GetFullPath(d).TrimEnd('\\'), AppDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
-            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        Repos = FindRepos(root);
         myEmails = null;
+    }
+
+    List<string> FindRepos(string root)
+    {
+        var exclude = cfg["excludeRepos"]!.AsArray().Select(n => (string)n!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            return !Directory.Exists(root) ? [] : Directory.GetDirectories(root)
+                .Where(d => Directory.Exists(Path.Combine(d, ".git")) && !exclude.Contains(Path.GetFileName(d)))
+                .Where(d => !string.Equals(Path.GetFullPath(d).TrimEnd('\\'), AppDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException) { return []; }   // a folder Windows won't let us list
     }
 
     // Only repositories the ledger knows are ever opened or read on request from the page.
@@ -1539,7 +1556,9 @@ static class LookupScan
             conn.Open();
             static string Q(string id) => "\"" + id.Replace("\"", "\"\"") + "\"";
             var catKey = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(cs)));
-            // every live table with a tag column: whether it has created_date / is_deleted, and where its display name lives
+            // every live table with a tag column: whether it has created_date / is_deleted, and where its display name lives.
+            // tag is never indexed, so tables over 64 MB (message logs, transactions: rows, not definitions) are left out;
+            // scanning them pushed the lookup past the command timeout
             var tables = catalogs.TryGetValue(catKey, out var cat) && DateTime.UtcNow < cat.Until ? cat.Tables : new List<(string S, string T, bool Created, bool Deleted, string? NameSql)>();
             if (tables.Count == 0)
             using (var cmd = new Npgsql.NpgsqlCommand("""
@@ -1554,6 +1573,7 @@ static class LookupScan
                          LIMIT 1)
                   FROM information_schema.columns c JOIN information_schema.tables t USING (table_schema, table_name)
                  WHERE c.column_name = 'tag' AND t.table_type = 'BASE TABLE'
+                   AND pg_relation_size(format('%I.%I', c.table_schema, c.table_name)::regclass) < 64 * 1024 * 1024
                 """, conn))
             using (var rd = cmd.ExecuteReader())
                 while (rd.Read())
@@ -1988,6 +2008,74 @@ static class QaPrep
 }
 
 // ───────────────────────────── opening repositories and files on this computer ─────────────────────────────
+
+// The Windows "Select folder" dialog, for the repositories folder. Built-in COM is off in a file-based app, so Windows
+// PowerShell shows it; its owner is the window in front (the browser that asked), so it opens on top of the page.
+static class FolderPicker
+{
+    static readonly SemaphoreSlim one = new(1, 1);
+
+    const string Script = """
+        $ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'
+        Add-Type -TypeDefinition @'
+        using System; using System.Runtime.InteropServices;
+        public static class GlPick {
+          [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")] class FileOpenDialog { }
+          [ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+          interface IFileDialog {
+            [PreserveSig] int Show(IntPtr owner);
+            void SetFileTypes(uint n, IntPtr specs); void SetFileTypeIndex(uint i); void GetFileTypeIndex(out uint i);
+            void Advise(IntPtr e, out uint c); void Unadvise(uint c);
+            void SetOptions(uint o); void GetOptions(out uint o);
+            void SetDefaultFolder(IShellItem i); void SetFolder(IShellItem i); void GetFolder(out IShellItem i); void GetCurrentSelection(out IShellItem i);
+            void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string n); void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string n);
+            void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string t); void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string t);
+            void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string t); void GetResult(out IShellItem i);
+          }
+          [ComImport, Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+          interface IShellItem {
+            void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv); void GetParent(out IShellItem i);
+            void GetDisplayName(uint sigdn, [MarshalAs(UnmanagedType.LPWStr)] out string name);
+          }
+          [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+          static extern void SHCreateItemFromParsingName(string path, IntPtr pbc, [MarshalAs(UnmanagedType.LPStruct)] Guid riid, out IShellItem item);
+          [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+          public static string Pick(string start, string title) {
+            var d = (IFileDialog)new FileOpenDialog();
+            d.SetOptions(0x20 | 0x40 | 0x800 | 0x8);   // pick folders, file system only, must exist, keep the current directory
+            d.SetTitle(title); d.SetOkButtonLabel("Use this folder");
+            if (!String.IsNullOrEmpty(start)) { try { IShellItem s; SHCreateItemFromParsingName(start, IntPtr.Zero, typeof(IShellItem).GUID, out s); d.SetFolder(s); } catch { } }
+            if (d.Show(GetForegroundWindow()) != 0) return "";   // cancelled
+            IShellItem r; d.GetResult(out r); string p; r.GetDisplayName(0x80058000, out p); return p;
+          }
+        }
+        '@
+        [Console]::OutputEncoding = [Text.Encoding]::UTF8
+        [Console]::Out.Write([GlPick]::Pick($env:GL_PICK_START, $env:GL_PICK_TITLE))
+        """;
+
+    // the chosen folder, or null when the dialog was closed without choosing
+    public static async Task<string?> Pick(string? start, string title)
+    {
+        if (!await one.WaitAsync(0)) throw new Exception("The folder dialog is already open. Look for it behind this window.");
+        try
+        {
+            var ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe");
+            // encoded, not piped: "-Command -" runs stdin line by line and breaks the here-string
+            var psi = new ProcessStartInfo(ps, ["-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(Script))])
+            { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true, StandardOutputEncoding = Encoding.UTF8 };
+            psi.Environment["GL_PICK_START"] = start is not null && Directory.Exists(start) ? start : "";
+            psi.Environment["GL_PICK_TITLE"] = title;
+            using var p = Process.Start(psi)!;
+            var outTask = p.StandardOutput.ReadToEndAsync(); _ = p.StandardError.ReadToEndAsync();   // stderr is PowerShell's CLIXML noise
+            await p.WaitForExitAsync();
+            var chosen = (await outTask).Trim();
+            if (p.ExitCode != 0 && chosen == "") throw new Exception("Couldn't open the folder dialog. Type or paste the path instead.");
+            return chosen == "" ? null : chosen;
+        }
+        finally { one.Release(); }
+    }
+}
 
 static class LocalApps
 {
@@ -3591,6 +3679,15 @@ static class UiServer
                     var body = await ReadJson(req);
                     if ((string?)body["reposRoot"] is { Length: > 0 } root) ledger.SetReposRoot(root);
                     await Send(res, 200, new JsonObject { ["reposRoot"] = ledger.ReposRoot, ["repoCount"] = ledger.Repos.Count });
+                    return;
+                }
+
+                case ("POST", "/api/pick-folder"):
+                {
+                    if (!Trusted(req)) { await Send(res, 403, Err("Forbidden")); return; }
+                    var start = Directory.Exists(ledger.ReposRoot) ? ledger.ReposRoot : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    var chosen = await FolderPicker.Pick(start, "Choose the folder that contains your repositories");
+                    await Send(res, 200, new JsonObject { ["path"] = chosen });
                     return;
                 }
 
