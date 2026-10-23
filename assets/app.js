@@ -29,7 +29,7 @@ const STEPS = [
   { id: "config", name: "Config",   means: "New settings are added to the QA configuration, which lives outside git." },
   { id: "qa",     name: "Handover", means: "The ticket is moved in Jira and the checklist is posted for the tester." },
 ];
-const WORD = { done: "Done", todo: "Needs you", check: "To confirm", wait: "Waiting", skip: "Not needed", none: "Not checked" };
+const WORD = { done: "Done", todo: "To do", check: "To check", wait: "Waiting", skip: "Not needed", none: "Not checked" };
 
 function mark(s, label = true) {
   const a = label ? `role="img" aria-label="${WORD[s] || s}"` : `aria-hidden="true"`;
@@ -261,9 +261,18 @@ function wireGitlab(msg) {
   });
 }
 
+// tickets moved to a Done status from here. Jira's search lags a transition by a few seconds,
+// so these are dropped from the list until a reload stops returning them on its own.
+const closedKeys = new Set();
+
 async function loadTickets() {
   $("#list").innerHTML = Array(8).fill(`<div class="ghost-row"></div>`).join("");
-  try { tickets = await api("/api/my-tickets"); } catch (e) { tickets = []; fail(esc(e.message)); }
+  try {
+    const all = await api("/api/my-tickets");
+    const back = new Set(all.map(t => t.key));
+    closedKeys.forEach(k => { if (!back.has(k)) closedKeys.delete(k); });
+    tickets = all.filter(t => !closedKeys.has(t.key));
+  } catch (e) { tickets = []; fail(esc(e.message)); }
   renderList();
 }
 
@@ -442,7 +451,7 @@ async function load(key, fetchFirst, inPlace = false, retrying = false) {
         const s = ev.station, row = $(`#ldSteps [data-id="${s.id}"]`);
         if (row) {
           const k2 = STEPS.findIndex(x => x.id === s.id);
-          row.innerHTML = `<div class="stp-h">${mark(s.state)}<span class="nm">${STEPS[k2].name}</span><span class="hl">${esc(s.headline)}</span><span class="ct ${s.state === "todo" ? "need" : ""}">${WORD[s.state]}</span><span></span></div>`;
+          row.innerHTML = `<div class="stp-h">${mark(s.state)}<span class="nm">${STEPS[k2].name}</span><span class="hl">${esc(s.headline)}</span><span class="ct ${s.state}">${WORD[s.state]}</span><span></span></div>`;
           soften(row);
           progress("Working out what QA needs", .85 + (k2 + 1) / STEPS.length * .15);
         }
@@ -476,7 +485,7 @@ async function load(key, fetchFirst, inPlace = false, retrying = false) {
 function back() {
   const toReviews = section === "reviews";
   history.pushState(null, "", toReviews ? "#reviews" : "#tickets");
-  selected = null; report = null; reviewing = null; reviewerMode = false; diffState = null;
+  selected = null; report = null; reviewing = null; reviewerMode = false; diffState = null; filesState = null; setupState = null;
   $("#split").classList.remove("open"); renderList();
   toReviews ? reviewsBlank() : blank();
 }
@@ -498,21 +507,115 @@ function blank() {
   $("#s2")?.addEventListener("click", openSettings);
 }
 
-function renderTicket() {
-  const r = report, i = r.issue, me = status?.account;
+// git only sees a merge request once it is merged; GitLab knows the open ones, so they're laid over the code step
+// when the ticket's merge requests arrive: an open MR turns "merge this branch" from an action into a wait on review
+let ticketMrs = { key: null, list: null };
+// "approved" only when someone did approve: GitLab reports 0 approvals left on projects that need none, even with no review at all
+const approvers = m => { const r = (m.reviewers || []).filter(x => x.state === "approved").map(x => x.user?.name).filter(Boolean); return r.length ? r : m.approvals?.by || []; };
+const isApproved = m => approvers(m).length > 0 && !m.approvals?.left;
+function reviewSay(m) {
+  const who = approvers(m), left = m.approvals?.left || 0;
+  const pending = (m.reviewers || []).filter(x => x.state !== "approved").map(x => x.user?.name).filter(Boolean);
+  if (left) return `${pl(left, "approval")} still needed${who.length ? `, approved so far by ${who.join(", ")}` : ""}.`;
+  if (who.length) return `Approved by ${who.join(", ")}, waiting to be merged.`;
+  return pending.length ? `Waiting for ${pending.join(", ")} to review.` : "Open. No reviewer assigned and nobody has approved it yet.";
+}
+// the ticket's merge request from this branch into this target: an open one first, else one that's already merged
+const mrFor = (repo, branch, into) => {
+  if (ticketMrs.key !== report?.key) return null;
+  const hits = (ticketMrs.list || []).filter(m => (m.repo || "").toLowerCase() === (repo || "").toLowerCase()
+    && (m.source || "") === branch.replace(/^origin\//, "") && (m.target || "") === into);
+  return hits.find(m => m.state === "opened") || hits.find(m => m.state === "merged") || null;
+};
+
+// Each "Merge <branch> into <target>" item is one merge request. A service with a dev branch has two of them, dev first:
+// GitLab says whether each one is still to create, open (in review, approved, changes asked) or already merged.
+function applyOpenMrs(r) {
+  const s = r.stations.find(x => x.id === "code"); if (!s) return false;
+  s.items.forEach(codeInfo);   // read the server's titles before they're renamed below
+  let changed = false;
+  s.items.forEach(it => {
+    if (it.mr || (it.state !== "todo" && it.state !== "wait")) return;
+    const b = /^Merge (\S+) into (\S+)$/.exec(it.title || ""); if (!b) return;
+    const m = mrFor(it.repo, b[1], b[2]); if (!m) return;
+    const step = /^Step \d of \d[.,]/.exec(it.detail || "")?.[0].replace(/,$/, ".") || "";
+    it.mr = m; changed = true; it.actionUrl = m.url; it.actionLabel = `Open !${m.iid}`;
+    if (m.state === "merged") {
+      // merged on GitLab, but the local copy hasn't fetched it yet
+      it.state = "done"; it.title = `Merged ${b[1]} into ${b[2]}`;
+      it.detail = `${step} Merge request !${m.iid}. Fetch to bring it into your copy.`.trim();
+      return;
+    }
+    const asked = (m.reviewers || []).some(x => x.state === "requested_changes");
+    it.state = asked ? "todo" : "wait";
+    it.title = `Merge request !${m.iid} into ${b[2]}`;
+    it.detail = `${step} ${m.draft ? "Draft. " : ""}${asked ? "Changes requested." : reviewSay(m)}`.trim();
+  });
+  // a dev merge request that's merged unblocks step 2 of the same service and branch
+  s.items.forEach(it => {
+    const b = /^Merge (\S+) into (\S+)$/.exec(it.title || "");
+    if (!b || it.state !== "wait" || it.mr || !/^Step 2 of 2/.test(it.detail || "")) return;
+    const first = s.items.find(x => x !== it && x.repo === it.repo && x.state === "done" && /^Step 1 of 2/.test(x.detail || "") && x.title.startsWith(`Merged ${b[1]} into `));
+    if (first) { it.state = "todo"; it.detail = it.detail.replace(/^Step 2 of 2, after the \S+ merge request is merged\./, "Step 2 of 2."); changed = true; }
+  });
+  if (!changed) return false;
+  const n = f => s.items.filter(f).length;
+  const create = n(x => x.state === "todo" && !x.mr), asked = n(x => x.state === "todo" && x.mr);
+  const review = n(x => x.state === "wait" && x.mr), later = n(x => x.state === "wait" && !x.mr);
+  s.state = create + asked ? "todo" : review + later ? "wait" : "done";
+  s.headline = create + asked + review + later === 0 ? "Every merge request is merged"
+    : [create ? `${pl(create, "merge request")} to create` : "", asked ? `${asked} with changes requested` : "",
+       review ? `${review} in review` : "", later ? `${later} after an earlier step` : ""].filter(Boolean).join(" · ");
+  return true;
+}
+
+function progressHtml(r) {
   const st = r.stations.map(s => s.state), ov = overall(st), nothing = r.repos.length === 0;
   const todo = r.stations.reduce((n, s) => n + s.items.filter(x => x.state === "todo").length, 0);
   const confirm = r.stations.reduce((n, s) => n + s.items.filter(x => x.state === "check").length, 0);
   const at = st.findIndex(s => s === "todo" || s === "wait");
   const kids = r.scope.length - 1;
   const v = nothing ? ["none", "No trace in git yet", `Nothing in your repositories mentions ${esc(r.key)}${kids ? ` or your ${pl(kids, "sub-ticket")}` : ""}.`]
-    : ov === "todo" ? ["todo", `Stopped at ${STEPS[at].name.toLowerCase()}`, `${pl(todo, "thing needs", "things need")} doing before QA can test this${confirm ? `, and ${pl(confirm, "item")} to confirm` : ""}.`]
-    : ov === "wait" ? ["wait", `Waiting at ${STEPS[at].name.toLowerCase()}`, "An earlier step has to finish first."]
+    : ov === "todo" ? ["todo", `Stopped at ${STEPS[at].name.toLowerCase()}`, `${pl(todo, "thing needs", "things need")} doing before QA can test this${confirm ? `, and ${pl(confirm, "item")} to check` : ""}.`]
+    : ov === "wait" ? ["wait", `Waiting at ${STEPS[at].name.toLowerCase()}`, at === 0 ? "Merge requests are open and waiting for review." : "An earlier step has to finish first."]
     : ov === "done" ? ["done", "With QA", confirm ? `Handed over. ${pl(confirm, "item")} still worth a look.` : "Handed over, and every step is done."]
     : ["check", "Ready to hand over", `Nothing blocks QA. Confirm ${pl(confirm, "item")}, then post the handover.`];
+  const mood = nothing ? "empty" : ov === "todo" ? "warning" : ov === "wait" ? "thinking" : "success";
+  return {
+    state: `<div class="state ${ov === "done" || ov === "check" ? "ok" : ""}" id="tkState">
+      ${glim(mood)}
+      <div class="say">${mark(v[0])}${v[1]}</div>
+      <div class="sub">${v[2]}</div>
+      <div class="fresh">Checked ${esc(ago(r.generated))}<br>${r.fetched ? "with the latest from the server" : `from your local copies · <button id="fetchNow">fetch latest</button>`}</div>
+    </div>`,
+    // each step says its state in a word next to its colour; hovering gives the step's one-line summary
+    meter: `<div id="tkMeter"><div class="meter">${STEPS.map((s, k) => `<div class="${k === at ? "here" : ""} ${st[k]}" title="${esc(`${s.name}: ${r.stations[k]?.headline || WORD[st[k]] || ""}`)}"><i class="${st[k]}"></i>
+        <span class="mn">${mark(st[k], false)}${s.name}</span><span class="mw">${k === at ? "You are here · " : ""}${WORD[st[k]] || ""}</span></div>`).join("")}</div></div>`,
+    steps: `<section id="tkSteps">
+        <h3 class="h3">Steps to QA<span>${todo ? pl(todo, "action") : "No actions"}${confirm ? ` · ${confirm} to check` : ""}</span></h3>
+        <ol class="steps">${r.stations.map((s, k) => stepHtml(s, k)).join("")}</ol>
+      </section>`,
+  };
+}
+
+// the open merge requests just arrived: repaint the verdict, the meter and the steps in place
+function repaintProgress() {
+  const r = report; if (!r || !$("#tkSteps")) return;
+  const p = progressHtml(r);
+  $("#tkState")?.replaceWith(frag(p.state)); $("#tkMeter")?.replaceWith(frag(p.meter)); $("#tkSteps").replaceWith(frag(p.steps));
+  $("#fetchNow")?.addEventListener("click", () => load(r.key, true));
+  wireSteps();
+}
+const frag = html => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };
+
+function renderTicket() {
+  const r = report, i = r.issue, me = status?.account;
+  const nothing = r.repos.length === 0;
+  const kids = r.scope.length - 1;
+  applyOpenMrs(r);
+  const p = progressHtml(r);
 
   document.title = `${r.key} · greenlight`;
-  const mood = nothing ? "empty" : ov === "todo" ? "warning" : ov === "wait" ? "thinking" : "success";
   $("#main").innerHTML = `<div class="page">
     <button class="btn back" id="back">${icon("back")}My tickets</button>
     <div class="path">${r.ancestors.map(a => `<button class="ln" data-go="${esc(a.key)}">${esc(a.type)} <span class="mono">${esc(a.key)}</span></button><span class="sl">/</span>`).join("")}<a class="mono ln" href="${url(r.jiraUrl)}" target="_blank" rel="noopener" title="Open in Jira">${esc(r.key)}</a></div>
@@ -536,19 +639,11 @@ function renderTicket() {
     </div>
     ${me ? subControl(r) : ""}
 
-    ${nothing ? voidHtml(r, kids) : `<div class="state ${ov === "done" || ov === "check" ? "ok" : ""}">
-      ${glim(mood)}
-      <div class="say">${mark(v[0])}${v[1]}</div>
-      <div class="sub">${v[2]}</div>
-      <div class="fresh">Checked ${esc(ago(r.generated))}<br>${r.fetched ? "with the latest from the server" : `from your local copies · <button id="fetchNow">fetch latest</button>`}</div>
-    </div>`}
-    ${nothing ? "" : `<div class="meter" aria-hidden="true">${STEPS.map((s, k) => `<div class="${k === at ? "here" : ""}"><i class="${st[k]}"></i><span>${s.name}</span></div>`).join("")}</div>
+    ${nothing ? voidHtml(r, kids) : p.state}
+    ${nothing ? "" : `${p.meter}
 
     <div class="body">
-      <section>
-        <h3 class="h3">Steps to QA<span>${todo ? pl(todo, "action") : "No actions"}${confirm ? ` · ${confirm} to confirm` : ""}</span></h3>
-        <ol class="steps">${r.stations.map((s, k) => stepHtml(s, k)).join("")}</ol>
-      </section>
+      ${p.steps}
       <aside class="side">
         <div id="timeBox" class="timebox"></div>
         <div><h3 class="h3">Your footprint<span id="figsFor"></span></h3><div class="figs" id="figs"></div></div>
@@ -637,21 +732,181 @@ function voidHtml(r, kids) {
   </div>`;
 }
 
+/* one service's files for the ticket, on a page of their own (#MM-1/files/<repo>): opened from a step item about files,
+   or from "See all" on a Files group, which only shows its first FILES_PEEK */
+let filesState = null;   // { repo, scroll, query }
+const FILES_PEEK = 8;
+function showFiles(repo) {
+  filesState = { repo, scroll: $("#main").scrollTop, query: "" };
+  history.pushState(null, "", `#${report.key}/files/${encodeURIComponent(repo)}`);
+  renderFilesPage();
+}
+function leaveFiles() {
+  const y = filesState?.scroll || 0;
+  filesState = null;
+  history.pushState(null, "", `#${report.key}`);
+  renderTicket();
+  $("#main").scrollTop = y;
+}
+function renderFilesPage() {
+  const f = filesState; if (!f || !report) return;
+  // every commit of the ticket in that repository, whoever made it: this page is about the service, not the footprint filters
+  const x = report.repos.find(r => r.name.toLowerCase() === f.repo.toLowerCase());
+  const all = x ? evFiles(x) : [];
+  $("#main").innerHTML = `<div class="dpage fpage">
+    <div class="dp-h">
+      <button class="btn dp-back" id="fpBack">${icon("back")}${esc(report.key)}</button>
+      <div class="dp-t"><div class="dp-file">${repoTag(f.repo)}${x ? openBtns(x.name, null, x.sln) : ""}</div>
+        <div class="dp-sub ink-3">${pl(all.length, "file")} changed for ${esc(report.key)}</div></div>
+      ${all.length > 8 ? `<input class="filter" id="fpq" placeholder="Filter by path" aria-label="Filter files" value="${esc(f.query)}">` : ""}
+    </div>
+    <div class="dp-b"><ul class="files" id="fpList"></ul></div>
+  </div>`;
+  document.title = `${f.repo} files · ${report.key} · Greenlight`;
+  $("#fpBack").onclick = leaveFiles;
+  const draw = () => {
+    const q = f.query.toLowerCase(), list = all.filter(y => !q || y.p.toLowerCase().includes(q));
+    if (!list.length) { $("#fpList").innerHTML = `<li class="pane-empty"><b>${all.length ? `No files match “${esc(f.query)}”` : "No files in this repository for the ticket"}</b></li>`; return; }
+    paged($("#fpList"), list.map(y => fileRow(x, y)), 80);
+  };
+  $("#fpq")?.addEventListener("input", e => { f.query = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(draw, 120); });
+  draw();
+  $("#main").scrollTop = 0;
+}
+
 function stepHtml(s, k) {
   const open = s.id === openStep;
   const rank = ["todo", "wait", "check", "done", "skip"];
   const items = [...s.items].sort((a, b) => rank.indexOf(a.state) - rank.indexOf(b.state));
   const nTodo = s.items.filter(x => x.state === "todo").length, nCheck = s.items.filter(x => x.state === "check").length;
-  const ct = nTodo ? `<span class="ct need">${pl(nTodo, "action")}</span>` : nCheck ? `<span class="ct">${nCheck} to confirm</span>` : `<span class="ct">${WORD[s.state]}</span>`;
+  // a pill in the step's own colour: how many actions, how many to check, or the state in a word
+  const ct = nTodo ? `<span class="ct todo">${pl(nTodo, "action")}</span>` : nCheck ? `<span class="ct check">${nCheck} to check</span>` : `<span class="ct ${s.state}">${WORD[s.state]}</span>`;
   return `<li class="stp" data-open="${open}" data-id="${s.id}">
     <button class="stp-h" aria-expanded="${open}" aria-controls="sb-${s.id}">${mark(s.state)}<span class="nm">${STEPS[k].name}</span><span class="hl">${esc(s.headline)}</span>${ct}${icon("chev", "ico chev")}</button>
     <div class="stp-b" id="sb-${s.id}" ${open ? "" : "hidden"}>
       <p class="means">${esc(STEPS[k].means)}</p>
-      ${items.length ? `<ul class="its">${items.map(it => `<li class="it"><div class="lead"><span class="dot ${it.state}"></span>${it.repo ? `<span class="rp">${repoTag(it.repo)}</span>` : ""}<span class="tx">${esc(it.title)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ""}</div>
-        <div class="ia">${stepActions(s, it)}${it.actionUrl === "post:" ? `<button class="btn solid small" data-post>${icon("send")}${esc(it.actionLabel)}</button>`
-          : it.actionUrl ? `<a class="btn line small" href="${url(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")}${icon("out")}</a>` : ""}</div></li>`).join("")}</ul>`
+      ${items.length ? `<ul class="its">${s.id === "code" ? codeItemsHtml(s, items) : items.map(it => itemHtml(s, it)).join("")}</ul>`
         : `<p class="empty-step">${esc(s.headline)}.</p>`}
     </div></li>`;
+}
+
+const itemLink = it => it.actionUrl === "post:" ? `<button class="btn solid small" data-post>${icon("send")}${esc(it.actionLabel)}</button>`
+  : it.actionUrl ? `<a class="btn line small" href="${url(it.actionUrl)}" target="_blank" rel="noopener">${esc(it.actionLabel || "Open")}${icon("out")}</a>` : "";
+function itemHtml(s, it) {
+  return `<li class="it"><div class="lead"><span class="dot ${it.state}"></span>${it.repo ? `<span class="rp">${repoTag(it.repo)}</span>` : ""}<span class="tx">${esc(it.title)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ""}${s.id === "qa" ? openStepsHtml(it) : ""}</div>
+    <div class="ia">${it.files?.length ? `<button class="btn line small" data-showfiles="${esc(it.repo)}">${icon("list")}Show files</button>` : ""}${detailLinks(s, it)}${stepActions(s, it)}${itemLink(it)}</div></li>`;
+}
+
+/* where an item's details are: the file it's about (preview the change, open it), or its cards in the System Manager setup */
+function detailLinks(s, it) {
+  if (s.id === "qa") return handoverLinks(it);
+  const x = report?.repos.find(r => r.name === it.repo); if (!x) return "";
+  // a file named by its path in the detail ("Changed: …", pipelines, SQL grants), or by its name in the title ("3 new settings in appsettings.json")
+  const fs = evFiles(x), inTitle = / in (\S+\.\w+)$/.exec(it.title || "")?.[1];
+  const f = fs.find(y => y.p === it.detail) || (inTitle && fs.find(y => y.p.split("/").pop() === inTitle));
+  if (f) return `<button class="btn line small" data-preview="${esc(x.name)}" data-path="${esc(f.p)}" data-shas="${esc(f.shas.join(","))}">${icon("eye")}Preview change</button>${f.s === "D" ? "" : openBtns(x.name, f.p, x.sln)}`;
+  if (s.id !== "access") return "";
+  const st = report.setup || {};
+  if (/scope/.test(it.title) && (st.services || []).some(v => v.repo === it.repo))
+    return `<button class="btn line small" data-setup="${esc("smx:" + it.repo)}">${icon("list")}Show scopes</button>`;
+  const menus = (st.menus || []).filter(m => m.repo === it.repo);
+  if (/menu/.test(it.title) && menus.length)
+    return `<button class="btn line small" data-setup="${esc(menus.map(m => "smx:" + m.uri).join("|"))}">${icon("list")}Show ${menus.length === 1 ? "menu" : "menus"}</button>`;
+  return "";
+}
+
+/* handover items do the handover: log time, move the ticket in Jira, jump to the steps still open */
+function handoverLinks(it) {
+  const t = it.title || "", jira = status?.account;
+  if (/^Jira isn't connected/.test(t)) return `<button class="btn line small" data-connect>Connect Jira</button>`;
+  if (!jira) return "";
+  const move = `<button class="btn line small" data-movejira>${icon("send")}Move in Jira…</button>`;
+  if (/logged by you$|^No time logged/.test(t)) return `<button class="btn ${it.state === "done" ? "line" : "primary"} small" data-logtime>${icon("checkall")}Log time</button>`;
+  return /still open$|can't have it yet$|^Move the ticket|^Jira status is/.test(t) ? move : "";
+}
+// the steps still blocking the handover, named on the item; each one opens that step
+function openStepsHtml(it) {
+  if (!/still open$|can't have it yet$/.test(it.title || "")) return "";
+  const open = (report?.stations || []).map((s, k) => ({ s, k })).filter(({ s }) => s.id !== "qa" && (s.state === "todo" || s.state === "wait"));
+  return open.length ? `<span class="opn">${open.map(({ s, k }) => `<button class="opn-s ${s.state}" data-openstep="${esc(s.id)}" title="${esc(s.headline)}">${mark(s.state, false)}${STEPS[k].name}<span>· ${WORD[s.state]}</span></button>`).join("")}</span>` : "";
+}
+function goToStep(id) {
+  const li = $(`.stp[data-id="${CSS.escape(id)}"]`); if (!li) return;
+  if (li.dataset.open !== "true") li.querySelector(".stp-h").click();
+  li.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
+}
+
+/* the System Manager setup on a page of its own (#MM-1/setup), with the cards an Access item is about already open */
+let setupState = null;   // { scroll }
+function showSetup(ids) {
+  ids.filter(Boolean).forEach(id => { groupOpen[id] = true; });
+  setupState = { scroll: $("#main").scrollTop };
+  history.pushState(null, "", `#${report.key}/setup`);
+  renderSetupPage();
+}
+function leaveSetup() {
+  const y = setupState?.scroll || 0;
+  setupState = null;
+  history.pushState(null, "", `#${report.key}`);
+  renderTicket();
+  $("#main").scrollTop = y;
+}
+function renderSetupPage() {
+  if (!report) return;
+  const body = setupHtml(report, true);
+  $("#main").innerHTML = `<div class="dpage fpage">
+    <div class="dp-h">
+      <button class="btn dp-back" id="suBack">${icon("back")}${esc(report.key)}</button>
+      <div class="dp-t"><div class="dp-file"><b>Access on QA</b></div><div class="dp-sub ink-3">Scopes, menus and data testers need to reach the feature</div></div>
+    </div>
+    <div class="dp-b su-b">${body || `<div class="pane-empty"><b>Nothing to set up</b><span>This ticket adds no scopes, menus or data.</span></div>`}</div>
+  </div>`;
+  document.title = `Setup · ${report.key} · Greenlight`;
+  $("#suBack").onclick = leaveSetup;
+  syncSmx();
+  $("#main").scrollTop = 0;
+}
+
+/* code items are merge requests. The server names them "Merge <branch> into <target>" (or "Merged …", "Push and merge …"),
+   with "Step n of m." in front of the detail when a service merges into dev first; read once, before GitLab renames them */
+function codeInfo(it) {
+  if (it._c !== undefined) return it._c;
+  const t = it.title || "";
+  const m = /^Merged? (\S+) into (\S+)$/.exec(t), p = /^Push and merge (\S+)$/.exec(t);
+  const c = m ? { branch: m[1], into: m[2] } : p ? { branch: p[1], into: null, local: true } : null;
+  if (c) { const st = /^Step (\d) of (\d)/.exec(it.detail || ""); c.step = st ? +st[1] : 0; c.of = st ? +st[2] : 1; }
+  return it._c = c;
+}
+
+// one card per service and branch, one row per merge request: where it goes, where it stands, what to do
+function codeItemsHtml(s, items) {
+  const cards = new Map(), rest = [];
+  items.forEach(it => { const c = codeInfo(it); if (!c) return rest.push(it); const k = `${it.repo}|${c.branch}`; if (!cards.has(k)) cards.set(k, []); cards.get(k).push(it); });
+  const rank = ["todo", "wait", "check", "done", "skip"];
+  const worst = list => list.map(x => x.state).sort((a, b) => rank.indexOf(a) - rank.indexOf(b))[0];
+  const status = it => {
+    const c = codeInfo(it), m = it.mr;
+    const text = (it.detail || "").replace(/^Step \d of \d[.,]\s*/, "");
+    const say = text ? text[0].toUpperCase() + text.slice(1) : "";
+    if (it.state === "done") return ["done", "Merged", say];
+    if (m && it.state === "todo") return ["todo", "Changes requested", `!${m.iid} · ${say}`];
+    if (m) return ["wait", m.draft ? "Draft" : isApproved(m) ? "Approved" : m.approvals?.left || (m.reviewers || []).length ? "In review" : "Open", `!${m.iid} · ${say}`];
+    if (it.state === "wait") return ["wait", "Not yet", say];
+    return ["todo", c.local ? "Not pushed" : "To create", say];
+  };
+  const row = it => {
+    const c = codeInfo(it), [st, word, say] = status(it);
+    return `<li class="ms">
+      ${c.of > 1 ? `<span class="ms-n ${st}">${c.step}</span>` : `<span class="ms-n ${st}">${mark(st, false)}</span>`}
+      <div class="ms-t"><div class="ms-into">${c.into ? `Into <code>${esc(c.into)}</code>` : "Push the branch"}<span class="ms-w ${st}">${esc(word)}</span></div>${say ? `<div class="ms-s">${esc(say)}</div>` : ""}</div>
+      <div class="ms-a">${stepActions(s, it)}${itemLink(it)}</div></li>`;
+  };
+  return [...cards.values()].map(list => {
+    list.sort((a, b) => (codeInfo(a).step || 0) - (codeInfo(b).step || 0));
+    const c = codeInfo(list[0]);
+    return `<li class="it mrg"><div class="mrg-h"><span class="dot ${worst(list)}"></span>${repoTag(list[0].repo)}<code class="mrg-br" title="${esc(c.branch)}">${esc(c.branch)}</code></div>
+      <ol class="mss">${list.map(row).join("")}</ol></li>`;
+  }).join("") + rest.map(it => itemHtml(s, it)).join("");
 }
 
 /* ── evidence: what *you* changed for the chosen ticket, by repository ── */
@@ -710,7 +965,12 @@ function renderEvidence() {
   const all = evScoped(), shown = evShown();
   const files = shown.reduce((n, x) => n + evFiles(x).length, 0), commits = shown.reduce((n, x) => n + x.commits.length, 0);
   // footprint follows the ticket and author filters
-  const mrs = all.reduce((n, x) => n + x.merges.filter(m => keyHit(m.branch)).length, 0);
+  // merged ones come from git; open ones only GitLab knows, so they're added once the ticket's merge requests arrive
+  const merged = all.flatMap(x => x.merges.filter(m => keyHit(m.branch)).map(m => `${x.name}|${m.label}`.toLowerCase()));
+  const names = new Set(all.map(x => x.name.toLowerCase()));
+  const live = ticketMrs.key === report.key ? (ticketMrs.list || []).filter(m => m.state !== "closed" && names.has((m.repo || "").toLowerCase()) && keyHit(m.source || m.title))
+    .map(m => `${m.repo}|!${m.iid}`.toLowerCase()) : [];
+  const mrs = new Set([...merged, ...live]).size;
   const cAll = all.flatMap(x => x.commits);
   $("#figsFor").textContent = evTicket === "*" ? "all your tickets here" : evTicket;
   $("#figs").innerHTML = `
@@ -732,10 +992,11 @@ const openBtns = (repo, path, sln) => `<span class="acts-i">
   ${path || sln ? `<button class="btn only small" data-open="vs" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Open in Visual Studio${sln && !path ? ` (${esc(sln)})` : ""}" aria-label="Open in Visual Studio">${icon("vs")}</button>` : `<span class="slot" aria-hidden="true"></span>`}
   <button class="btn only small" data-open="folder" data-repo="${esc(repo)}" ${path ? `data-path="${esc(path)}"` : ""} title="Show in folder" aria-label="Show in folder">${icon("folder")}</button></span>`;
 
-function groupHtml(x, count, body, id) {
-  const open = groupOpen[id] !== false;
+function groupHtml(x, count, body, id, tools = "") {
+  // collapsed until opened, like the setup cards
+  const open = groupOpen[id] === true;
   return `<section class="gbox" data-open="${open}" data-gid="${esc(id)}">
-    <div class="gbox-h"><button class="gtoggle" aria-expanded="${open}">${icon("chev", "ico chev")}${repoTag(x.name)}<span class="ink-3">${count}</span></button>${openBtns(x.name, null, x.sln)}</div>
+    <div class="gbox-h"><button class="gtoggle" aria-expanded="${open}">${icon("chev", "ico chev")}${repoTag(x.name)}<span class="ink-3">${count}</span></button>${tools}${openBtns(x.name, null, x.sln)}</div>
     <div class="gbox-b" ${open ? "" : "hidden"}>${body}</div></section>`;
 }
 
@@ -783,8 +1044,14 @@ function renderPane() {
       const many = groups.length > 1;
       $("#xAll").hidden = !many;
       if (!groups.length) { $("#fl").innerHTML = `<div class="pane-empty"><b>No files match “${esc(fileQuery)}”</b></div>`; return; }
-      $("#fl").innerHTML = groups.map(g => many ? groupHtml(g.x, pl(g.fs.length, "file"), `<ul class="files" data-fill="${esc(g.x.name)}"></ul>`, "f:" + g.x.name) : `<ul class="files" data-fill="${esc(g.x.name)}"></ul>`).join("");
-      groups.forEach(g => paged($(`#fl ul[data-fill="${CSS.escape(g.x.name)}"]`), g.fs.map(f => fileRow(g.x, f)), 60));
+      // a group shows its first few files; the rest are on the repository's own files page. A path filter shows every match.
+      const cut = g => !q && g.fs.length > FILES_PEEK;
+      const seeAll = g => `<button class="btn line small see-all" data-showfiles="${esc(g.x.name)}">See all ${g.fs.length}</button>`;
+      // under the cut list, a row that says how many more there are; it opens the same page as "See all"
+      const more = g => cut(g) ? `<button class="more-files" data-showfiles="${esc(g.x.name)}">${icon("more")}<span>${g.fs.length - FILES_PEEK} more ${g.fs.length - FILES_PEEK === 1 ? "file" : "files"}</span><span class="ink-3">· See all ${g.fs.length}</span></button>` : "";
+      $("#fl").innerHTML = groups.map(g => many ? groupHtml(g.x, pl(g.fs.length, "file"), `<ul class="files" data-fill="${esc(g.x.name)}"></ul>${more(g)}`, "f:" + g.x.name, cut(g) ? seeAll(g) : "")
+        : `<ul class="files" data-fill="${esc(g.x.name)}"></ul>${more(g)}`).join("");
+      groups.forEach(g => paged($(`#fl ul[data-fill="${CSS.escape(g.x.name)}"]`), (cut(g) ? g.fs.slice(0, FILES_PEEK) : g.fs).map(f => fileRow(g.x, f)), 60));
       syncAll();
     };
     $("#ff").oninput = e => { fileQuery = e.target.value; clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); soften($("#fl")); }, 120); };
@@ -829,13 +1096,49 @@ function toggleGroup(g, open = g.dataset.open !== "true") {
 }
 
 // one listener for everything clickable in the main area, so rows added later by paging work too
+// a <details class="smooth"> glides open and shut like the steps do, instead of the browser's instant jump
+function toggleSmooth(d) {
+  const body = d.querySelector(":scope > summary + *");
+  if (!body || calm()) { d.open = !d.open; return; }
+  body.getAnimations().forEach(a => a.cancel());
+  // tall bodies (a long review) get a little longer, so they don't fly open
+  const ms = base => base + Math.min(260, body.scrollHeight / 12);
+  if (!d.open) {
+    d.open = true;
+    body.animate([{ height: "0px", opacity: 0 }, { height: body.scrollHeight + "px", opacity: 1 }], { duration: ms(380), easing: "cubic-bezier(.33, .8, .25, 1)" });
+  } else {
+    d.classList.add("closing");
+    const a = body.animate([{ height: body.scrollHeight + "px", opacity: 1 }, { height: "0px", opacity: 0 }], { duration: ms(320), easing: "cubic-bezier(.45, 0, .3, 1)" });
+    a.onfinish = () => { d.open = false; d.classList.remove("closing"); };
+    a.oncancel = () => d.classList.remove("closing");
+  }
+}
+
 function mainClicks(e) {
   const t = e.target;
+  const sm = t.closest("details.smooth > summary");
+  if (sm) { e.preventDefault(); toggleSmooth(sm.parentElement); return; }
+  const sh = t.closest("#smx .smx-h");
+  if (sh && !t.closest("input, label, [data-copy], [data-copy-all]")) { toggleGroup(sh.closest(".gbox")); syncSmx(); return; }
+  const sf = t.closest("[data-showfiles]");
+  if (sf) { showFiles(sf.dataset.showfiles); return; }
+  const su = t.closest("[data-setup]");
+  if (su) { showSetup(su.dataset.setup.split("|")); return; }
+  if (t.closest("[data-logtime]")) { logDialog(report.key); return; }
+  if (t.closest("[data-movejira]")) { moveDialog(report.key); return; }
+  const os = t.closest("[data-openstep]");
+  if (os) { goToStep(os.dataset.openstep); return; }
+  if (t.closest("[data-connect]")) { openSettings(); return; }
   const tog = t.closest(".gtoggle");
-  if (tog) { toggleGroup(tog.closest(".gbox")); syncAll(); return; }
+  if (tog) { toggleGroup(tog.closest(".gbox")); syncAll(); syncSmx(); return; }
+  if (t.closest("#smxAll")) {
+    const open = $("#smxAll").textContent === "Expand all";
+    $$("#smx .gbox").forEach(g => { if ((g.dataset.open === "true") !== open) toggleGroup(g, open); });
+    syncSmx(); return;
+  }
   // only the open buttons: steps and groups also carry data-open (their expanded state), which must not count
   const op = t.closest("button[data-open][data-repo]");
-  if (op && !op.closest("#pop") && !op.closest(".dpage")) { openLocal(op.dataset.repo, op.dataset.open, op.dataset.path); return; }
+  if (op && !op.closest("#pop") && !op.closest(".dpage:not(.fpage)")) { openLocal(op.dataset.repo, op.dataset.open, op.dataset.path); return; }
   const pv = t.closest("[data-preview]");
   if (pv) { preview(pv.dataset.preview, pv.dataset.path, pv.dataset.shas.split(",")); return; }
   const ol = t.closest("[data-open-line]");
@@ -885,14 +1188,16 @@ async function openLocal(repo, app, path, line) {
 let diffState = null;   // { repo, path, shas, data, mode }
 
 function preview(repo, path, shas) {
-  diffState = { repo, path, shas, data: null, mode: "net", scroll: $("#main").scrollTop };
+  // from a service's files page, Back returns there instead of to the ticket
+  diffState = { repo, path, shas, data: null, mode: "net", scroll: $("#main").scrollTop, from: filesState };
   history.pushState(null, "", `#${report.key}/diff`);
   renderDiffPage();
 }
 
 function leaveDiff() {
-  const y = diffState?.scroll || 0;
+  const y = diffState?.scroll || 0, from = diffState?.from;
   diffState = null;
+  if (from) { filesState = from; history.pushState(null, "", `#${report.key}/files/${encodeURIComponent(from.repo)}`); renderFilesPage(); $("#main").scrollTop = y; return; }
   history.pushState(null, "", `#${report.key}`);
   renderTicket();
   $("#main").scrollTop = y;
@@ -903,7 +1208,7 @@ async function renderDiffPage() {
   const name = d.path.split("/").pop(), dir = d.path.slice(0, d.path.length - name.length);
   $("#main").innerHTML = `<div class="dpage">
     <div class="dp-h">
-      <button class="btn" id="dpBack">${icon("back")}${esc(report.key)}</button>
+      <button class="btn dp-back" id="dpBack">${icon("back")}${esc(report.key)}</button>
       <div class="dp-t"><div class="dp-file">${repoTag(d.repo)}<span class="mono"><span class="ink-3">${esc(dir)}</span>${esc(name)}</span><button class="btn only small cp" data-copy="${esc(d.path)}" title="Copy the path" aria-label="Copy the path">${icon("copy")}</button></div>
         <div class="dp-sub ink-3">${pl(d.shas.length, "commit")} of yours changed this file</div></div>
       <div class="seg" role="radiogroup" aria-label="View">
@@ -989,7 +1294,8 @@ function wireTicket() {
     const want = b.dataset.kids === "1";
     if (want === includeKids) return;
     includeKids = want;
-    $$(".seg [data-kids]").forEach(x => x.setAttribute("aria-checked", x === b));
+    // one spinner, on the choice being loaded: switching again while it loads moves it instead of adding another
+    $$(".seg [data-kids]").forEach(x => { x.setAttribute("aria-checked", x === b); x.querySelectorAll(".spinner").forEach(sp => sp.remove()); });
     b.insertAdjacentHTML("afterbegin", `<span class="spinner"></span>`);
     load(r.key, false, true);
   });
@@ -1002,9 +1308,14 @@ function wireTicket() {
   $("#post").onclick = post; $$("[data-post]").forEach(b => b.onclick = post);
   wirePop($("#more"), $("#pop"));
   $("#moveJira")?.addEventListener("click", () => moveDialog(r.key));
-  $$("[data-mkmr]").forEach(b => b.onclick = () => createMr(b.dataset.repo, b.dataset.mkmr));
-  $$("[data-mktag]").forEach(b => b.onclick = () => createTag(b.dataset.repo, b.dataset.mktag));
   $("#copy").onclick = async () => { try { await navigator.clipboard.writeText(await api(`/api/markdown?key=${encodeURIComponent(r.key)}`)); toast("Checklist copied."); } catch (e) { fail(`Couldn't copy: ${esc(e.message)}`); } };
+  wireSteps();
+}
+
+// the steps list is repainted on its own when the open merge requests arrive, so its wiring stands alone
+function wireSteps() {
+  $$("#tkSteps [data-post]").forEach(b => b.onclick = post);
+  $$("[data-mktag]").forEach(b => b.onclick = () => createTag(b.dataset.repo, b.dataset.mktag));
   $$(".stp-h").forEach(h => h.onclick = () => {
     const s = h.closest(".stp"), open = s.dataset.open !== "true";
     s.dataset.open = open; h.setAttribute("aria-expanded", open); slide(s.querySelector(".stp-b"), open); if (open) openStep = s.dataset.id;
@@ -1155,23 +1466,39 @@ async function loadTicketReviews(key) {
   try {
     const list = await api(`/api/ticket-reviews?key=${encodeURIComponent(key)}`);
     if (report?.key !== key || !$("#crv")) return;
+    ticketMrs = { key, list };
+    if (applyOpenMrs(report)) repaintProgress();
+    if ($("#figs")) renderEvidence();
     const open = list.reduce((n, m) => n + m.discussions.filter(d => d.resolvable && !d.resolved).length, 0);
+    // filter by GitLab state; the counts show what each filter holds, and states with none aren't offered
+    const F = [["all", "All", () => true], ["opened", "Open", m => m.state === "opened"], ["merged", "Merged", m => m.state === "merged"], ["closed", "Closed", m => m.state === "closed"]]
+      .map(([id, l, f]) => [id, l, f, list.filter(f).length]).filter(([id, , , c]) => id === "all" || c);
+    if (!F.some(([id]) => id === crvFilter)) crvFilter = "all";
     box.innerHTML = `<h3 class="h3">Code review<span>${list.length ? `${pl(list.length, "merge request")}${open ? ` · ${pl(open, "open comment")}` : ""}` : "no merge requests found"}</span></h3>
+      ${F.length > 2 ? `<div class="tabs crv-f" role="tablist" aria-label="Merge request status">${F.map(([id, l, , c]) => `<button role="tab" aria-selected="${crvFilter === id}" data-crvf="${id}">${l}<span class="c">${c}</span></button>`).join("")}</div>` : ""}
       <div id="crvList"></div>`;
     if (!list.length) { $("#crvList").innerHTML = `<div class="pane-empty"><b>No merge requests yet</b><span>Reviews and comments on this ticket's merge requests will show up here.</span></div>`; return; }
-    paged($("#crvList"), list.map(m => {
-      const st = m.state === "merged" ? "done" : m.state === "closed" ? "skip" : m.reviewers.some(r => r.state === "requested_changes") ? "todo" : m.approvals && !m.approvals.left ? "done" : "wait";
+    const draw = () => paged($("#crvList"), list.filter(F.find(([id]) => id === crvFilter)[2]).map(m => {
+      const st = m.state === "merged" ? "done" : m.state === "closed" ? "skip" : m.reviewers.some(r => r.state === "requested_changes") ? "todo" : isApproved(m) ? "done" : "wait";
       return `<article class="mrc">
         <header>${mark(st, false)}${repoTag(m.repo)}<a class="mono ln" href="${url(m.url)}" target="_blank" rel="noopener">!${m.iid}</a><span class="t">${esc(m.title)}</span><span class="ink-3">${esc(m.state)}</span></header>
         <div class="rvs">${m.reviewers.map(r => { const s = RS[r.state] || ["wait", esc(r.state)]; return `<span class="rv ${s[0]}">${mark(s[0], false)}${esc(r.user.name)}<span class="ink-3"> · ${s[1]}</span></span>`; }).join("") || `<span class="ink-3">No reviewers assigned</span>`}
-          ${m.approvals ? `<span class="ink-3">${m.approvals.left ? `${pl(m.approvals.left, "approval")} still needed` : "Approvals complete"}</span>` : ""}</div>
-        ${m.discussions.length ? `<details class="talks"><summary>${pl(m.discussions.length, "discussion")}${m.discussions.some(d => d.resolvable && !d.resolved) ? ` · <span class="open-n">${m.discussions.filter(d => d.resolvable && !d.resolved).length} open</span>` : ""}</summary>
-          ${m.discussions.map(d => discussionHtml(d, m.repo, !!report.repos.find(x => x.name === m.repo))).join("")}</details>` : ""}
+          ${m.approvals && m.state === "opened" ? `<span class="ink-3">${m.approvals.left ? `${pl(m.approvals.left, "approval")} still needed` : isApproved(m) ? "Approved" : "Nobody has approved it yet"}</span>` : ""}</div>
+        ${m.discussions.length ? `<details class="talks smooth"><summary>${icon("chev", "ico chev")}${pl(m.discussions.length, "discussion")}${m.discussions.some(d => d.resolvable && !d.resolved) ? ` · <span class="open-n">${m.discussions.filter(d => d.resolvable && !d.resolved).length} open</span>` : ""}</summary>
+          <div class="sm-b">${m.discussions.map(d => discussionHtml(d, m.repo, !!report.repos.find(x => x.name === m.repo))).join("")}</div></details>` : ""}
       </article>`;
     }), 10);
+    draw();
+    $$("#crv [data-crvf]").forEach(b => b.onclick = () => {
+      crvFilter = b.dataset.crvf;
+      $$("#crv [data-crvf]").forEach(x => x.setAttribute("aria-selected", x === b));
+      draw(); soften($("#crvList"));
+    });
     soften(box);
   } catch (e) { box.innerHTML = `<h3 class="h3">Code review</h3><p class="ink-3" style="margin:0">${esc(e.message)}</p>`; }
 }
+// open merge requests first; a ticket with none falls back to All
+let crvFilter = "opened";
 
 /* ── code review (GitLab) ── */
 let railMode = "mine", reviews = null, reviewing = null, reviewView = "all";
@@ -1224,7 +1551,7 @@ async function loadReview(project, iid, retrying = false) {
   const settle = ms => new Promise(ok => setTimeout(ok, Math.max(0, ms - (Date.now() - started))));
   if (retrying) { const b = $("#retry"); if (b) { b.disabled = true; b.innerHTML = `<span class="spinner"></span>Trying again`; } }
   reviewing = { project, iid };
-  selected = null; report = null; diffState = null;
+  selected = null; report = null; diffState = null; filesState = null; setupState = null;
   $("#split").classList.add("open");
   $$("#list .row").forEach(b => b.setAttribute("aria-selected", b.dataset.project === project && +b.dataset.iid === iid));
   const known = reviews?.find(r => r.project === project && r.iid === iid);
@@ -1356,7 +1683,7 @@ function discussionHtml(d, repo, local) {
   const where = first.path ? `<span class="where">${local ? `<button class="mono ln" data-open-line="${esc(first.path)}" data-line="${first.newLine || first.oldLine || 1}" data-repo="${esc(repo)}" title="Open in VS Code at this line">${esc(first.path.split("/").pop())}:${first.newLine || first.oldLine || ""}</button>` : `<span class="mono">${esc(first.path)}:${first.newLine || first.oldLine || ""}</span>`}</span>` : "";
   return `<article class="talk ${d.resolvable ? (d.resolved ? "resolved" : "open") : ""}">
     <header>${where}${d.resolvable ? `<span class="rstate">${d.resolved ? "Resolved" : "Open"}</span>` : ""}</header>
-    ${d.notes.map(n => `<div class="note"><div class="who"><b>${esc(n.author?.name || "")}</b><span class="ink-3">${esc(ago((n.created || "").replace("T", " ").slice(0, 16)) || "")}</span></div><div class="body">${esc(n.body || "").replace(/\n/g, "<br>")}</div></div>`).join("")}
+    ${d.notes.map(n => `<div class="note"><div class="by"><b>${esc(n.author?.name || "")}</b><span class="ink-3">${esc(ago((n.created || "").replace("T", " ").slice(0, 16)) || "")}</span>${n.body ? copyBtn(n.body, "Copy the comment") : ""}</div><div class="body">${esc(n.body || "").replace(/\n/g, "<br>")}</div></div>`).join("")}
   </article>`;
 }
 
@@ -1538,18 +1865,21 @@ function setSection(s) {
 }
 
 /* ─────────────────────────── routing ───────────────────────────
-   #tickets (home) · #MM-1 · #MM-1/diff · #reviews · #review/<project>/<iid> · #worklogs[/<monday>] */
+   #tickets (home) · #MM-1 · #MM-1/diff · #MM-1/files/<repo> · #MM-1/setup · #reviews · #review/<project>/<iid> · #worklogs[/<monday>] */
 function route() {
   const raw = decodeURIComponent(location.hash.slice(1)), low = raw.toLowerCase();
   if (raw.startsWith("review/")) { setSection("reviews"); if (!status?.gitlab) return reviewsBlank(); reviewRoute(); return; }
-  if (low === "" || low === "tickets" || low === "overview") { setSection("tickets"); selected = null; report = null; diffState = null; $("#split").classList.remove("open"); renderList(); return blank(); }
+  if (low === "" || low === "tickets" || low === "overview") { setSection("tickets"); selected = null; report = null; diffState = null; filesState = null; setupState = null; $("#split").classList.remove("open"); renderList(); return blank(); }
   if (low === "reviews") { setSection("reviews"); reviewing = null; $("#split").classList.remove("open"); return reviewsBlank(); }
   if (low.startsWith("worklogs")) { setSection("worklogs"); return renderWorklogs(raw.split("/")[1] || null); }
   const [k, sub] = raw.toUpperCase().split("/");
   setSection("tickets");
   if (!status?.account) return blank();   // tickets come from Jira: nothing to show until it's connected
   if (sub === "DIFF" && diffState && report?.key === k) return renderDiffPage();
-  if (k && report?.key === k && !sub) { diffState = null; $("#split").classList.add("open"); renderTicket(); return; }
+  // repository names are case-sensitive, so it's read from the raw hash
+  if (sub === "SETUP" && report?.key === k) { diffState = null; filesState = null; setupState = setupState || { scroll: 0 }; return renderSetupPage(); }
+  if (sub === "FILES" && report?.key === k && raw.split("/")[2]) { diffState = null; filesState = { repo: raw.split("/")[2], scroll: filesState?.scroll || 0, query: filesState?.query || "" }; return renderFilesPage(); }
+  if (k && report?.key === k && !sub) { diffState = null; filesState = null; setupState = null; $("#split").classList.add("open"); renderTicket(); return; }
   if (k) load(k, false); else blank();
 }
 // #review/<group/project>/<iid> opens a merge request; project paths are case-sensitive, so they are not upper-cased
@@ -1682,31 +2012,77 @@ const fullScope = (scope, repo) => (appName(repo) ? appName(repo).toLowerCase() 
 const copyBtn = (text, label = "Copy") => `<button class="btn only small cp" data-copy="${esc(text)}" title="${label}" aria-label="${label}">${icon("copy")}</button>`;
 const scopeCode = (e, cls = "") => `<code class="sc ${cls}" data-scope="${esc(e.scope)}" data-repo="${esc(e.repo)}">${esc(fullScope(e.scope, e.repo))}</code>`;
 const verbTag = v => `<span class="vb vb-${esc((v || "any").toLowerCase())}">${esc(v || "ANY")}</span>`;
+// one folding card, closed until opened: its whole header row toggles it, the controls on it still do their own thing
+function smxCard(id, head, tools, body) {
+  const open = groupOpen[id] === true;
+  return `<div class="smx-card gbox" data-open="${open}" data-gid="${esc(id)}">
+    <div class="smx-h"><button class="gtoggle" aria-expanded="${open}">${icon("chev", "ico chev")}${head}</button>${tools}</div>
+    <div class="gbox-b" ${open ? "" : "hidden"}>${body}</div></div>`;
+}
+// collapse / expand every setup card at once
+function syncSmx() {
+  const b = $("#smxAll"); if (!b) return;
+  b.textContent = $$("#smx .gbox").some(g => g.dataset.open === "true") ? "Collapse all" : "Expand all";
+}
 
-function setupHtml(r) {
+// lookup rows the code names by tag (categories, types, features, criteria...): one card per table
+const dataState = d => d.seeded ? "seeded" : d.older ? "older" : "create";
+function dataCards(data) {
+  const groups = new Map();
+  (data.rows || []).forEach(d => { const k = `${d.schema}.${d.table}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); });
+  const order = { create: 0, seeded: 1, older: 2 };
+  const rank = rows => Math.min(...rows.map(d => order[dataState(d)]));
+  return [...groups.entries()].sort((a, b) => rank(a[1]) - rank(b[1]) || a[0].localeCompare(b[0])).map(([k, rows]) => {
+    rows.sort((a, b) => order[dataState(a)] - order[dataState(b)] || a.tag.localeCompare(b.tag));
+    const n = rows.filter(d => dataState(d) === "create").length;
+    const status = d => ({
+      create: `<span class="dst">${mark("todo", false)}Create on QA</span>`,
+      seeded: `<span class="dst" title="${esc(d.seeded || "")}">${mark("done", false)}A script adds it: ${esc((d.seeded || "").split("/").pop())}</span>`,
+      older: `<span class="dst ink-3" title="It was on dev before this ticket's first commit, so QA most likely has it already.">Existed before this ticket</span>`,
+    })[dataState(d)];
+    return smxCard("smx:data:" + k, `<span class="smx-k">${esc(rows[0].kind)}</span><span class="ink-3">${esc(rows[0].schema)}</span>`,
+      `<span class="ink-3">${n ? `${n} to create` : "nothing to create"}${rows.length > n ? ` · ${rows.length - n} handled` : ""}</span>`,
+      `<div class="wide"><table class="tb smx-t"><thead><tr><th>Tag</th><th>Name on dev</th><th>On dev since</th><th>Used in</th><th>To do</th></tr></thead><tbody>
+        ${rows.map(d => `<tr class="${dataState(d) === "create" ? "" : "soft"}"><td><div class="sc-cell"><code class="sc">${esc(d.tag)}</code>${copyBtn(d.tag, "Copy the tag")}</div></td>
+          <td>${d.name ? esc(d.name) : `<span class="ink-3">-</span>`}</td><td class="nw ink-3">${esc(d.created || "-")}${d.tenants > 1 ? ` · ${d.tenants} tenants` : ""}</td>
+          <td class="nw" title="${esc(d.repo)}: ${esc(d.file)}">${repoTag(d.repo)} <span class="ink-3 mono">${esc(d.file.split("/").pop())}</span></td><td class="nw">${status(d)}</td></tr>`).join("")}
+      </tbody></table></div>`);
+  }).join("");
+}
+
+// on the ticket page the section links to its own page (#MM-1/setup); on that page it doesn't
+function setupHtml(r, onPage = false) {
   const s = r.setup || { services: [], menus: [] };
-  if (!s.services.length && !s.menus.length) return "";
+  const data = s.data || { rows: [] }, dataRows = data.rows || [];
+  const nData = dataRows.filter(d => dataState(d) === "create").length;
+  // the code names tags but they couldn't be looked up: say why, once
+  const dataNote = data.status === "no-connection" ? `<p class="smx-note warn">${icon("alert")}<span>The code names ${pl(data.candidates, "tag")} that may be System Manager data (categories, types, features, criteria...). Set the <code>${esc(data.env || "")}</code> environment variable to the dev database's connection string to look them up.</span></p>`
+    : data.status === "error" ? `<p class="smx-note warn">${icon("alert")}<span>Couldn't read the dev database to look up the tags the code names: ${esc(data.error)}</span></p>` : "";
+  if (!s.services.length && !s.menus.length && !dataRows.length && !dataNote) return "";
+  const nCards = s.services.length + s.menus.length + new Set(dataRows.map(d => d.schema + "." + d.table)).size;
   const nScopes = s.services.reduce((n, x) => n + x.added.length, 0);
   const row = (e, removed) => `<tr class="${removed ? "gone" : ""}"><td><div class="sc-cell">${scopeCode(e)}${removed ? `<span class="sc-tag">removed</span>` : copyBtn(fullScope(e.scope, e.repo), "Copy scope")}</div></td>
     <td class="nw">${verbTag(e.verb)} <code class="rt-path">${esc(e.route)}</code></td><td class="ink-3 nw">${esc(e.action)}</td></tr>`;
   return `<section class="smx" id="smx">
-    <h3 class="h3">System Manager setup on QA<span>${[nScopes ? pl(nScopes, "scope") : "", s.menus.length ? pl(s.menus.length, "menu") : ""].filter(Boolean).join(" · ")}</span></h3>
-    <p class="smx-note">Scopes register themselves when each service starts on QA. In the System Manager there: grant the scopes to the QA roles, create each menu with its actions, and link every action to the scopes listed with it. Each copy button gives the exact text.</p>
-    ${s.services.map(sv => `<div class="smx-card">
-      <div class="smx-h">${repoTag(sv.repo)}<span class="ink-3">${pl(sv.added.length, "new scope")}${sv.removed.length ? ` · ${sv.removed.length} removed` : ""}</span>
-        <label class="smx-pre" title="Scopes start with the service's Common:AppName, which isn't stored in git. Type it once; every copy includes it."><span>AppName</span><input data-pre="${esc(sv.repo)}" value="${esc(appName(sv.repo))}" placeholder="${esc((sv.tag || "e.g. omnicore").toLowerCase())}" spellcheck="false" autocomplete="off"></label>
-        ${sv.added.length ? `<button class="btn line small" data-copy-all="${esc(sv.repo)}">${icon("copy")}Copy all ${sv.added.length}</button>` : ""}</div>
-      <div class="wide"><table class="tb smx-t"><thead><tr><th>Scope</th><th>Endpoint</th><th>Controller action</th></tr></thead>
-        <tbody>${sv.added.map(e => row(e, false)).join("")}${sv.removed.map(e => row(e, true)).join("")}</tbody></table></div></div>`).join("")}
-    ${s.menus.map(m => `<div class="smx-card">
-      <div class="smx-h"><span class="smx-k">Menu</span><code class="smx-uri">${esc(m.uri)}</code>${copyBtn(m.uri, "Copy the menu URI")}<span class="ink-3">${m.page ? `page ${esc(m.page)} · ` : ""}${repoTag(m.repo)}</span></div>
-      <div class="wide"><table class="tb smx-t"><thead><tr><th>Action</th><th>Scopes to link</th></tr></thead><tbody>
+    <h3 class="h3">System Manager setup on QA<span>${[nScopes ? pl(nScopes, "scope") : "", s.menus.length ? pl(s.menus.length, "menu") : "", nData ? `${pl(nData, "data row")} to create` : ""].filter(Boolean).join(" · ")}</span>
+      ${nCards > 1 ? `<button class="btn small" id="smxAll">${Object.entries(groupOpen).some(([k, v]) => k.startsWith("smx:") && v === true) ? "Collapse all" : "Expand all"}</button>` : ""}
+      ${onPage ? "" : `<button class="btn line small smx-page" data-setup="">${icon("out")}Open as a page</button>`}</h3>
+    <p class="smx-note">Scopes register themselves when each service starts on QA. In the System Manager there: grant the scopes to the QA roles, create each menu with its actions, and link every action to the scopes listed with it. Create the data the code names (categories, types, features, criteria...) with the same tags it has on dev. Each copy button gives the exact text.</p>
+    ${dataNote}
+    ${s.services.map(sv => smxCard("smx:" + sv.repo, `${repoTag(sv.repo)}<span class="ink-3">${pl(sv.added.length, "new scope")}${sv.removed.length ? ` · ${sv.removed.length} removed` : ""}</span>`,
+        `<label class="smx-pre" title="Scopes start with the service's Common:AppName, which isn't stored in git. Type it once; every copy includes it."><span>AppName</span><input data-pre="${esc(sv.repo)}" value="${esc(appName(sv.repo))}" placeholder="${esc((sv.tag || "e.g. omnicore").toLowerCase())}" spellcheck="false" autocomplete="off"></label>
+        ${sv.added.length ? `<button class="btn line small" data-copy-all="${esc(sv.repo)}">${icon("copy")}Copy all ${sv.added.length}</button>` : ""}`,
+      `<div class="wide"><table class="tb smx-t"><thead><tr><th>Scope</th><th>Endpoint</th><th>Controller action</th></tr></thead>
+        <tbody>${sv.added.map(e => row(e, false)).join("")}${sv.removed.map(e => row(e, true)).join("")}</tbody></table></div>`)).join("")}
+    ${s.menus.map(m => smxCard("smx:" + m.uri, `<span class="smx-k">Menu</span><code class="smx-uri">${esc(m.uri)}</code>`,
+      `${copyBtn(m.uri, "Copy the menu URI")}<span class="ink-3">${m.page ? `page ${esc(m.page)} · ` : ""}${repoTag(m.repo)}</span>`,
+      `<div class="wide"><table class="tb smx-t"><thead><tr><th>Action</th><th>Scopes to link</th></tr></thead><tbody>
         ${m.actions.map(a => `<tr><td class="nw"><div class="sc-cell"><code class="act">${esc(a.name)}</code>${copyBtn(a.name, "Copy the action name")}</div>${a.name.toUpperCase() === "VIEW" ? `<div class="ink-3 smx-hint">Needed to open the page</div>` : ""}</td>
           <td>${a.scopes.length ? `<div class="sc-list">${a.scopes.map(e => `<div class="sc-cell">${verbTag(e.verb)}${scopeCode(e)}${copyBtn(fullScope(e.scope, e.repo), "Copy scope")}</div>`).join("")}</div>` : `<span class="ink-3">None found: the page checks this action but calls no endpoint for it</span>`}</td></tr>`).join("")}
         ${m.unlinked.length ? `<tr class="warn"><td><span class="ink-2">Not matched to an action</span></td><td><div class="sc-list">${m.unlinked.map(e => `<div class="sc-cell">${verbTag(e.verb)}${scopeCode(e)}${copyBtn(fullScope(e.scope, e.repo), "Copy scope")}</div>`).join("")}</div></td></tr>` : ""}
       </tbody></table></div>
-      ${m.unmatched.length ? `<p class="smx-note warn">${icon("alert")}The page also calls ${m.unmatched.map(x => `<code>${esc(x)}</code>`).join(", ")}, which matches no protected endpoint in your repositories. Check whether it needs a scope.</p>` : ""}
-    </div>`).join("")}
+      ${m.unmatched.length ? `<p class="smx-note warn">${icon("alert")}<span>The page also calls ${m.unmatched.map(x => `<code>${esc(x)}</code>`).join(", ")}, which matches no protected endpoint in your repositories. Check whether it needs a scope.</span></p>` : ""}`)).join("")}
+    ${dataCards(data)}
   </section>`;
 }
 
@@ -1734,35 +2110,44 @@ document.addEventListener("input", e => {
 });
 
 /* ─────────────────────────── ticket extras: deployments and actions ─────────────────────────── */
+/* Where the ticket's code runs. Nothing can be deployed before it's merged, so the section waits for the first merge;
+   then it's one line per service (where it is, where it isn't yet), with the environment cards behind it. */
 async function loadDeployments(key) {
   const box = $("#dep"); if (!box) return;
+  const merged = new Set(report.repos.filter(x => x.commits.some(c => c.inDefault)).map(x => x.name));
+  if (!merged.size) { box.remove(); return; }
   box.innerHTML = `<h3 class="h3">Where it's deployed</h3><div class="s2-msg"><span class="spinner"></span>Reading environments from GitLab</div>`;
   try {
     const list = await api(`/api/deployments?key=${encodeURIComponent(key)}`);
     if (report?.key !== key || !$("#dep")) return;
     if (!list.length) { box.innerHTML = `<h3 class="h3">Where it's deployed<span>no GitLab environments for these services</span></h3>`; return; }
-    box.innerHTML = `<h3 class="h3">Where it's deployed<span>last deployment to each environment</span></h3>
-      ${list.map(r => `<div class="grp">${repoTag(r.repo)}</div><div class="envs">${r.environments.map(e => `<div class="env">
-        <div class="en">${mark(e.contains === true ? "done" : e.contains === false ? "todo" : "check", false)}<a class="ln" href="${url(e.web)}" target="_blank" rel="noopener">${esc(e.name)}</a><span class="tier">${esc(e.tier || "")}</span></div>
-        <div class="er"><code>${esc(e.ref || "")}</code><span>${esc(e.sha || "")}</span><span>${day(e.date)}</span>${e.status && e.status !== "success" ? `<span>${esc(e.status)}</span>` : ""}</div>
-        <div class="has">${e.contains === true ? "Includes this work" : e.contains === false ? "Doesn't include all of it yet" : "Can't tell: fetch first"}</div></div>`).join("")}</div>`).join("")}`;
+    const isQa = e => /\b(qa|test|testing|uat)\b/i.test(`${e.name} ${e.tier || ""}`);
+    const env = e => `${esc(e.name)}${e.ref ? ` <span class="ink-3">(${esc(e.ref)})</span>` : ""}`;
+    const line = r => {
+      const on = r.environments.filter(e => e.contains === true), off = r.environments.filter(e => e.contains === false), unsure = r.environments.filter(e => e.contains == null);
+      const st = !merged.has(r.repo) ? "wait" : off.length || unsure.length ? (on.length ? "check" : "todo") : "done";
+      const say = !merged.has(r.repo) ? `Not merged into the default branch yet, so not deployed`
+        : [on.length ? `On ${on.map(env).join(", ")}` : "", off.length ? `not on ${off.map(env).join(", ")} yet` : "", unsure.length ? `can't tell for ${unsure.map(env).join(", ")}: fetch first` : ""].filter(Boolean).join(" · ");
+      const noQa = !r.environments.some(isQa);
+      return `<details class="dep-r smooth"><summary>${mark(st, false)}${repoTag(r.repo)}<span class="dep-say">${say.charAt(0).toUpperCase() + say.slice(1)}</span>
+          ${noQa ? `<span class="dep-noqa" title="GitLab has no QA environment for this service, so Greenlight can't see what QA runs. Check the QA deployment separately.">No QA environment in GitLab</span>` : ""}${icon("chev", "ico chev")}</summary>
+        <div class="envs">${r.environments.map(e => `<div class="env">
+          <div class="en">${mark(e.contains === true ? "done" : e.contains === false ? "todo" : "check", false)}<a class="ln" href="${url(e.web)}" target="_blank" rel="noopener">${esc(e.name)}</a><span class="tier">${esc(e.tier || "")}</span></div>
+          <div class="er"><code>${esc(e.ref || "")}</code><span>${esc(e.sha || "")}</span><span>${day(e.date)}</span>${e.status && e.status !== "success" ? `<span>${esc(e.status)}</span>` : ""}</div>
+          <div class="has">${e.contains === true ? "Includes this work" : e.contains === false ? "Doesn't include all of it yet" : "Can't tell: fetch first"}</div></div>`).join("")}</div></details>`;
+    };
+    box.innerHTML = `<h3 class="h3">Where it's deployed<span>last deployment to each GitLab environment</span></h3><div class="dep-list">${list.map(line).join("")}</div>`;
     soften(box);
   } catch (e) { box.innerHTML = `<h3 class="h3">Where it's deployed</h3><p class="ink-3" style="margin:0">${esc(e.message)}</p>`; }
 }
 
 // in-app actions for step items, shown only where Greenlight can really do them
 function stepActions(s, it) {
-  if (!status?.gitlab || it.state !== "todo" || !it.repo) return "";
-  if (s.id === "code") { const m = /^Merge (\S+) into /.exec(it.title || ""); if (m) return `<button class="btn primary small" data-mkmr="${esc(m[1])}" data-repo="${esc(it.repo)}">${icon("branch")}Create merge request</button>`; }
+  if (!status?.gitlab || it.state !== "todo" || !it.repo || it.mr) return "";
   if (s.id === "tag") { const next = report?.repos.find(x => x.name === it.repo)?.tags?.next; if (next) return `<button class="btn primary small" data-mktag="${esc(next)}" data-repo="${esc(it.repo)}">${icon("tag")}Create tag ${esc(next)}</button>`; }
   return "";
 }
 
-async function createMr(repo, branch) {
-  if (!await confirmDialog("Create a merge request?", `From <code>${esc(branch)}</code> into the default branch of ${repoTag(repo)}, titled with the ticket key and summary.`, "Create merge request", "primary")) return;
-  try { const r = await api("/api/gitlab/create-mr", { method: "POST", body: JSON.stringify({ repo, branch }) }); toast(`Merge request !${esc(r.iid)} created.<a href="${url(r.url)}" target="_blank" rel="noopener">Open in GitLab</a>`, 8000); if (report) loadTicketReviews(report.key); }
-  catch (e) { fail(esc(e.message)); }
-}
 
 async function createTag(repo, tag) {
   if (!await confirmDialog(`Create tag ${esc(tag)}?`, `Tags the default branch of ${repoTag(repo)} in GitLab. QA deploys tags, so this starts a release.`, `Create ${esc(tag)}`, "primary")) return;
@@ -1783,7 +2168,13 @@ async function moveDialog(key) {
     $("#mvGo").onclick = async () => {
       const id = $("#mvList input:checked")?.value; if (!id) return;
       $("#mvGo").disabled = true; $("#mvMsg").innerHTML = `<span class="spinner"></span>Moving`;
-      try { await api("/api/jira/transition", { method: "POST", body: JSON.stringify({ key, id }) }); d.close(); toast(`${esc(key)} moved.`); tickets && loadTickets(); if (report?.key === key) load(key, false, true); }
+      try {
+        await api("/api/jira/transition", { method: "POST", body: JSON.stringify({ key, id }) }); d.close();
+        const done = ts.find(t => t.id === id)?.category === "done";
+        if (done) closedKeys.add(key);
+        toast(done ? `${esc(key)} moved to Done and hidden from your tickets.` : `${esc(key)} moved.`);
+        tickets && loadTickets(); if (report?.key === key) load(key, false, true);
+      }
       catch (e) { $("#mvMsg").className = "msg bad"; $("#mvMsg").textContent = e.message; $("#mvGo").disabled = false; }
     };
   } catch (e) { $("#mvList").innerHTML = `<p class="ink-3">${esc(e.message)}</p>`; }
@@ -1870,6 +2261,49 @@ $("#reload").onclick = () => railMode === "review" ? loadReviews() : status?.acc
 
 // the app frame never scrolls as a whole; only its panes do. If focus ever nudges the document, put it back.
 addEventListener("scroll", () => { if (scrollX || scrollY) scrollTo(0, 0); }, { passive: true });
+
+// the list rail resizes by dragging its edge; dragged past the snap point it hides, and dragging the edge back out shows it again
+(() => {
+  const split = $("#split"), grip = $("#grip"), MIN = 260, SNAP = 150, STEP = 24;
+  const max = () => Math.max(MIN, Math.min(640, split.clientWidth * .6));
+  let w = null, shut = false;
+  try { const s = JSON.parse(localStorage.getItem("gl-rail") || "null"); if (s) { w = s.w || null; shut = !!s.shut; } } catch { }
+  const width = () => shut ? 0 : Math.round($(".rail").getBoundingClientRect().width);
+  const apply = () => {
+    if (w) split.style.setProperty("--rail-w", Math.min(w, max()) + "px"); else split.style.removeProperty("--rail-w");
+    split.classList.toggle("shut", shut);
+    grip.setAttribute("aria-valuenow", shut ? 0 : (w || 340));
+    grip.title = shut ? "Drag right to show the list" : "Drag to resize; drag to the edge to hide";
+  };
+  const save = () => { try { localStorage.setItem("gl-rail", JSON.stringify({ w, shut })); } catch { } };
+  const to = px => { if (px < SNAP) shut = true; else { shut = false; w = Math.round(Math.min(Math.max(px, MIN), max())); } apply(); };
+  grip.setAttribute("aria-valuemin", 0);
+  grip.setAttribute("aria-valuemax", 640);
+  apply();
+
+  grip.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || innerWidth <= 900) return;
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const x0 = e.clientX, w0 = width();
+    split.classList.add("dragging"); document.body.classList.add("resizing");
+    const move = ev => to(w0 + ev.clientX - x0);
+    const end = () => {
+      grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", end); grip.removeEventListener("pointercancel", end);
+      split.classList.remove("dragging"); document.body.classList.remove("resizing");
+      save();
+    };
+    grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", end); grip.addEventListener("pointercancel", end);
+  });
+  grip.addEventListener("keydown", e => {
+    const d = { ArrowLeft: -STEP, ArrowRight: STEP }[e.key]; if (!d) return;
+    e.preventDefault();
+    // from the narrowest width one more step left hides it; from hidden one step right brings it back at the narrowest
+    to(shut ? (d > 0 ? MIN : 0) : width() <= MIN && d < 0 ? 0 : width() + d);
+    save();
+  });
+  addEventListener("resize", apply);
+})();
 
 $("#main").addEventListener("click", mainClicks);
 // opened comment threads ease in like everything else that unfolds
