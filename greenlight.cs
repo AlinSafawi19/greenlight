@@ -3170,12 +3170,11 @@ class Jira
         return found;
     }
 
-    // Tickets assigned to me (any status) whose key matches exactly or whose summary contains the words.
-    public Task<(List<IssueInfo> Items, string? Next)> SearchMine(string text, bool exactKey, int size, string? token)
+    // An exact key finds any ticket, whoever has it; words search the summaries of tickets assigned to me (any status).
+    public Task<(List<IssueInfo> Items, string? Next)> SearchTickets(string text, bool exactKey, int size, string? token)
     {
         var q = text.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        var match = exactKey ? $"key = \"{q}\"" : $"summary ~ \"{q}*\"";
-        return SearchPage($"assignee = currentUser() AND {match} ORDER BY updated DESC", size, token);
+        return SearchPage(exactKey ? $"key = \"{q}\"" : $"assignee = currentUser() AND summary ~ \"{q}*\" ORDER BY updated DESC", size, token);
     }
 
     public Task<List<IssueInfo>> MyOpenIssues() =>
@@ -3711,7 +3710,7 @@ static class UiServer
                     var q = (req.QueryString["q"] ?? "").Trim();
                     if (q.Length < 2) { await Send(res, 200, new JsonObject { ["items"] = new JsonArray(), ["next"] = null }); return; }
                     var exact = ledger.IsValidKey(q.ToUpperInvariant());
-                    var (hits, next) = await ledger.Jira.SearchMine(exact ? q.ToUpperInvariant() : q, exact, 20, req.QueryString["next"]);
+                    var (hits, next) = await ledger.Jira.SearchTickets(exact ? q.ToUpperInvariant() : q, exact, 20, req.QueryString["next"]);
                     await Send(res, 200, new JsonObject { ["items"] = new JsonArray(hits.Select(i => (JsonNode)ReportJson.Issue(i)).ToArray()), ["next"] = next });
                     return;
                 }

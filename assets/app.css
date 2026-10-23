@@ -313,6 +313,8 @@ body.resizing { cursor: col-resize; user-select: none; }
 .facts label { display: inline-flex; gap: 7px; align-items: center; cursor: pointer; }
 .facts input { accent-color: var(--gl-accent); margin: 0; }
 .facts .tag { display: inline-flex; align-items: center; }
+.scope-note { margin: 10px 0 0; max-width: 90ch; display: flex; gap: 8px; align-items: flex-start; color: var(--gl-text-muted); font-size: 13px; line-height: 1.5; }
+.scope-note .ico { color: var(--st-todo); margin-top: 2px; flex: none; }
 
 
 /* readiness summary card */

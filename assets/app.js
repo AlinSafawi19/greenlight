@@ -808,6 +808,7 @@ function renderTicket() {
       ${i ? `<span class="tag">${typeTag(i.type, true)}</span><span class="tag">${jiraBadge(i.status, i.statusCategory)}</span><span><b>${esc(cap(i.assignee))}</b></span>${i.fixVersions !== "none" ? `<span>Fix version <b>${esc(i.fixVersions)}</b></span>` : ""}`
           : me ? "" : `<span><button id="hc" style="color:var(--ink-2);border-bottom:1px solid var(--hair-2)">Connect Jira</button> for title, status and sub-tickets</span>`}
     </div>
+    ${i && me && i.assigneeId !== me.accountId ? `<p class="scope-note">${icon("alert")}<span>This ticket isn't assigned to you. Greenlight only sees the repositories in your folder, so ${i.assigneeId ? esc(cap(i.assignee)) : "whoever works on it"} may have work in others that doesn't show here.</span></p>` : ""}
     ${me ? subControl(r) : ""}
 
     ${nothing ? voidHtml(r, kids) : p.state}
@@ -1941,13 +1942,13 @@ function initFinder() {
     templateResult: o => o.loading ? jq(`<span class="s2-msg"><span class="spinner"></span>Searching your tickets</span>`) : o.t ? jq(hitHtml(o.t)) : o.text,
     templateSelection: () => jq(`<span class="s2-ph">Find a ticket</span>`),
     language: {
-      noResults: () => "None of your tickets match.",
+      noResults: () => "None of your tickets match. Type a full key to open anyone's ticket.",
       searching: () => "Searching your tickets",
       errorLoading: () => "Couldn't reach Jira.",
     },
   });
   el.on("select2:opening", e => { if (!status?.account) { e.preventDefault(); openSettings(); } });
-  el.on("select2:open", () => { const f = document.querySelector(".finder-wrap .select2-search__field"); if (f) { f.placeholder = "Key or words from the title"; f.focus(); } });
+  el.on("select2:open", () => { const f = document.querySelector(".finder-wrap .select2-search__field"); if (f) { f.placeholder = "Any ticket key, or words from your ticket titles"; f.focus(); } });
   el.on("select2:select", e => { const k = e.params.data.id; el.val(null).trigger("change.select2"); select(k); });
 }
 const openFind = () => { if (status?.account) jq("#finderSel").select2("open"); };
